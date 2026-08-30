@@ -192,7 +192,7 @@ TOUR = [
     ("Now the essentials.\n"
      "- **SUPER+RETURN** opens a terminal \u2014 try it\n"
      "Bonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
-     "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
+     "event", lambda ev, d: ev == "openwindow" and any("," + x + "," in "," + d.lower() + "," for x in ("foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty")), 1),
     ("Your browser has its own key.\n"
      "- Press **SUPER+SHIFT+RETURN**",
      "event", lambda ev, d: ev == "openwindow" and any(
@@ -200,7 +200,7 @@ TOUR = [
     ("One more terminal: **SUPER+RETURN**.\n"
      "Watch the windows share the screen evenly \u2014 no overlap, no dragging.\n"
      "That\u2019s tiling.",
-     "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
+     "event", lambda ev, d: ev == "openwindow" and any("," + x + "," in "," + d.lower() + "," for x in ("foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty")), 1),
     ("The move that kills the mouse:\n"
      "- **SUPER+arrows** jump focus between panes\n"
      "Bounce around a few times \u2014 watch the highlight travel.",

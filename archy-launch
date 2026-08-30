@@ -2,13 +2,22 @@
 # Archy's bar-button entry: bootstrap on first use, then toggle the widget.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-if ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]]; then
+# Re-run setup when the plugin was updated (version marker mismatch), not
+# just on first install — otherwise `omarchy plugin update` never reaches
+# the installed services.
+MARKER="$HOME/.local/share/omarchy-help/.installed-version"
+WANT=$(python3 -c "import json;print(json.load(open('$HERE/manifest.json'))['version'])" 2>/dev/null || echo dev)
+HAVE=$(cat "$MARKER" 2>/dev/null || echo none)
+if ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
   bash "$HERE/install.sh" >/tmp/archy-setup.log 2>&1 || {
     omarchy-notification-send --urgency critical "Archy setup failed" \
       "See /tmp/archy-setup.log" 2>/dev/null || true
     exit 1
   }
-  omarchy-notification-send "Archy is ready" \
+  mkdir -p "$HOME/.local/share/omarchy-help"
+  echo "$WANT" > "$MARKER"
+  systemctl --user try-restart omarchy-help.service omarchy-help-watch.service 2>/dev/null || true
+  [[ "$HAVE" == "none" ]] && omarchy-notification-send "Archy is ready" \
     "Click the robot again any time — or press your helper key." 2>/dev/null || true
 fi
 export PATH="$HOME/.local/bin:$PATH"
