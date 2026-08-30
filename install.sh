@@ -7,7 +7,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$HOME/.config/omarchy-help"
-mkdir -p "$DIR" "$HOME/.local/bin" "$HOME/.config/omarchy/extensions"
+mkdir -p "$DIR" "$HOME/.local/share/omarchy-help" "$HOME/.local/bin" "$HOME/.config/omarchy/extensions"
 cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$ROOT/share/ui.html" "$DIR/"
 install -m755 "$ROOT/bin/omarchy-help" "$HOME/.local/bin/omarchy-help"
 install -m755 "$ROOT/bin/omarchy-help-server" "$HOME/.local/bin/omarchy-help-server"

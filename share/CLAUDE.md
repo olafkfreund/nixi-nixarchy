@@ -21,16 +21,16 @@ appended to the question with what tier 1 found; build on it, don't repeat it.
      user's personal customizations (that's how you know *their* setup, not
      a generic one)
    - `KNOWLEDGE.md` here — verified Omarchy 4 facts
-   - `manual/` here — the OFFICIAL Omarchy manual (fetched copy; check
+   - `~/.local/share/omarchy-help/manual/` — the OFFICIAL Omarchy manual (fetched copy; check
      `manual/.fetched` for its date). Grep it for anything beyond the basics;
      it is the authority on stock behavior. Refresh: `omarchy-help-update-manual`.
-   - `LEARNED.md` here — what this installation has learned (read it every
-     session if present)
+   - `~/.local/share/omarchy-help/LEARNED.md` — what this installation has
+     learned; read it every session, append your corrections there
    - `LOCAL.md` here — machine-specific notes, if present
    - `ls /usr/share/omarchy/bin | grep -i <topic>` and `hyprctl` for live state
 2. **Learn.** When the user corrects you, or you verify a fact that isn't in
-   KNOWLEDGE.md, append ONE short dated line to `LEARNED.md` (create it if
-   missing). Never delete existing lines. This is how the helper gets better
+   KNOWLEDGE.md, append ONE short dated line to `~/.local/share/omarchy-help/LEARNED.md`
+   (create it if missing). Never delete existing lines. This is how the helper gets better
    for this user over time.
 3. **Teach the key, not the config.** Users want to USE the system. Only go
    into config files when explicitly asked how to change something — and then

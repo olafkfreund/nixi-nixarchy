@@ -10,6 +10,9 @@ import threading
 
 PORT = int(os.environ.get("OMARCHY_HELP_PORT", "8642"))
 DIR = os.path.expanduser(os.environ.get("OMARCHY_HELP_DIR", "~/.config/omarchy-help"))
+# Mutable state (fetched manual, learned facts) lives OUTSIDE the config dir
+# so dotfile-manager redeploys can never wipe it.
+DATA = os.path.expanduser(os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help"))
 UI = os.path.join(DIR, "ui.html")
 ALLOWED = ",".join([
     "Read", "Grep", "Glob",
@@ -32,13 +35,22 @@ _STOP = set("the a an and or of to in on for with how do i does what is are my "
 
 
 def _tokens(text):
-    return [w.lower() for w in _WORD.findall(text) if w.lower() not in _STOP]
+    out = []
+    for w in _WORD.findall(text):
+        w = w.lower()
+        if w in _STOP:
+            continue
+        # cheap stemming so app/apps, theme/themes, keybinding/keybindings meet
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        out.append(w)
+    return out
 
 
 def _sections():
     docs = []
-    for base, tag in ((os.path.join(DIR, "manual"), "manual"),
-                      (DIR, "notes")):
+    for base, tag in ((os.path.join(DATA, "manual"), "manual"),
+                      (DIR, "notes"), (DATA, "notes")):
         try:
             names = sorted(os.listdir(base))
         except OSError:
@@ -46,7 +58,7 @@ def _sections():
         for name in names:
             if not name.endswith(".md"):
                 continue
-            if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):
+            if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):  # noqa
                 continue
             try:
                 text = open(os.path.join(base, name)).read()
@@ -78,7 +90,7 @@ _index = {"sig": None, "docs": []}
 
 def _index_sig():
     sig = []
-    for base in (os.path.join(DIR, "manual"), DIR):
+    for base in (os.path.join(DATA, "manual"), DIR, DATA):
         try:
             for n in os.listdir(base):
                 if n.endswith(".md"):
@@ -108,8 +120,8 @@ def local_answer(q):
         if not bt:
             continue
         bset = set(bt)
-        s = 3.0 * len(qset & set(ht)) + len(qset & bset)
-        s /= (1 + 0.02 * len(bt))          # prefer focused sections
+        s = 3.0 * len(qset & set(ht))              # title hits: undamped
+        s += len(qset & bset) / (1 + 0.02 * len(bt))  # body hits: focused wins
         if s > score:
             best, score = (head, body, tag), s
     # keybinding questions: grep the live bindings too
