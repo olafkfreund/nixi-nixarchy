@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import threading
+import time
 
 PORT = int(os.environ.get("OMARCHY_HELP_PORT", "8642"))
 DIR = os.path.expanduser(os.environ.get("OMARCHY_HELP_DIR", "~/.config/omarchy-help"))
@@ -152,6 +153,105 @@ def local_answer(q):
     return "\n\n".join(parts)
 
 
+LEARNING = os.path.join(DATA, "learning.json")
+
+# The path from newcomer to advanced user, in teaching order. "observe" names
+# the watcher-detectable signal that the user already uses the feature.
+CURRICULUM = [
+    ("menu", "The Omarchy menu", "How do I open the Omarchy menu and what can I do from it?", None),
+    ("keys", "The keybinding overlay", "How do I see every keybinding on my machine?", None),
+    ("workspaces", "Workspaces", "How do I use workspaces? Teach me the basics briefly.", "workspaces"),
+    ("movewindows", "Moving windows", "How do I move and swap windows with the keyboard?", None),
+    ("scratchpad", "The scratchpad", "What is the scratchpad and how do I use it?", "scratchpad"),
+    ("webapps", "Websites as apps", "How do I turn a website into an app with its own window and icon?", "webapps"),
+    ("install", "Installing software", "How do I install and remove apps, including from the AUR?", None),
+    ("floating", "Floating windows", "How do I make a window float, move and resize it?", "floating"),
+    ("fullscreen", "Full screen modes", "What are the fullscreen and maximize keys and when do I use each?", "fullscreen"),
+    ("themes", "Themes", "How do I change the theme and background, and install new themes?", None),
+    ("capture", "Screenshots and OCR", "How do I take screenshots and grab text from the screen?", None),
+    ("update", "Staying updated", "How do I keep Omarchy updated and what happens during an update?", None),
+    ("agents", "Your AI agent", "What can my default AI agent do across Omarchy, like diagnosing crashes?", None),
+    ("config", "Customizing safely", "How do I customize Omarchy safely so updates never break my changes?", None),
+]
+
+
+# ---- the LIVE tour: Archie instructs, the event socket confirms ----------
+# Steps chosen so every action is verifiable from socket2 AND safe while the
+# widget overlay is visible (no other special workspace involved).
+TOUR = [
+    ("Open a terminal: press SUPER+RETURN.",
+     lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ","),
+    ("Nice. Now switch to workspace 2: SUPER+2.",
+     lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2"),
+    ("See how it's a fresh desk? Come back with SUPER+1.",
+     lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1"),
+    ("Make the focused window float free: SUPER+T.",
+     lambda ev, d: ev == "changefloatingmode"),
+    ("Now close it the Omarchy way: SUPER+W.",
+     lambda ev, d: ev == "closewindow"),
+]
+tour = {"active": False, "step": 0, "finished": False}
+
+
+def tour_thread():
+    run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    try:
+        import socket as sk
+        sigs = os.listdir(os.path.join(run, "hypr"))
+        s2 = sk.socket(sk.AF_UNIX)
+        s2.connect(os.path.join(run, "hypr", sigs[0], ".socket2.sock"))
+        s2.settimeout(1.0)
+        buf = b""
+        deadline = time.time() + 600
+        while tour["active"] and time.time() < deadline:
+            try:
+                chunk = s2.recv(4096)
+            except OSError:
+                continue
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                ev, _, d = line.decode(errors="replace").partition(">>")
+                i = tour["step"]
+                if i < len(TOUR) and TOUR[i][1](ev, d):
+                    tour["step"] = i + 1
+                    if tour["step"] >= len(TOUR):
+                        tour["active"] = False
+                        tour["finished"] = True
+                        st = load_learning()
+                        st["toured"] = True
+                        save_learning(st)
+                        return
+        tour["active"] = False
+    except Exception:
+        tour["active"] = False
+
+
+def load_learning():
+    try:
+        return json.load(open(LEARNING))
+    except Exception:
+        return {}
+
+
+def save_learning(st):
+    os.makedirs(DATA, exist_ok=True)
+    json.dump(st, open(LEARNING, "w"))
+
+
+def learning_status():
+    st = load_learning()
+    taught = st.get("taught", {})
+    observed = st.get("observed", {})
+    items = []
+    for fid, label, q, obs in CURRICULUM:
+        done = fid in taught or (obs and obs in observed)
+        items.append({"id": fid, "label": label, "done": bool(done)})
+    return st, items
+
+
 def read_theme():
     """The active Omarchy theme's palette (colors.toml)."""
     try:
@@ -279,14 +379,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("/*__THEME__*/", css)
             if agent_ready():
                 html = html.replace("__GREETING__",
-                    "Hey! I\u2019m your Omarchy helper \U0001F916 Ask me anything about "
-                    "your system \u2014 what a key does, how to set something up, why "
-                    "something behaves the way it does.")
+                    "Hey, I\u2019m Archie \U0001F916 your Omarchy guide. Ask me anything \u2014 "
+                    "or hit \U0001f680 for the live tour and I\u2019ll teach you the "
+                    "moves hands-on.")
                 html = html.replace("__HINT__",
                     "answers come from your AI, grounded in this machine")
             else:
                 html = html.replace("__GREETING__",
-                    "Hey! I\u2019m your Omarchy helper \U0001F916 No AI agent is "
+                    "Hey, I\u2019m Archie \U0001F916 your Omarchy guide. No AI agent is "
                     "connected yet \u2014 tap a quick answer below to get going "
                     "(\u201cSet up your AI agent\u201d unlocks the full chat).")
                 html = html.replace("__HINT__",
@@ -309,6 +409,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/prime":
             q = state.pop("primed", "")
             self._send(200, {"q": q})
+        elif self.path == "/tour/state":
+            self._send(200, {"active": tour["active"], "step": tour["step"],
+                             "finished": tour["finished"]})
+        elif self.path == "/learn":
+            _, items = learning_status()
+            self._send(200, {"items": items,
+                             "done": sum(1 for i in items if i["done"]),
+                             "total": len(items),
+                             "toured": load_learning().get("toured", False)})
         elif self.path == "/status":
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
@@ -317,6 +426,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/tour/start":
+            tour.update({"active": True, "step": 0, "finished": False})
+            threading.Thread(target=tour_thread, daemon=True).start()
+            return self._send(200, {"ok": True, "steps": [t[0] for t in TOUR]})
+        if self.path == "/tour/stop":
+            tour["active"] = False
+            return self._send(200, {"ok": True})
+        if self.path == "/learn/next":
+            st, items = learning_status()
+            nxt = next((i for i in items if not i["done"]), None)
+            if nxt is None:
+                return self._send(200, {"q": "", "msg": "You've explored the whole path \U0001f393"})
+            q = next(qq for fid, _, qq, _ in CURRICULUM if fid == nxt["id"])
+            st.setdefault("taught", {})[nxt["id"]] = time.time()
+            save_learning(st)
+            return self._send(200, {"q": q, "label": nxt["label"]})
+        if self.path == "/toured":
+            st = load_learning()
+            st["toured"] = True
+            save_learning(st)
+            return self._send(200, {"ok": True})
         if self.path == "/prime":
             # A teaching question queued by the tip watcher: the widget asks
             # it automatically the next time it becomes visible.

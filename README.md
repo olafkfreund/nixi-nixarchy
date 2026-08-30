@@ -1,4 +1,4 @@
-# Omarchy Helper
+# Archie — the Omarchy guide
 
 A beginner-friendly tutor for [Omarchy](https://omarchy.org), one keypress
 away. Ask it anything — "how do workspaces work?", "how do I install an

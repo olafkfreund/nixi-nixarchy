@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Omarchy Helper</title>
+<title>Archie</title>
 <style>
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
   * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
@@ -30,6 +30,11 @@
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0 2px 4px; }
+  .act { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:0.8rem; cursor:pointer; }
+  .act:hover { border-color:var(--ember); color:var(--ember); }
+  .act.primary { border-color:var(--ember); color:var(--ember); font-weight:600; }
+  .progress { font-size:0.72rem; color:var(--muted); margin-left:auto; }
   .src { display:block; margin-top:5px; font-size:0.68rem; color:var(--muted); }
   .chips { display:flex; flex-wrap:wrap; gap:6px; padding:2px 2px 6px; }
   .chip { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:5px 11px; font-size:0.78rem; cursor:pointer; text-align:left; }
@@ -49,7 +54,7 @@
 </symbol></svg>
 <header>
   <svg class="avatar"><use href="#bot"/></svg>
-  <div style="flex:1"><h1>Omarchy Helper</h1><p>ask me anything about your system</p></div>
+  <div style="flex:1"><h1>Archie</h1><p>your Omarchy guide</p></div>
   <button id="mini" title="Minimize (bring back with your helper key)" aria-label="Minimize">&#8212;</button>
 </header>
 <div id="chat">
@@ -112,6 +117,63 @@ async function ask(q) {
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 }
+// --- Archie's mission controls: live tour + learning path -------------
+const actions = document.createElement('div'); actions.className = 'actions';
+const tourBtn = document.createElement('button'); tourBtn.className = 'act primary'; tourBtn.textContent = '🚀 Live tour';
+const learnBtn = document.createElement('button'); learnBtn.className = 'act'; learnBtn.textContent = '🎓 Teach me something new';
+const prog = document.createElement('span'); prog.className = 'progress';
+actions.append(tourBtn, learnBtn, prog);
+chat.insertBefore(actions, chat.children[1] || null);
+
+async function refreshLearn() {
+  try {
+    const j = await (await fetch('/learn')).json();
+    prog.textContent = 'explored ' + j.done + '/' + j.total;
+    tourBtn.classList.toggle('primary', !j.toured);
+  } catch (e) {}
+}
+refreshLearn();
+
+let TOUR_STEPS = [], tourStep = -1, tourTimer = null;
+tourBtn.addEventListener('click', async () => {
+  if (tourTimer) return;
+  try {
+    const j = await (await fetch('/tour/start', { method: 'POST' })).json();
+    TOUR_STEPS = j.steps || [];
+    tourStep = 0;
+    add('bot', "Let's do this — a live tour. I can see what you press, so I'll know when you've done each step. " + TOUR_STEPS[0]);
+    tourTimer = setInterval(pollTour, 700);
+  } catch (e) { add('bot', 'Could not start the tour — is the helper service running?'); }
+});
+
+async function pollTour() {
+  try {
+    const t = await (await fetch('/tour/state')).json();
+    while (tourStep < t.step && tourStep < TOUR_STEPS.length) {
+      tourStep++;
+      if (tourStep < TOUR_STEPS.length) add('bot', '✅ Got it! ' + TOUR_STEPS[tourStep]);
+    }
+    if (t.finished) {
+      clearInterval(tourTimer); tourTimer = null;
+      add('bot', "✅ That's the tour — you just used the five moves that make Omarchy feel fast. Tap 🎓 whenever you want the next trick, or ask me anything.");
+      refreshLearn();
+    } else if (!t.active && tourStep < TOUR_STEPS.length) {
+      clearInterval(tourTimer); tourTimer = null;
+      add('bot', 'Tour paused — tap 🚀 to pick it up again any time.');
+    }
+  } catch (e) { clearInterval(tourTimer); tourTimer = null; }
+}
+
+learnBtn.addEventListener('click', async () => {
+  try {
+    const j = await (await fetch('/learn/next', { method: 'POST' })).json();
+    if (!j.q) { add('bot', j.msg || 'Nothing left to teach — impressive.'); refreshLearn(); return; }
+    add('me', '🎓 ' + j.label);
+    ask(j.q);
+    refreshLearn();
+  } catch (e) {}
+});
+
 async function checkPrimed() {
   try {
     const j = await (await fetch('/prime')).json();
