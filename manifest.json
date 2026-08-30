@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.respira-crece-lidera.archy",
+  "name": "Archy",
+  "version": "0.9.0",
+  "author": "Luke (Respira Crece Lidera)",
+  "license": "MIT",
+  "description": "Archy, your Omarchy guide — a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the bar icon to summon.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Archy",
+    "description": "Your Omarchy guide — tour, lessons, and answers",
+    "category": "System",
+    "allowMultiple": false
+  }
+}

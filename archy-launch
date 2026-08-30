@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Archy's bar-button entry: bootstrap on first use, then toggle the widget.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+if ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]]; then
+  bash "$HERE/install.sh" >/tmp/archy-setup.log 2>&1 || {
+    omarchy-notification-send --urgency critical "Archy setup failed" \
+      "See /tmp/archy-setup.log" 2>/dev/null || true
+    exit 1
+  }
+  omarchy-notification-send "Archy is ready" \
+    "Click the robot again any time — or press your helper key." 2>/dev/null || true
+fi
+export PATH="$HOME/.local/bin:$PATH"
+exec omarchy-help
