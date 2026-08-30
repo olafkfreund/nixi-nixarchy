@@ -1,0 +1,11 @@
+[Unit]
+Description=Omarchy Helper tip watcher (suggests workflow improvements, max one per day)
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/omarchy-help-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

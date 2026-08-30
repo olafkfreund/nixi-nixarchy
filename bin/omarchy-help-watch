@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+# omarchy:summary=Watch desktop patterns and suggest one workflow tip a day at most
+# omarchy:hidden=true
+"""Workflow tip watcher — the crash-watcher pattern, pointed at habits.
+
+Reads Hyprland's event socket, counts a few teachable patterns locally
+(nothing leaves the machine), and when one crosses its threshold sends ONE
+notification. Guardrails: at most one tip per day, each tip at most once per
+14 days, and `systemctl --user disable --now omarchy-help-watch` turns it off
+for good. State: ~/.local/share/omarchy-help/tips.json
+"""
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+DATA = os.path.expanduser(os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help"))
+STATE = os.path.join(DATA, "tips.json")
+
+# Thresholds (env-overridable so tests can force them low).
+FLIPFLOP = int(os.environ.get("OMARCHY_TIPS_FLIPFLOP", "40"))
+TERM_CHURN = int(os.environ.get("OMARCHY_TIPS_TERM_CHURN", "10"))
+MONO_WINDOWS = int(os.environ.get("OMARCHY_TIPS_MONO_WINDOWS", "8"))
+DAY_GAP = float(os.environ.get("OMARCHY_TIPS_DAY_GAP", str(24 * 3600)))
+TIP_GAP = float(os.environ.get("OMARCHY_TIPS_TIP_GAP", str(14 * 24 * 3600)))
+
+TERMINALS = {"foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty"}
+
+TIPS = {
+    "sidebyside": ("Tired of flipping between two windows?",
+                   "Put them side by side: SUPER+SHIFT+arrows swaps positions, "
+                   "SUPER+arrows moves focus instantly. Ask the helper "
+                   "(SUPER+SHIFT+H) for more."),
+    "workspaces": ("All your windows on one desk?",
+                   "Workspaces are extra desks: SUPER+2 opens a fresh one, "
+                   "SUPER+SHIFT+2 sends a window there. One context per desk "
+                   "feels great. Ask the helper (SUPER+SHIFT+H) for more."),
+    "scratchpad": ("Opening terminals over and over?",
+                   "Keep ONE always ready: send it to the scratchpad with "
+                   "SUPER+ALT+S, then SUPER+S drops it over anything and hides "
+                   "it again. Ask the helper (SUPER+SHIFT+H) for more."),
+}
+
+
+def load_state():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return {}
+
+
+def save_state(st):
+    os.makedirs(DATA, exist_ok=True)
+    json.dump(st, open(STATE, "w"))
+
+
+def fire(tip_id):
+    st = load_state()
+    now = time.time()
+    if now - st.get("last_any", 0) < DAY_GAP:
+        return False
+    if now - st.get("last_" + tip_id, 0) < TIP_GAP:
+        return False
+    title, body = TIPS[tip_id]
+    try:
+        subprocess.run(["omarchy-notification-wait"], timeout=30)
+        subprocess.run(["omarchy-notification-send", "--glyph", "\U0001f4a1",
+                        "Tip: " + title, body, "--exec", "omarchy-help"],
+                       timeout=15)
+    except FileNotFoundError:
+        print(f"TIP[{tip_id}]: {title} — {body}")  # test mode / no notifier
+    st["last_any"] = now
+    st["last_" + tip_id] = now
+    save_state(st)
+    return True
+
+
+class Day:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.start = time.time()
+        self.workspaces = set()
+        self.opens_by_class = {}
+        self.total_opens = 0
+        self.last_focus = None
+        self.prev_focus = None
+        self.flips = {}
+
+    def maybe_roll(self):
+        if time.time() - self.start > 24 * 3600:
+            self.reset()
+
+    def on_event(self, line):
+        self.maybe_roll()
+        if ">>" not in line:
+            return
+        ev, _, data = line.partition(">>")
+        if ev == "workspace":
+            self.workspaces.add(data.strip())
+        elif ev == "openwindow":
+            parts = data.split(",", 3)
+            if len(parts) >= 3:
+                cls = parts[2].strip().lower()
+                self.workspaces.add(parts[1].strip())
+                self.opens_by_class[cls] = self.opens_by_class.get(cls, 0) + 1
+                self.total_opens += 1
+                if (cls in TERMINALS
+                        and self.opens_by_class[cls] >= TERM_CHURN
+                        and fire("scratchpad")):
+                    self.opens_by_class[cls] = 0
+                if (self.total_opens >= MONO_WINDOWS
+                        and len(self.workspaces) <= 1
+                        and fire("workspaces")):
+                    self.total_opens = 0
+        elif ev == "activewindow":
+            cls = data.split(",", 1)[0].strip().lower()
+            if not cls or cls == self.last_focus:
+                return
+            if self.prev_focus == cls and self.last_focus:
+                pair = tuple(sorted((cls, self.last_focus)))
+                self.flips[pair] = self.flips.get(pair, 0) + 1
+                if self.flips[pair] >= FLIPFLOP and fire("sidebyside"):
+                    self.flips[pair] = 0
+            self.prev_focus, self.last_focus = self.last_focus, cls
+
+
+def main():
+    day = Day()
+    if "--stdin" in sys.argv:  # test mode: feed events on stdin
+        for line in sys.stdin:
+            day.on_event(line.strip())
+        return
+    run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    while True:
+        try:
+            sigs = os.listdir(os.path.join(run, "hypr"))
+            if not sigs:
+                time.sleep(10)
+                continue
+            s = socket.socket(socket.AF_UNIX)
+            s.connect(os.path.join(run, "hypr", sigs[0], ".socket2.sock"))
+            buf = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    day.on_event(line.decode(errors="replace"))
+        except OSError:
+            pass
+        time.sleep(5)  # compositor restarted; reconnect
+
+
+if __name__ == "__main__":
+    main()

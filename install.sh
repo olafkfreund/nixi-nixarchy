@@ -23,9 +23,13 @@ cp "$ROOT/skills/omarchy-help/SKILL.md" "$DIR/SKILL.md"
 
 # The widget server runs as a user service (like omarchy-crash-watch).
 mkdir -p "$HOME/.config/systemd/user"
-cp "$ROOT/systemd/omarchy-help.service" "$HOME/.config/systemd/user/"
+cp "$ROOT/systemd/omarchy-help.service" "$ROOT/systemd/omarchy-help-watch.service" "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now omarchy-help.service 2>/dev/null || true
+# The tip watcher (one workflow suggestion a day, max). Turn off any time:
+#   systemctl --user disable --now omarchy-help-watch
+install -m755 "$ROOT/bin/omarchy-help-watch" "$HOME/.local/bin/omarchy-help-watch"
+systemctl --user enable --now omarchy-help-watch.service 2>/dev/null || true
 "$HOME/.local/bin/omarchy-help-update-manual" || true
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
