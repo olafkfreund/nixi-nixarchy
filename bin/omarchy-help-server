@@ -179,7 +179,9 @@ CURRICULUM = [
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
-    ("First things first: connect your AI. Press SUPER+SPACE, go to Setup \u2192 "
+    ("Quick decoder first: SUPER is the Windows key (\u229e, next to ALT \u2014 "
+     "\u2318 on a Mac keyboard). It runs this whole OS. Now, first things "
+     "first: connect your AI. Press SUPER+SPACE, go to Setup \u2192 "
      "Default agent, and pick one (Claude Code, Codex\u2026). Everything smart in "
      "Omarchy flows through it \u2014 including me.",
      "poll", lambda: bool(default_agent()), 1),
