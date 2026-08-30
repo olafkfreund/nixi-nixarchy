@@ -152,6 +152,17 @@ def local_answer(q):
     return "\n\n".join(parts)
 
 
+def read_theme():
+    """The active Omarchy theme's palette (colors.toml)."""
+    try:
+        import tomllib
+        p = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
+        with open(p, "rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
 def hypr(cmd):
     """Send one command to the Hyprland socket (works even when the server
     was started outside the session env)."""
@@ -243,7 +254,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
-            self._send(200, open(UI, "rb").read(), "text/html")
+            html = open(UI).read()
+            t = read_theme()
+            if t.get("background"):
+                light = t.get("mode") == "light"
+                css = ":root{" + "".join(
+                    f"{k}:{v};" for k, v in {
+                        "--bg": t.get("background"),
+                        "--panel": (t.get("darker_background") if light else t.get("dark_background"))
+                                   or t.get("dark_background") or t.get("background"),
+                        "--line": t.get("muted") or t.get("selection") or "#555",
+                        "--ink": t.get("foreground"),
+                        "--muted": t.get("dark_foreground") or t.get("muted"),
+                        "--ember": t.get("accent") or t.get("blue") or "#ffb454",
+                        "--bot": t.get("lighter_background") or t.get("selection"),
+                        "--me": t.get("selection") or t.get("lighter_background"),
+                        "--on-accent": "#ffffff" if light else (t.get("darker_background") or "#111"),
+                    }.items() if v) + "}"
+                html = html.replace("/*__THEME__*/", css)
+            self._send(200, html.encode(), "text/html")
         elif self.path == "/health":
             self._send(200, {"ok": True})
         elif self.path == "/faq":
@@ -261,14 +290,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/status":
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
-            # The active Omarchy theme's palette, so the widget always matches.
-            try:
-                import tomllib
-                p = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
-                with open(p, "rb") as f:
-                    self._send(200, tomllib.load(f))
-            except Exception:
-                self._send(200, {})
+            self._send(200, read_theme())
         else:
             self._send(404, {"error": "not found"})
 

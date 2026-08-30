@@ -4,7 +4,9 @@
 <title>Omarchy Helper</title>
 <style>
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
-  * { box-sizing:border-box; }
+  * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
+  *::-webkit-scrollbar { display:none; }
+  html, body { overflow:hidden; }
   body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,sans-serif; }
   header { display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
   header .avatar { width:34px; height:34px; }
@@ -34,6 +36,7 @@
   .chip:hover { border-color:var(--ember); color:var(--ember); }
   .cat { width:100%; margin:4px 2px 0; font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); }
   .deeper { display:inline-block; margin-top:6px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+/*__THEME__*/
 </style></head>
 <body>
 <svg style="display:none"><symbol id="bot" viewBox="0 0 48 48">
@@ -57,20 +60,7 @@
   <input id="q" autocomplete="off" placeholder="Type a question and press Enter…" autofocus>
 </form>
 <script>
-// Match the active Omarchy theme (served from its colors.toml).
-fetch('/theme').then(r => r.json()).then(t => {
-  if (!t || !t.background) return;
-  const r = document.documentElement.style, light = t.mode === 'light';
-  r.setProperty('--bg', t.background);
-  r.setProperty('--panel', light ? (t.darker_background || t.dark_background || t.background) : (t.dark_background || t.darker_background || t.background));
-  r.setProperty('--line', t.muted || t.selection || '#555');
-  r.setProperty('--ink', t.foreground);
-  r.setProperty('--muted', t.dark_foreground || t.muted || t.foreground);
-  r.setProperty('--ember', t.accent || t.blue || '#ffb454');
-  r.setProperty('--bot', t.lighter_background || t.selection || t.background);
-  r.setProperty('--me', t.selection || t.lighter_background || t.background);
-  r.setProperty('--on-accent', light ? '#ffffff' : (t.darker_background || '#111'));
-}).catch(() => {});
+// Theme palette is baked in server-side (no flash).
 document.getElementById('mini').addEventListener('click', () =>
   fetch('/minimize', { method: 'POST' }).catch(() => {}));
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
