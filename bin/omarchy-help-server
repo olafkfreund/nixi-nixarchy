@@ -24,10 +24,12 @@ state = {"sid": None}
 
 
 def ask_claude(q, resume):
-    args = ["claude", "-p", "--output-format", "json"]
+    # NOTE: --allowedTools is variadic — keep the prompt ahead of it and use
+    # the = form, or it swallows the prompt as a tool name.
+    args = ["claude", "-p", q + STYLE, "--output-format", "json",
+            "--allowedTools=" + ALLOWED]
     if resume and state["sid"]:
         args += ["--resume", state["sid"]]
-    args += ["--allowedTools", ALLOWED, q + STYLE]
     out = subprocess.run(args, cwd=DIR, capture_output=True, text=True, timeout=240)
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
