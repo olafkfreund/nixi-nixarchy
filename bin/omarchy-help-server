@@ -181,45 +181,55 @@ CURRICULUM = [
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
-    ("Quick decoder first: SUPER is the Windows key (\u229e, next to ALT \u2014 "
-     "\u2318 on a Mac keyboard). It runs this whole OS. Now, first things "
-     "first: connect your AI. Press SUPER+SPACE, go to Setup \u2192 "
-     "Default agent, and pick one (Claude Code, Codex\u2026). Everything smart in "
-     "Omarchy flows through it \u2014 including me.",
+    # (instruction, kind, matcher, count). Texts are structured for the
+    # widget's renderer: lead line + "- " bullets + **bold** keys.
+    ("**SUPER** is the Windows key (\u229e, next to ALT \u2014 \u2318 on a Mac).\n"
+     "It runs this whole OS. First: connect your AI.\n"
+     "- Press **SUPER+SPACE**\n"
+     "- Go to **Setup \u2192 Default agent**\n"
+     "- Pick one (Claude Code, Codex\u2026)",
      "poll", lambda: bool(default_agent()), 1),
-    ("Now the essentials. SUPER+RETURN opens a terminal \u2014 try it. "
-     "(Bonus: SUPER+C / SUPER+V copy-paste works EVERYWHERE here \u2014 even "
-     "inside the terminal, same keys.)",
+    ("Now the essentials.\n"
+     "- **SUPER+RETURN** opens a terminal \u2014 try it\n"
+     "Bonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
      "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
-    ("Your browser has its own key too: SUPER+SHIFT+RETURN. Open it.",
+    ("Your browser has its own key.\n"
+     "- Press **SUPER+SHIFT+RETURN**",
      "event", lambda ev, d: ev == "openwindow" and any(
          b in d.lower() for b in ("brave", "chromium", "firefox", "helium")), 1),
-    ("One more terminal: SUPER+RETURN again \u2014 and watch how the windows "
-     "share the screen evenly, no overlapping, no dragging. That\u2019s tiling.",
+    ("One more terminal: **SUPER+RETURN**.\n"
+     "Watch the windows share the screen evenly \u2014 no overlap, no dragging.\n"
+     "That\u2019s tiling.",
      "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
-    ("Here\u2019s the move that kills the mouse: SUPER+arrow keys jump focus "
-     "between panes \u2014 watch the highlight border travel. Bounce around a "
-     "few times.",
+    ("The move that kills the mouse:\n"
+     "- **SUPER+arrows** jump focus between panes\n"
+     "Bounce around a few times \u2014 watch the highlight travel.",
      "event", lambda ev, d: ev == "activewindow", 4),
-    ("Now steer focus onto a window with the arrows and press SUPER+W \u2014 "
-     "closed, no titlebar needed. Close TWO of them.",
+    ("Time to tidy up:\n"
+     "- Steer onto a window with **SUPER+arrows**\n"
+     "- **SUPER+W** closes it \u2014 no titlebar needed\n"
+     "Close TWO of them.",
      "event", lambda ev, d: ev == "closewindow", 2),
-    ("The front door of the whole OS: SUPER+SPACE opens the menu \u2014 apps, "
-     "install, themes, setup, everything. Type any app\u2019s name and launch "
-     "it from there.",
+    ("The front door of the whole OS:\n"
+     "- **SUPER+SPACE** opens the menu \u2014 apps, install, themes, setup\n"
+     "- Type any app\u2019s name and launch it from there",
      "event", lambda ev, d: ev == "openwindow", 1),
-    ("Desks: press SUPER+2 for a fresh workspace. (I\u2019ll come along \u2014 "
-     "I\u2019m pinned.)",
+    ("Fresh desk:\n"
+     "- Press **SUPER+2** for a new workspace\n"
+     "(I\u2019ll come along \u2014 I\u2019m pinned.)",
      "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2", 1),
-    ("A clean context for anything \u2014 one project per desk works great. "
-     "Hop back: SUPER+1.",
+    ("A clean context for anything \u2014 one project per desk works great.\n"
+     "- Hop back with **SUPER+1**",
      "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1", 1),
-    ("Arrow your focus onto a window (leave me out of it \U0001f605) "
-     "and press SUPER+T \u2014 it floats free. SUPER+T again tiles it back.",
+    ("The float trick:\n"
+     "- Arrow onto a window (leave me out of it \U0001f605)\n"
+     "- **SUPER+T** pops it out to float\n"
+     "- **SUPER+T** again tiles it back",
      "event", lambda ev, d: ev == "changefloatingmode", 2),
-    ("Last one \u2014 about me. Dismiss me any time with SUPER+W on my window. "
-     "Whenever you need me again: SUPER+SHIFT+H. Go on \u2014 close me and "
-     "call me back!",
+    ("Last one \u2014 about me.\n"
+     "- Dismiss me any time: **SUPER+W** on my window\n"
+     "- Summon me back: **SUPER+SHIFT+H**\n"
+     "Go on \u2014 close me and call me back!",
      "event", lambda ev, d: ev == "openwindow" and "127.0.0.1" in d, 1),
 ]
 tour = {"active": False, "step": 0, "finished": False, "note": "", "hits": 0}
