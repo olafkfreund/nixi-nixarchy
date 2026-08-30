@@ -34,26 +34,27 @@ BarWidget {
         property color px: button.foreground
         onPxChanged: bot.requestPaint()
         onPaint: {
-          // 8x8 arcade bot: antennae, visor eyes, invader legs.
+          // The classic 11x8 arcade invader (crab).
           var rows = [
-            ".X....X.",
-            "..X..X..",
-            ".XXXXXX.",
-            "XX.XX.XX",
-            "XXXXXXXX",
-            "..XXXX..",
-            ".X.XX.X.",
-            "X..XX..X"
+            "..X.....X..",
+            "...X...X...",
+            "..XXXXXXX..",
+            ".XX.XXX.XX.",
+            "XXXXXXXXXXX",
+            "X.XXXXXXX.X",
+            "X.X.....X.X",
+            "...XX.XX..."
           ];
+          var W = 11, H = 8;
           var ctx = getContext("2d");
           ctx.clearRect(0, 0, width, height);
-          var cell = Math.floor(Math.min(width, height) / 8);
+          var cell = Math.floor(Math.min(width / W, height / H));
           if (cell < 1) cell = 1;
-          var ox = Math.floor((width - cell * 8) / 2);
-          var oy = Math.floor((height - cell * 8) / 2);
+          var ox = Math.floor((width - cell * W) / 2);
+          var oy = Math.floor((height - cell * H) / 2);
           ctx.fillStyle = String(px);
-          for (var y = 0; y < 8; y++)
-            for (var x = 0; x < 8; x++)
+          for (var y = 0; y < H; y++)
+            for (var x = 0; x < W; x++)
               if (rows[y].charAt(x) === "X")
                 ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
         }
