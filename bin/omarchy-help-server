@@ -290,6 +290,7 @@ def own_window_address():
     return None
 lock = threading.Lock()
 state = {"sid": None, "primed": ""}
+history = []  # [(who, text)] session transcript, restored on widget reopen
 
 
 def agent_ready():
@@ -412,6 +413,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/tour/state":
             self._send(200, {"active": tour["active"], "step": tour["step"],
                              "finished": tour["finished"]})
+        elif self.path == "/history":
+            self._send(200, {"turns": history[-40:]})
         elif self.path == "/learn":
             _, items = learning_status()
             self._send(200, {"items": items,
@@ -457,21 +460,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"error": "bad request"})
             return self._send(200, {"ok": True})
         if self.path == "/show":
-            # Idempotent reveal: toggle the overlay ON only if it's hidden.
-            # (A blind toggle raced the window-rule's auto-show: first open
-            # revealed then immediately re-hid the widget.)
-            mons = json.loads(hypr("j/monitors") or "[]")
-            visible = any(m.get("specialWorkspace", {}).get("name") == "special:helper"
-                          for m in mons)
-            if not visible:
-                hypr('dispatch hl.dsp.workspace.toggle_special("helper")')
-            return self._send(200, {"ok": True, "was_visible": visible})
-        if self.path == "/minimize":
-            # The widget lives on special:helper (window rule); hiding is just
-            # flipping that overlay off. v4's lua IPC syntax, learned the hard
-            # way: dispatch hl.dsp.workspace.toggle_special("helper").
-            hypr('dispatch hl.dsp.workspace.toggle_special("helper")')
+            # Pinned widget is always visible when open; just focus it.
+            if own_window_address():
+                subprocess.run(["omarchy-launch-or-focus",
+                                "brave-127.0.0.1__-Default", "true"], timeout=10)
             return self._send(200, {"ok": True})
+        if self.path == "/minimize":
+            # Archie is a PINNED widget (visible on every workspace); hiding
+            # means closing the window — the chat survives server-side and is
+            # restored on reopen. Targeted close: focus it, close the active.
+            addr = own_window_address()
+            if addr:
+                subprocess.run(["omarchy-launch-or-focus",
+                                "brave-127.0.0.1__-Default", "true"], timeout=10)
+                time.sleep(0.3)
+                hypr("dispatch hl.dsp.window.close()")
+            return self._send(200, {"ok": bool(addr)})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
         n = int(self.headers.get("Content-Length", 0))
@@ -520,6 +524,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     answer = ask_agent(prompt, resume=False)
                 except Exception as e:
                     answer = "I hit a snag: " + str(e)[-300:]
+        history.append(("me", q))
+        history.append(("bot", answer))
         self._send(200, {"a": answer, "src": "ai"})
 
 

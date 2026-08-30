@@ -134,6 +134,13 @@ async function refreshLearn() {
 }
 refreshLearn();
 
+// Restore this session's conversation (the widget closes to hide; the
+// server remembers).
+fetch('/history').then(r => r.json()).then(h => {
+  (h.turns || []).forEach(([who, text]) => add(who === 'me' ? 'me' : 'bot', text));
+  chat.scrollTop = chat.scrollHeight;
+}).catch(() => {});
+
 let TOUR_STEPS = [], tourStep = -1, tourTimer = null;
 tourBtn.addEventListener('click', async () => {
   if (tourTimer) return;
