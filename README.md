@@ -20,7 +20,35 @@ Under the hood it's a [Claude Code](https://claude.com/claude-code) session
 - **LEARNED.md** — it appends what it verifies and what you correct, so it
   gets better on your machine over time
 
-## Install
+## Install (Omarchy plugin — recommended)
+
+    omarchy plugin add https://github.com/respira-crece-lidera/archy-omarchy.git --enable
+
+The 👾 invader appears in your bar (place it with `omarchy bar put`).
+**First click** runs Archy's one-time setup — with that click you consent to:
+per-user config in `~/.config/omarchy-help/`, two user services
+(`omarchy-help`, `omarchy-help-watch`), a Help entry merged (non-destructively)
+into your Omarchy menu, and a one-shot welcome hook. Nothing touches system
+files, nothing runs as root, no existing configuration is overwritten.
+
+## Remove
+
+    omarchy plugin remove io.github.respira-crece-lidera.archy
+    systemctl --user disable --now omarchy-help omarchy-help-watch
+    rm -rf ~/.config/omarchy-help ~/.local/share/omarchy-help \
+       ~/.local/bin/omarchy-help* ~/.config/systemd/user/omarchy-help*
+    # plus the "help" entry in ~/.config/omarchy/extensions/omarchy-menu.jsonc
+
+## Dependencies
+
+- `python` (stdlib only) and `curl` — required
+- An AI agent for the chat tier: whatever `omarchy default agent` is set to
+  (Claude Code and Codex supported headless; the tour, starter chips, and
+  coaching work with **no agent at all**)
+- License: MIT. No telemetry; all traffic stays on 127.0.0.1 except your
+  agent's own API calls and the optional manual refresh from GitHub.
+
+## Install (manual / non-plugin)
 
     git clone <this repo> && cd omarchy-helper && ./install.sh
 
