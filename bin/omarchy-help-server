@@ -213,8 +213,9 @@ HEADLESS_AGENTS = ("claude", "codex")  # agents we can call inline for the chat
 def ask_claude(q, resume):
     # NOTE: --allowedTools is variadic — keep the prompt ahead of it and use
     # the = form, or it swallows the prompt as a tool name.
+    # A tutor needs speed, not deep reasoning: fast model on purpose.
     args = ["claude", "-p", q + STYLE, "--output-format", "json",
-            "--allowedTools=" + ALLOWED]
+            "--model", "haiku", "--allowedTools=" + ALLOWED]
     if resume and state["sid"]:
         args += ["--resume", state["sid"]]
     out = subprocess.run(args, cwd=DIR, capture_output=True, text=True, timeout=240)
@@ -226,8 +227,12 @@ def ask_claude(q, resume):
 
 
 def ask_codex(q):
-    out = subprocess.run(["codex", "exec", q + STYLE], cwd=DIR,
-                         capture_output=True, text=True, timeout=240)
+    # Low reasoning effort for speed; retry plain if this codex predates it.
+    fast = ["codex", "exec", "-c", "model_reasoning_effort=low", q + STYLE]
+    out = subprocess.run(fast, cwd=DIR, capture_output=True, text=True, timeout=240)
+    if out.returncode != 0:
+        out = subprocess.run(["codex", "exec", q + STYLE], cwd=DIR,
+                             capture_output=True, text=True, timeout=240)
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
     return out.stdout.strip()[-2000:] or "Sorry — I came back empty."
