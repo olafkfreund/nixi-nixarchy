@@ -22,7 +22,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󱜙"
+    text: "\uf17b"
     slotSize: Style.bar.statusSlot
     fontSize: Style.font.caption
     tooltipText: "Archy — your Omarchy guide"
