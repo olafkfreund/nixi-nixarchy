@@ -1,19 +1,87 @@
 [
- {"cat": "Start here", "q": "Set up your AI agent", "a": "Omarchy is AI-first: pick your coding agent once and everything AI (this helper's chat, crash diagnosis, SUPER+A) uses it. Open the menu with SUPER+SPACE, go to Setup → Default agent, and choose (Claude Code, Codex, Gemini…). Or in a terminal: omarchy default agent claude. Then sign in to the agent once and you're set."},
- {"cat": "Start here", "q": "The one key to remember", "a": "SUPER (the Windows key) runs everything. SUPER+SPACE opens the Omarchy menu — apps, install, style, setup, power. SUPER+K shows every keybinding on your machine, including your own custom ones. When lost, press SUPER+K."},
- {"cat": "Start here", "q": "Open a terminal / browser", "a": "SUPER+RETURN opens a terminal. SUPER+B opens the browser (unless remapped — check SUPER+K). Or press SUPER+SPACE and type the app's name, like a search bar."},
- {"cat": "Start here", "q": "Close and move windows", "a": "SUPER+W closes the focused window (many apps here have no titlebar buttons — this is the way). Hold SUPER and drag with the left mouse button to move a floating window; SUPER + right-button drag resizes it."},
- {"cat": "Apps", "q": "Install an app", "a": "SUPER+SPACE → Install → Package for official software, or Install → AUR for community packages (huge selection, unvetted — like npm). Type the name, it fuzzy-finds. Remove later via SUPER+SPACE → Remove → Package, which also cleans config and dependencies."},
- {"cat": "Apps", "q": "Turn a website into an app", "a": "SUPER+SPACE → Install → Web App. Give it a name, the URL, and an icon — Omarchy wraps the site as a real app with its own window and launcher entry. Great for Gmail, WhatsApp Web, YouTube, dashboards. This is how several of the preinstalled 'apps' work."},
- {"cat": "Windows & workspaces", "q": "What are workspaces?", "a": "Independent desks for separate contexts — browser on one, work on another. SUPER+1…9 jumps to a workspace (they're created as you visit them). SUPER+SHIFT+1…9 sends the focused window to that workspace. The numbers in your top bar show which desk you're on."},
- {"cat": "Windows & workspaces", "q": "Move between windows", "a": "SUPER+arrow keys move focus between windows in the direction you press. SUPER+SHIFT+arrows swap the windows themselves. New windows tile automatically — nothing overlaps unless it's a floating window."},
- {"cat": "Windows & workspaces", "q": "What is the scratchpad?", "a": "A hidden overlay workspace: press SUPER+S and it drops over whatever you're doing; press SUPER+S again and it's gone — but everything in it keeps running. Send any window there with SUPER+ALT+S. Perfect for a terminal, music player, or chat you want one keypress away."},
- {"cat": "Windows & workspaces", "q": "Make a window fill the screen", "a": "SUPER+F expands the focused window within the layout; SUPER+CTRL+F is true fullscreen (bar hidden). Press the same key again to go back. Exact behavior can vary if customized — SUPER+K shows what yours does."},
- {"cat": "Look & feel", "q": "Change the theme", "a": "SUPER+SPACE → Style → Theme. One choice restyles everything at once — colors, bar, terminal, lock screen, wallpaper. Omarchy ships many themes and you can install more from git URLs (Style → Theme → Install). Backgrounds cycle with SUPER+CTRL+SPACE."},
- {"cat": "Look & feel", "q": "Adjust display and brightness", "a": "Brightness usually lives on your keyboard's function keys. Display settings (resolution, scaling, arrangement) are in SUPER+SPACE → Setup → Monitors — it edits the config for you. Night-light and idle/lock timing are under Setup too."},
- {"cat": "System", "q": "Connect Wi-Fi or Bluetooth", "a": "SUPER+SPACE → Setup → Wi-Fi opens the network picker; Setup → Bluetooth pairs devices. Both also sit as icons in the top bar — click them for the same panels."},
- {"cat": "System", "q": "Take a screenshot", "a": "Press PRINT — select an area, and it opens in a small editor for arrows/text before saving to your Pictures folder (and the clipboard). SUPER+CTRL+PRINT grabs TEXT from anywhere on screen via OCR — great for copying from images or videos."},
- {"cat": "System", "q": "Update the system", "a": "SUPER+SPACE → Update. It updates Omarchy itself plus all packages in one go. Omarchy versions arrive as regular package updates — no reinstalls. If something looks odd after an update, the same menu has Update → Config restore options."},
- {"cat": "System", "q": "Lock, sleep, power off", "a": "SUPER+SPACE → Power has lock, suspend, restart, and shutdown. The screen locks automatically after idle (timing under Setup → Idle). Closing the laptop lid suspends by default."},
- {"cat": "System", "q": "Something crashed — now what?", "a": "If a program crashes, Omarchy notices and shows a notification offering an AI diagnosis — click it and your default agent investigates the crash for you. Nothing set up? It only appears once you've chosen your default agent (see 'Set up your AI agent')."}
+ {
+  "cat": "Start here",
+  "q": "Set up your AI agent",
+  "a": "Omarchy is AI-first: pick your coding agent once and everything AI (this helper's chat, crash diagnosis, SUPER+A) uses it. Open the menu with SUPER+SPACE, go to Setup → Default agent, and choose (Claude Code, Codex, Gemini…). Or in a terminal: omarchy default agent claude. Then sign in to the agent once and you're set."
+ },
+ {
+  "cat": "Start here",
+  "q": "The one key to remember",
+  "a": "SUPER (the Windows key) runs everything. SUPER+SPACE opens the Omarchy menu — apps, install, style, setup, power. SUPER+K shows every keybinding on your machine, including your own custom ones. When lost, press SUPER+K."
+ },
+ {
+  "cat": "Start here",
+  "q": "Open a terminal / browser",
+  "a": "SUPER+RETURN opens a terminal. SUPER+SHIFT+RETURN opens the browser (and SUPER+ALT+RETURN opens tmux). Or press SUPER+SPACE and type any app's name, like a search bar."
+ },
+ {
+  "cat": "Start here",
+  "q": "Close and move windows",
+  "a": "SUPER+W closes the focused window (many apps here have no titlebar buttons — this is the way). Hold SUPER and drag with the left mouse button to move a floating window; SUPER + right-button drag resizes it."
+ },
+ {
+  "cat": "Apps",
+  "q": "Install an app",
+  "a": "SUPER+SPACE → Install → Package for official software, or Install → AUR for community packages (huge selection, unvetted — like npm). Type the name, it fuzzy-finds. Remove later via SUPER+SPACE → Remove → Package, which also cleans config and dependencies."
+ },
+ {
+  "cat": "Apps",
+  "q": "Turn a website into an app",
+  "a": "SUPER+SPACE → Install → Web App. Give it a name, the URL, and an icon — Omarchy wraps the site as a real app with its own window and launcher entry. Great for Gmail, WhatsApp Web, YouTube, dashboards. This is how several of the preinstalled 'apps' work."
+ },
+ {
+  "cat": "Windows & workspaces",
+  "q": "What are workspaces?",
+  "a": "Independent desks for separate contexts — browser on one, work on another. SUPER+1…9 jumps to a workspace (they're created as you visit them). SUPER+SHIFT+1…9 sends the focused window to that workspace. The numbers in your top bar show which desk you're on."
+ },
+ {
+  "cat": "Windows & workspaces",
+  "q": "Move between windows",
+  "a": "SUPER+arrow keys move focus between windows in the direction you press. SUPER+SHIFT+arrows swap the windows themselves. New windows tile automatically — nothing overlaps unless it's a floating window."
+ },
+ {
+  "cat": "Windows & workspaces",
+  "q": "What is the scratchpad?",
+  "a": "A hidden overlay workspace: press SUPER+S and it drops over whatever you're doing; press SUPER+S again and it's gone — but everything in it keeps running. Send any window there with SUPER+ALT+S. Perfect for a terminal, music player, or chat you want one keypress away."
+ },
+ {
+  "cat": "Windows & workspaces",
+  "q": "Make a window fill the screen",
+  "a": "SUPER+F expands the focused window within the layout; SUPER+CTRL+F is true fullscreen (bar hidden). Press the same key again to go back. Exact behavior can vary if customized — SUPER+K shows what yours does."
+ },
+ {
+  "cat": "Look & feel",
+  "q": "Change the theme",
+  "a": "SUPER+SPACE → Style → Theme. One choice restyles everything at once — colors, bar, terminal, lock screen, wallpaper. Omarchy ships many themes and you can install more from git URLs (Style → Theme → Install). Backgrounds cycle with SUPER+CTRL+SPACE."
+ },
+ {
+  "cat": "Look & feel",
+  "q": "Adjust display and brightness",
+  "a": "Brightness usually lives on your keyboard's function keys. Display settings (resolution, scaling, arrangement) are in SUPER+SPACE → Setup → Monitors — it edits the config for you. Night-light and idle/lock timing are under Setup too."
+ },
+ {
+  "cat": "System",
+  "q": "Connect Wi-Fi or Bluetooth",
+  "a": "SUPER+SPACE → Setup → Wi-Fi opens the network picker; Setup → Bluetooth pairs devices. Both also sit as icons in the top bar — click them for the same panels."
+ },
+ {
+  "cat": "System",
+  "q": "Take a screenshot",
+  "a": "Press PRINT — select an area, and it opens in a small editor for arrows/text before saving to your Pictures folder (and the clipboard). SUPER+CTRL+PRINT grabs TEXT from anywhere on screen via OCR — great for copying from images or videos."
+ },
+ {
+  "cat": "System",
+  "q": "Update the system",
+  "a": "SUPER+SPACE → Update. It updates Omarchy itself plus all packages in one go. Omarchy versions arrive as regular package updates — no reinstalls. If something looks odd after an update, the same menu has Update → Config restore options."
+ },
+ {
+  "cat": "System",
+  "q": "Lock, sleep, power off",
+  "a": "SUPER+SPACE → Power has lock, suspend, restart, and shutdown. The screen locks automatically after idle (timing under Setup → Idle). Closing the laptop lid suspends by default."
+ },
+ {
+  "cat": "System",
+  "q": "Something crashed — now what?",
+  "a": "If a program crashes, Omarchy notices and shows a notification offering an AI diagnosis — click it and your default agent investigates the crash for you. Nothing set up? It only appears once you've chosen your default agent (see 'Set up your AI agent')."
+ }
 ]

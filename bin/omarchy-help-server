@@ -187,8 +187,7 @@ TOUR = [
      "poll", lambda: bool(default_agent()), 1),
     ("Now the essentials. SUPER+RETURN opens a terminal \u2014 try it.",
      "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
-    ("Your browser has its own key too \u2014 usually SUPER+B (SUPER+K lists "
-     "every key if yours differs). Open it.",
+    ("Your browser has its own key too: SUPER+SHIFT+RETURN. Open it.",
      "event", lambda ev, d: ev == "openwindow" and any(
          b in d.lower() for b in ("brave", "chromium", "firefox", "helium")), 1),
     ("One more terminal: SUPER+RETURN again \u2014 and watch how the windows "
