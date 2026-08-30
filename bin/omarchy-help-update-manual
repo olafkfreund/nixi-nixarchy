@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# omarchy:summary=Refresh the Omarchy Helper's local copy of the official manual
 # Fetch the official Omarchy manual (markdown) into the helper's knowledge dir
 # so answers can cite the real manual, offline. Re-run any time to refresh.
 set -euo pipefail

@@ -1,0 +1,11 @@
+[Unit]
+Description=Omarchy Helper widget server (offline manual answers + agent relay)
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/omarchy-help-server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

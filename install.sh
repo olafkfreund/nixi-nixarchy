@@ -12,6 +12,20 @@ cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$ROOT/share/ui.html" "$DI
 install -m755 "$ROOT/bin/omarchy-help" "$HOME/.local/bin/omarchy-help"
 install -m755 "$ROOT/bin/omarchy-help-server" "$HOME/.local/bin/omarchy-help-server"
 install -m755 "$ROOT/bin/omarchy-help-update-manual" "$HOME/.local/bin/omarchy-help-update-manual"
+
+# The tutor method ships as a skill (the Omarchy way — cf. diagnose-crash):
+# agents pick it up from ~/.claude/skills; a copy sits in the config dir for
+# harnesses without a skill mechanism.
+mkdir -p "$HOME/.claude/skills"
+rm -rf "$HOME/.claude/skills/omarchy-help"
+cp -r "$ROOT/skills/omarchy-help" "$HOME/.claude/skills/omarchy-help"
+cp "$ROOT/skills/omarchy-help/SKILL.md" "$DIR/SKILL.md"
+
+# The widget server runs as a user service (like omarchy-crash-watch).
+mkdir -p "$HOME/.config/systemd/user"
+cp "$ROOT/systemd/omarchy-help.service" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable --now omarchy-help.service 2>/dev/null || true
 "$HOME/.local/bin/omarchy-help-update-manual" || true
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"

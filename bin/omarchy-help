@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# omarchy:summary=Open the Omarchy Helper chat widget (toggle show/hide)
+# omarchy:args=[--tui] [question]
 # Omarchy Helper: opens the corner chat widget (grounded Claude answers).
 # --tui opens the plain terminal session instead. Requires Claude Code.
 set -euo pipefail
