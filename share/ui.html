@@ -169,7 +169,7 @@ fetch('/tour/state').then(r => r.json()).then(t => {
   if (t.active && !tourTimer) {
     TOUR_STEPS = t.steps || [];
     tourStep = t.step;
-    add('bot', "Welcome! Let's set up your machine together — I can see what you press, so I'll know when each step is done. " + (TOUR_STEPS[tourStep] || ''));
+    add('bot', "Let me show you what's great about Omarchy — hands-on. I can see what you press, so I'll know when each step is done. " + (TOUR_STEPS[tourStep] || ''));
     tourTimer = setInterval(pollTour, 700);
   }
 }).catch(() => {});
@@ -179,7 +179,7 @@ tourBtn.addEventListener('click', async () => {
     const j = await (await fetch('/tour/start', { method: 'POST' })).json();
     TOUR_STEPS = j.steps || [];
     tourStep = 0;
-    add('bot', "Let's do this — a live tour. I can see what you press, so I'll know when you've done each step. " + TOUR_STEPS[0]);
+    add('bot', "Let me show you what's great about Omarchy — hands-on. I can see what you press, so I'll know when each step is done. " + TOUR_STEPS[0]);
     tourTimer = setInterval(pollTour, 700);
   } catch (e) { add('bot', 'Could not start the tour — is the helper service running?'); }
 });
