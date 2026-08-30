@@ -30,6 +30,10 @@
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .msg .li { padding-left: 1.1em; position: relative; margin-top: 3px; }
+  .msg .li::before { content: "•"; position: absolute; left: 0.2em; color: var(--ember); }
+  .msg code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 0.85em; }
+  .msg b { color: var(--ember); font-weight: 600; }
   .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0 2px 4px; }
   .act { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:0.8rem; cursor:pointer; }
   .act:hover { border-color:var(--ember); color:var(--ember); }
@@ -70,9 +74,18 @@ document.getElementById('mini').addEventListener('click', () =>
   fetch('/minimize', { method: 'POST' }).catch(() => {}));
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q');
+function md(text) {
+  let h = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  h = h.split('\n').map(l => /^\s*[-•] /.test(l)
+    ? '<div class="li">' + l.replace(/^\s*[-•] /, '') + '</div>'
+    : l).join('\n');
+  return h;
+}
 function add(cls, text) {
   const d = document.createElement('div'); d.className = 'msg ' + cls;
-  if (cls === 'bot') d.innerHTML = '<svg class="avatar"><use href="#bot"/></svg><div></div>', d.lastChild.textContent = text;
+  if (cls === 'bot') d.innerHTML = '<svg class="avatar"><use href="#bot"/></svg><div></div>', d.lastChild.innerHTML = md(text);
   else d.textContent = text;
   chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
 }
@@ -108,7 +121,7 @@ async function ask(q) {
   try {
     const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ q }) });
     const j = await r.json();
-    t.lastChild.textContent = j.a || j.error || 'Hmm, something went wrong.';
+    t.lastChild.innerHTML = md(j.a || j.error || 'Hmm, something went wrong.');
     if (j.src === 'ai') {
       const badge = document.createElement('span'); badge.className = 'src';
       badge.textContent = '🤖 AI';

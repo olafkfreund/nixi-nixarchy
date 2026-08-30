@@ -23,8 +23,10 @@ ALLOWED = ",".join([
     "Bash(hyprctl binds)", "Bash(hyprctl clients)", "Bash(hyprctl workspaces)",
     "Bash(ls /usr/share/omarchy/bin)",
 ])
-STYLE = ("\n\n(Answer for a chat bubble: plain text, no markdown headings, "
-         "max ~90 words unless asked for more.)")
+STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
+         "then 2-4 bullet lines starting with '- ' for steps or options. Bold "
+         "key names like **SUPER+K**. No headings, no long paragraphs, max "
+         "~80 words unless asked for more.)")
 
 
 # ---------------------------------------------------------------- tier 1
