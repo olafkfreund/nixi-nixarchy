@@ -30,6 +30,7 @@ EOF
 fi
 
 echo "Installed. Try: omarchy-help \"how do workspaces work?\""
-echo "Optional keybinding — add to ~/.config/hypr/bindings.lua:"
-echo '  o.bind("SUPER + SHIFT + H", "Omarchy helper", "xdg-terminal-exec omarchy-help")'
+echo "Optional: a compact floating helper window — add to ~/.config/hypr/bindings.lua:"
+echo "  o.bind(\"SUPER + SHIFT + H\", \"Omarchy helper\", \"foot --app-id=omarchy-help --title='Omarchy Help' -e omarchy-help\")"
+echo '  o.window("^omarchy-help$", { float = true, center = true, size = { 620, 700 } })'
 echo "Uninstall: rm -rf ~/.config/omarchy-help ~/.local/bin/omarchy-help (and the menu entry)."
