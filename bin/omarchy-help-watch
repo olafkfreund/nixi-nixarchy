@@ -29,19 +29,21 @@ TIP_GAP = float(os.environ.get("OMARCHY_TIPS_TIP_GAP", str(14 * 24 * 3600)))
 TERMINALS = {"foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty"}
 
 TIPS = {
-    # Teaching questions, offered ONLY when the feature is observably unused
-    # while the situation that wants it keeps happening.
-    "workspaces": ("Do you know how to use your workspaces?",
-                   "You have several desks, not one \u2014 and everything's "
-                   "piling onto the first. Click and I'll show you in 30 seconds.",
+    # Voice: "I noticed <evidence> — <feature> could help." Observation first
+    # (with the real number), offer second, lesson on click. Never preachy.
+    "workspaces": ("I noticed everything lives on one workspace",
+                   "{n} windows opened today without ever switching desks \u2014 "
+                   "workspaces could untangle that in seconds. Click and I\u2019ll "
+                   "show you how they work.",
                    "How do I use workspaces? Teach me the basics briefly."),
-    "scratchpad": ("Do you know about the scratchpad?",
-                   "You keep opening fresh terminals \u2014 there's a hidden one "
-                   "that drops over anything with one key. Click and I'll show you.",
+    "scratchpad": ("I noticed you keep opening new terminals",
+                   "{n} today \u2014 there\u2019s a hidden one that drops over "
+                   "anything with a single key and never closes. Click and "
+                   "I\u2019ll show you.",
                    "What is the scratchpad and how do I use it? Teach me briefly."),
-    "sidebyside": ("Do you know the window-moving keys?",
-                   "You've been flipping between the same two windows a lot \u2014 "
-                   "side by side might feel better. Click and I'll show you.",
+    "sidebyside": ("I noticed you bouncing between the same two windows",
+                   "{n} switches and counting \u2014 side by side with the focus "
+                   "keys would feel much smoother. Click and I\u2019ll show you.",
                    "How do I arrange two windows side by side and move focus "
                    "between them? Teach me briefly."),
 }
@@ -59,7 +61,7 @@ def save_state(st):
     json.dump(st, open(STATE, "w"))
 
 
-def fire(tip_id):
+def fire(tip_id, **fmt):
     st = load_state()
     now = time.time()
     if now - st.get("last_any", 0) < DAY_GAP:
@@ -67,6 +69,8 @@ def fire(tip_id):
     if now - st.get("last_" + tip_id, 0) < TIP_GAP:
         return False
     title, body, question = TIPS[tip_id]
+    title = title.format(**fmt)
+    body = body.format(**fmt)
     try:
         subprocess.run(["omarchy-notification-wait"], timeout=30)
         subprocess.run(["omarchy-notification-send", "--glyph", "\U0001f4a1",
@@ -123,11 +127,11 @@ class Day:
                 if (cls in TERMINALS
                         and self.opens_by_class[cls] >= TERM_CHURN
                         and not self.used_special
-                        and fire("scratchpad")):
+                        and fire("scratchpad", n=self.opens_by_class[cls])):
                     self.opens_by_class[cls] = 0
                 if (self.total_opens >= MONO_WINDOWS
                         and len(self.workspaces) <= 1
-                        and fire("workspaces")):
+                        and fire("workspaces", n=self.total_opens)):
                     self.total_opens = 0
         elif ev == "activewindow":
             cls = data.split(",", 1)[0].strip().lower()
@@ -136,7 +140,7 @@ class Day:
             if self.prev_focus == cls and self.last_focus:
                 pair = tuple(sorted((cls, self.last_focus)))
                 self.flips[pair] = self.flips.get(pair, 0) + 1
-                if self.flips[pair] >= FLIPFLOP and fire("sidebyside"):
+                if self.flips[pair] >= FLIPFLOP and fire("sidebyside", n=self.flips[pair]):
                     self.flips[pair] = 0
             self.prev_focus, self.last_focus = self.last_focus, cls
 
