@@ -34,6 +34,14 @@ systemctl --user enable --now omarchy-help-watch.service 2>/dev/null || true
 # First-boot welcome (fires once ever, via Omarchy's post-boot hooks).
 mkdir -p "$HOME/.config/omarchy/hooks/post-boot.d"
 install -m755 "$ROOT/hooks/archy-welcome.hook" "$HOME/.config/omarchy/hooks/post-boot.d/archy-welcome.hook"
+
+# Keep the bundled manual current: refresh after every omarchy-update, plus
+# a weekly timer for doc-only changes between releases.
+mkdir -p "$HOME/.config/omarchy/hooks/post-update.d"
+install -m755 "$ROOT/hooks/archy-manual-refresh.hook" "$HOME/.config/omarchy/hooks/post-update.d/archy-manual-refresh.hook"
+cp "$ROOT/systemd/omarchy-help-manual.service" "$ROOT/systemd/omarchy-help-manual.timer" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable --now omarchy-help-manual.timer 2>/dev/null || true
 "$HOME/.local/bin/omarchy-help-update-manual" || true
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"

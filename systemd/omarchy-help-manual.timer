@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly refresh of Archy's Omarchy manual copy
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+RandomizedDelaySec=6h
+
+[Install]
+WantedBy=timers.target
