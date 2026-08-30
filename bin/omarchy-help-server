@@ -31,7 +31,9 @@ import re as _re
 
 _WORD = _re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
 _STOP = set("the a an and or of to in on for with how do i does what is are my "
-            "you your it this that can where when omarchy".split())
+            "you your it this that can where when omarchy use using used why "
+            "work works working different way ways get set new want would "
+            "should could there some more make makes".split())
 
 
 def _tokens(text):
@@ -64,12 +66,12 @@ def _sections():
                 text = open(os.path.join(base, name)).read()
             except OSError:
                 continue
-            title = name
+            fname_words = " ".join(name[:-3].split("-"))
             for part in _re.split(r"\n(?=#{1,3} )", text):
                 lines = part.strip().splitlines()
                 if not lines:
                     continue
-                head = lines[0].lstrip("# ").strip() or title
+                head = (lines[0].lstrip("# ").strip() or name) + " " + fname_words
                 body = "\n".join(lines[1:]).strip()
                 if body:
                     docs.append((f"{head}", body, tag))
@@ -120,8 +122,12 @@ def local_answer(q):
         if not bt:
             continue
         bset = set(bt)
-        s = 3.0 * len(qset & set(ht))              # title hits: undamped
-        s += len(qset & bset) / (1 + 0.02 * len(bt))  # body hits: focused wins
+        hmatch = len(qset & set(ht))
+        s = 3.0 * hmatch                            # title/filename hits: undamped
+        if hmatch and ht:
+            s += 1.5 * hmatch / len(set(ht))        # focused titles beat long ones
+        freq = sum(min(bt.count(w), 3) for w in qset)   # repeated terms matter
+        s += freq / (1 + 0.02 * len(bt))
         if s > score:
             best, score = (head, body, tag), s
     # keybinding questions: grep the live bindings too
@@ -132,7 +138,7 @@ def local_answer(q):
         hits = [l for l in kb.splitlines()
                 if any(w in l.lower() for w in qt)][:4]
         kb_hit = "\n".join(hits)
-    if score < 2.0 and not kb_hit:
+    if score < 3.8 and not kb_hit:
         return None
     parts = []
     if best:
