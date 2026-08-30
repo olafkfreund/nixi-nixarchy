@@ -8,6 +8,8 @@
   customizations. The ground truth for "what key does X".
 - **SUPER+W** closes a window (many apps have no titlebar — this is how).
 - Default terminal is **foot** (`xdg-terminal-exec` opens it).
+- **SUPER+RETURN** terminal · **SUPER+SHIFT+RETURN** browser ·
+  **SUPER+ALT+RETURN** tmux · **SUPER+CTRL+RETURN** Herdr (all verified live).
 
 ## Workspaces
 - **SUPER+1…9** go to a workspace; **SUPER+SHIFT+1…9** move the focused
