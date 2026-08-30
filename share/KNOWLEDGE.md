@@ -45,6 +45,16 @@
   `looknfeel.lua`/`autostart.lua` (helpers: `o.bind`, `o.window`,
   `hl.config`, `hl.unbind`).
 
+## For scripts (advanced, verified the hard way)
+- In Omarchy 4 both `hyprctl` AND the raw Hyprland IPC socket are wrapped in
+  the Lua layer: classic dispatch syntax fails. Working form on the socket:
+  `dispatch hl.dsp.workspace.toggle_special("name")` (everything after the
+  first space is inlined as Lua; hl.dispatch wants hl.dsp.* dispatcher
+  objects, not strings). Queries (`j/clients`, `j/monitors`) pass through
+  unchanged. Targeted per-window dispatches aren't reachable this way —
+  prefer window rules + toggle_special, or `omarchy-launch-or-focus` + an
+  active-window dispatcher.
+
 ## Unverified on this build (check SUPER+K before asserting)
 Clipboard history key · pop-out/pin key · quick panels (audio/display/
 network/bluetooth/power) · window-group keys · split-direction key.
