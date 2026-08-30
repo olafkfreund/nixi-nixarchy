@@ -553,6 +553,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(n))
             q = body.get("q", "").strip()[:2000]
             force = body.get("force")
+            ephemeral = bool(body.get("ephemeral"))
         except Exception:
             return self._send(400, {"error": "bad request"})
         if not q:
@@ -594,8 +595,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     answer = ask_agent(prompt, resume=False)
                 except Exception as e:
                     answer = "I hit a snag: " + str(e)[-300:]
-        history.append(("me", q))
-        history.append(("bot", answer))
+        if not ephemeral:
+            history.append(("me", q))
+            history.append(("bot", answer))
         self._send(200, {"a": answer, "src": "ai"})
 
 
