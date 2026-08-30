@@ -179,33 +179,39 @@ CURRICULUM = [
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
-    # (instruction, kind, matcher). "event" matches socket2 lines; "poll" is
-    # checked every second — poll steps auto-complete if already true, so the
-    # same tour fits a first boot and an old hand.
+    # (instruction, kind, matcher, count) — count = how many matching actions
+    # complete the step. Poll steps auto-complete if already true.
     ("First things first: connect your AI. Press SUPER+SPACE, go to Setup \u2192 "
      "Default agent, and pick one (Claude Code, Codex\u2026). Everything smart in "
      "Omarchy flows through it \u2014 including me.",
-     "poll", lambda: bool(default_agent())),
-    ("Now the one key to rule them all: SUPER+RETURN opens a terminal. Try it.",
-     "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ","),
-    ("Open your browser too \u2014 SUPER+SPACE and type its name, or its key if "
-     "you know it.",
+     "poll", lambda: bool(default_agent()), 1),
+    ("Now the essentials. SUPER+RETURN opens a terminal \u2014 try it.",
+     "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
+    ("Your browser has its own key too \u2014 usually SUPER+B (SUPER+K lists "
+     "every key if yours differs). Open it.",
      "event", lambda ev, d: ev == "openwindow" and any(
-         b in d.lower() for b in ("brave", "chromium", "firefox", "helium"))),
-    ("Notice: no titlebars, nothing overlaps \u2014 windows tile themselves. "
-     "Your desks are numbered: press SUPER+2 for a fresh one. (I\u2019ll come "
-     "along \u2014 I\u2019m pinned.)",
-     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2"),
-    ("That\u2019s a clean context for anything. Hop back: SUPER+1.",
-     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1"),
-    ("CLICK the terminal (so it has focus, not me!), then SUPER+T \u2014 it pops "
-     "out to float. Same key tiles it back.",
-     "event", lambda ev, d: ev == "changefloatingmode"),
-    ("Last move: with the terminal focused, SUPER+W closes it. That\u2019s how "
-     "everything closes here.",
-     "event", lambda ev, d: ev == "closewindow"),
+         b in d.lower() for b in ("brave", "chromium", "firefox", "helium")), 1),
+    ("One more terminal: SUPER+RETURN again \u2014 and watch how the windows "
+     "share the screen evenly, no overlapping, no dragging. That\u2019s tiling.",
+     "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
+    ("Getting crowded? Tidy up: click a window, SUPER+W closes it. Close TWO "
+     "of them.",
+     "event", lambda ev, d: ev == "closewindow", 2),
+    ("Now the front door of the whole OS: SUPER+SPACE opens the menu \u2014 "
+     "apps, install, themes, setup, everything. Type any app\u2019s name and "
+     "launch it from there.",
+     "event", lambda ev, d: ev == "openwindow", 1),
+    ("Desks: press SUPER+2 for a fresh workspace. (I\u2019ll come along \u2014 "
+     "I\u2019m pinned.)",
+     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2", 1),
+    ("A clean context for anything \u2014 one project per desk works great. "
+     "Hop back: SUPER+1.",
+     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1", 1),
+    ("Last trick: CLICK a window (so it has focus, not me!) and press SUPER+T "
+     "\u2014 it floats free. Press SUPER+T again to tile it back.",
+     "event", lambda ev, d: ev == "changefloatingmode", 2),
 ]
-tour = {"active": False, "step": 0, "finished": False, "note": ""}
+tour = {"active": False, "step": 0, "finished": False, "note": "", "hits": 0}
 
 
 def _advance_if_done():
@@ -213,6 +219,7 @@ def _advance_if_done():
     i = tour["step"]
     while i < len(TOUR) and TOUR[i][1] == "poll" and TOUR[i][2]():
         i += 1
+        tour["hits"] = 0
     if i != tour["step"]:
         tour["step"] = i
         _maybe_finish()
@@ -261,8 +268,11 @@ def tour_thread():
                     continue
                 i = tour["step"]
                 if i < len(TOUR) and TOUR[i][1] == "event" and TOUR[i][2](ev, d):
-                    tour["step"] = i + 1
-                    _maybe_finish()
+                    tour["hits"] = tour.get("hits", 0) + 1
+                    if tour["hits"] >= TOUR[i][3]:
+                        tour["step"] = i + 1
+                        tour["hits"] = 0
+                        _maybe_finish()
                     if not tour["active"]:
                         return
                 _advance_if_done()
@@ -476,7 +486,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/tour/start":
-            tour.update({"active": True, "step": 0, "finished": False, "note": ""})
+            tour.update({"active": True, "step": 0, "finished": False, "note": "", "hits": 0})
             threading.Thread(target=tour_thread, daemon=True).start()
             return self._send(200, {"ok": True, "steps": [t[0] for t in TOUR]})
         if self.path == "/tour/stop":
