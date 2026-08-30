@@ -273,6 +273,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/show":
+            # Idempotent reveal: toggle the overlay ON only if it's hidden.
+            # (A blind toggle raced the window-rule's auto-show: first open
+            # revealed then immediately re-hid the widget.)
+            mons = json.loads(hypr("j/monitors") or "[]")
+            visible = any(m.get("specialWorkspace", {}).get("name") == "special:helper"
+                          for m in mons)
+            if not visible:
+                hypr('dispatch hl.dsp.workspace.toggle_special("helper")')
+            return self._send(200, {"ok": True, "was_visible": visible})
         if self.path == "/minimize":
             # The widget lives on special:helper (window rule); hiding is just
             # flipping that overlay off. v4's lua IPC syntax, learned the hard

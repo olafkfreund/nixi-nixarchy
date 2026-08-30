@@ -29,7 +29,11 @@ if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": tr
 fi
 omarchy-launch-webapp "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true
 for _ in $(seq 1 40); do
-  curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true' && { toggle; exit 0; }
+  if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true'; then
+    sleep 0.3   # let the window-rule finish placing it
+    curl -fsS -X POST "http://127.0.0.1:$PORT/show" >/dev/null 2>&1
+    exit 0
+  fi
   sleep 0.25
 done
 echo "helper window did not appear" >&2; exit 1
