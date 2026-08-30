@@ -16,7 +16,11 @@
   /* scrolling without the visible bar */
   #chat { scrollbar-width:none; -ms-overflow-style:none; }
   #chat::-webkit-scrollbar { display:none; }
-  .msg { max-width:86%; padding:9px 12px; border-radius:14px; white-space:pre-wrap; word-wrap:break-word; }
+  .msg { max-width:86%; padding:9px 12px; border-radius:14px; word-wrap:break-word; }
+  .me { white-space:pre-wrap; }
+  .msg .ln { margin-top:4px; }
+  .msg .ln:first-child, .msg .li:first-child { margin-top:0; }
+  .msg .gap { height:7px; }
   .bot { background:var(--bot); border:1px solid var(--line); border-bottom-left-radius:4px; align-self:flex-start; display:flex; gap:8px; }
   .bot .avatar { width:22px; height:22px; flex:none; margin-top:2px; }
   .me { background:var(--me); border:1px solid var(--line); border-bottom-right-radius:4px; align-self:flex-end; }
@@ -30,7 +34,7 @@
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
-  .msg .li { padding-left: 1.1em; position: relative; margin-top: 3px; }
+  .msg .li { padding-left: 1.1em; position: relative; margin-top: 5px; }
   .msg .li::before { content: "•"; position: absolute; left: 0.2em; color: var(--ember); }
   .msg code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 0.85em; }
   .msg b { color: var(--ember); font-weight: 600; }
@@ -78,10 +82,11 @@ function md(text) {
   let h = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
   h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  h = h.split('\n').map(l => /^\s*[-•] /.test(l)
-    ? '<div class="li">' + l.replace(/^\s*[-•] /, '') + '</div>'
-    : l).join('\n');
-  return h;
+  return h.split('\n').map(l => {
+    if (/^\s*[-•] /.test(l)) return '<div class="li">' + l.replace(/^\s*[-•] /, '') + '</div>';
+    if (l.trim() === '') return '<div class="gap"></div>';
+    return '<div class="ln">' + l + '</div>';
+  }).join('');
 }
 function add(cls, text) {
   const d = document.createElement('div'); d.className = 'msg ' + cls;
