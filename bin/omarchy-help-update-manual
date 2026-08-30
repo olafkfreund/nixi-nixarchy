@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Fetch the official Omarchy manual (markdown) into the helper's knowledge dir
+# so answers can cite the real manual, offline. Re-run any time to refresh.
+set -euo pipefail
+DIR="${OMARCHY_HELP_DIR:-$HOME/.config/omarchy-help}/manual"
+mkdir -p "$DIR"
+API="https://api.github.com/repos/basecamp/omarchy/contents/manual"
+listing=$(curl -fsSL "$API" 2>/dev/null) || { echo "could not reach GitHub — manual not updated"; exit 1; }
+echo "$listing" | python3 -c "
+import json, sys, urllib.request, os
+files = [f for f in json.load(sys.stdin) if f['name'].endswith('.md')]
+for f in files:
+    urllib.request.urlretrieve(f['download_url'], os.path.join('$DIR', f['name']))
+print(f'manual: {len(files)} pages -> $DIR')
+"
+date +%F > "$DIR/.fetched"

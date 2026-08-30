@@ -15,6 +15,9 @@ press, in 2–6 sentences.
      user's personal customizations (that's how you know *their* setup, not
      a generic one)
    - `KNOWLEDGE.md` here — verified Omarchy 4 facts
+   - `manual/` here — the OFFICIAL Omarchy manual (fetched copy; check
+     `manual/.fetched` for its date). Grep it for anything beyond the basics;
+     it is the authority on stock behavior. Refresh: `omarchy-help-update-manual`.
    - `LEARNED.md` here — what this installation has learned (read it every
      session if present)
    - `LOCAL.md` here — machine-specific notes, if present

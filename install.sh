@@ -11,13 +11,15 @@ mkdir -p "$DIR" "$HOME/.local/bin" "$HOME/.config/omarchy/extensions"
 cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$ROOT/share/ui.html" "$DIR/"
 install -m755 "$ROOT/bin/omarchy-help" "$HOME/.local/bin/omarchy-help"
 install -m755 "$ROOT/bin/omarchy-help-server" "$HOME/.local/bin/omarchy-help-server"
+install -m755 "$ROOT/bin/omarchy-help-update-manual" "$HOME/.local/bin/omarchy-help-update-manual"
+"$HOME/.local/bin/omarchy-help-update-manual" || true
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 if ! grep -q '"help"' "$EXT" 2>/dev/null; then
   python3 - "$EXT" <<'EOF'
 import json, re, sys, os
 p = sys.argv[1]
-row = '"help": {"icon": "\U000f0625", "label": "Help", "description": "Ask anything about Omarchy", "action": "xdg-terminal-exec omarchy-help", "aliases": ["how", "ayuda"]}'
+row = '"help": {"icon": "\U000f0625", "label": "Help", "description": "Ask anything about Omarchy", "action": "omarchy-help", "aliases": ["how", "ayuda"]}'
 if not os.path.exists(p) or not re.sub(r"//.*", "", open(p).read()).strip().strip("{}").strip():
     open(p, "w").write("{\n  " + row + "\n}\n")
 else:

@@ -21,18 +21,18 @@
   form { display:flex; gap:8px; padding:12px; background:var(--panel); border-top:1px solid var(--line); }
   input { flex:1; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--ink); font:inherit; outline:none; }
   input:focus { border-color:var(--ember); }
-  button { background:var(--ember); border:none; border-radius:12px; padding:0 16px; font-weight:700; color:#1a1206; cursor:pointer; }
+  button { background:var(--ember); border:none; border-radius:12px; padding:0 16px; font-weight:700; color:var(--on-accent,#1a1206); cursor:pointer; }
   button:disabled { opacity:.5; }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
 </style></head>
 <body>
 <svg style="display:none"><symbol id="bot" viewBox="0 0 48 48">
-  <rect x="10" y="14" width="28" height="22" rx="7" fill="#2a2417" stroke="#ffb454" stroke-width="2.2"/>
-  <circle cx="19" cy="25" r="3.2" fill="#ffb454"/><circle cx="29" cy="25" r="3.2" fill="#ffb454"/>
-  <path d="M18 31.5c2 1.8 10 1.8 12 0" stroke="#ffb454" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <line x1="24" y1="14" x2="24" y2="8" stroke="#ffb454" stroke-width="2.2"/><circle cx="24" cy="6.5" r="2.4" fill="#ffb454"/>
-  <line x1="10" y1="24" x2="5" y2="24" stroke="#ffb454" stroke-width="2.2" stroke-linecap="round"/>
-  <line x1="38" y1="24" x2="43" y2="24" stroke="#ffb454" stroke-width="2.2" stroke-linecap="round"/>
+  <rect x="10" y="14" width="28" height="22" rx="7" style="fill:var(--bot);stroke:var(--ember)" stroke-width="2.2"/>
+  <circle cx="19" cy="25" r="3.2" style="fill:var(--ember)"/><circle cx="29" cy="25" r="3.2" style="fill:var(--ember)"/>
+  <path d="M18 31.5c2 1.8 10 1.8 12 0" style="stroke:var(--ember)" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <line x1="24" y1="14" x2="24" y2="8" style="stroke:var(--ember)" stroke-width="2.2"/><circle cx="24" cy="6.5" r="2.4" style="fill:var(--ember)"/>
+  <line x1="10" y1="24" x2="5" y2="24" style="stroke:var(--ember)" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="38" y1="24" x2="43" y2="24" style="stroke:var(--ember)" stroke-width="2.2" stroke-linecap="round"/>
 </symbol></svg>
 <header>
   <svg class="avatar"><use href="#bot"/></svg>
@@ -47,6 +47,20 @@
   <button id="send">Ask</button>
 </form>
 <script>
+// Match the active Omarchy theme (served from its colors.toml).
+fetch('/theme').then(r => r.json()).then(t => {
+  if (!t || !t.background) return;
+  const r = document.documentElement.style, light = t.mode === 'light';
+  r.setProperty('--bg', t.background);
+  r.setProperty('--panel', light ? (t.darker_background || t.dark_background || t.background) : (t.dark_background || t.darker_background || t.background));
+  r.setProperty('--line', t.muted || t.selection || '#555');
+  r.setProperty('--ink', t.foreground);
+  r.setProperty('--muted', t.dark_foreground || t.muted || t.foreground);
+  r.setProperty('--ember', t.accent || t.blue || '#ffb454');
+  r.setProperty('--bot', t.lighter_background || t.selection || t.background);
+  r.setProperty('--me', t.selection || t.lighter_background || t.background);
+  r.setProperty('--on-accent', light ? '#ffffff' : (t.darker_background || '#111'));
+}).catch(() => {});
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q'), send = document.getElementById('send');
 function add(cls, text) {

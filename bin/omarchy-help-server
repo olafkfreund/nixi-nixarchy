@@ -55,6 +55,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, open(UI, "rb").read(), "text/html")
         elif self.path == "/health":
             self._send(200, {"ok": True})
+        elif self.path == "/theme":
+            # The active Omarchy theme's palette, so the widget always matches.
+            try:
+                import tomllib
+                p = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
+                with open(p, "rb") as f:
+                    self._send(200, tomllib.load(f))
+            except Exception:
+                self._send(200, {})
         else:
             self._send(404, {"error": "not found"})
 
