@@ -240,6 +240,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, open(UI, "rb").read(), "text/html")
         elif self.path == "/health":
             self._send(200, {"ok": True})
+        elif self.path == "/faq":
+            for p in (os.path.join(DIR, "faq.json"), os.path.join(DATA, "faq.json")):
+                if os.path.exists(p):
+                    return self._send(200, open(p, "rb").read())
+            return self._send(200, b"[]")
         elif self.path == "/status":
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
@@ -274,21 +279,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(400, {"error": "empty"})
 
         import shutil
-        agent = default_agent() or "claude"
+        agent = default_agent()
         have_ai = agent in HEADLESS_AGENTS and bool(shutil.which(agent))
-
-        # Tier 1: instant offline answer from the manual/notes/keybindings.
-        local = None if force == "ai" else local_answer(q)
-        if local is not None:
-            return self._send(200, {"a": local, "src": "manual",
-                                    "can_escalate": have_ai})
         if not have_ai:
-            return self._send(200, {
-                "a": "I couldn't find that in the local manual, and no AI is "
-                     "connected on this machine (install & sign in to Claude "
-                     "Code for deeper answers). Try rephrasing with a keyword "
-                     "from the manual.",
-                "src": "manual", "can_escalate": False})
+            hint = ("No AI agent is connected yet. Omarchy is AI-first: pick "
+                    "your coding agent once with SUPER+SPACE \u2192 Setup \u2192 "
+                    "Default agent (or: omarchy default agent claude), sign in "
+                    "to it, and I\u2019ll answer anything. The Getting-started "
+                    "buttons above work without one.")
+            if agent and agent not in HEADLESS_AGENTS:
+                hint = (f"Your default agent is \u2018{agent}\u2019, which I can\u2019t "
+                        "chat through inline yet (Claude Code and Codex work). "
+                        "Switch with: omarchy default agent claude \u2014 or use "
+                        "SUPER+A for a full agent session.")
+            return self._send(200, {"a": hint, "src": "manual"})
 
         # Tier 2: the LLM — when escalating a manual hit, hand it that hit
         # as grounding (on a genuine local miss there's nothing to add).
