@@ -156,6 +156,7 @@ tourBtn.addEventListener('click', async () => {
 async function pollTour() {
   try {
     const t = await (await fetch('/tour/state')).json();
+    if (t.note) add('bot', t.note);
     while (tourStep < t.step && tourStep < TOUR_STEPS.length) {
       tourStep++;
       if (tourStep < TOUR_STEPS.length) add('bot', '✅ Got it! ' + TOUR_STEPS[tourStep]);

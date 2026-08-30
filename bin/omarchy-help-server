@@ -181,20 +181,23 @@ CURRICULUM = [
 TOUR = [
     ("Open a terminal: press SUPER+RETURN.",
      lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ","),
-    ("Nice. Now switch to workspace 2: SUPER+2.",
+    ("Nice. Now switch to workspace 2: SUPER+2. (I'll come with you \u2014 I'm pinned.)",
      lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2"),
     ("See how it's a fresh desk? Come back with SUPER+1.",
      lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1"),
-    ("Make the focused window float free: SUPER+T.",
+    ("Now CLICK the terminal first (so it has focus, not me!), then press "
+     "SUPER+T to make it float free.",
      lambda ev, d: ev == "changefloatingmode"),
-    ("Now close it the Omarchy way: SUPER+W.",
+    ("Last one: with the terminal still focused, SUPER+W closes it the "
+     "Omarchy way.",
      lambda ev, d: ev == "closewindow"),
 ]
-tour = {"active": False, "step": 0, "finished": False}
+tour = {"active": False, "step": 0, "finished": False, "note": ""}
 
 
 def tour_thread():
     run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    own = (own_window_address() or "").replace("0x", "")
     try:
         import socket as sk
         sigs = os.listdir(os.path.join(run, "hypr"))
@@ -214,6 +217,15 @@ def tour_thread():
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 ev, _, d = line.decode(errors="replace").partition(">>")
+                # Never let an action ON ARCHIE count as a step — and warn.
+                if own and ev in ("changefloatingmode", "closewindow") \
+                        and own in d.replace("0x", ""):
+                    tour["note"] = ("Careful \u2014 that one hit ME, not the "
+                                    "terminal \U0001f605 Click the other window "
+                                    "first, then try the key again. (If I ever "
+                                    "look broken: SUPER+W on me, then "
+                                    "SUPER+SHIFT+H brings me back fresh.)")
+                    continue
                 i = tour["step"]
                 if i < len(TOUR) and TOUR[i][1](ev, d):
                     tour["step"] = i + 1
@@ -411,8 +423,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             q = state.pop("primed", "")
             self._send(200, {"q": q})
         elif self.path == "/tour/state":
+            note = tour.pop("note", "") if tour.get("note") else ""
             self._send(200, {"active": tour["active"], "step": tour["step"],
-                             "finished": tour["finished"]})
+                             "finished": tour["finished"], "note": note})
         elif self.path == "/history":
             self._send(200, {"turns": history[-40:]})
         elif self.path == "/learn":
@@ -430,7 +443,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/tour/start":
-            tour.update({"active": True, "step": 0, "finished": False})
+            tour.update({"active": True, "step": 0, "finished": False, "note": ""})
             threading.Thread(target=tour_thread, daemon=True).start()
             return self._send(200, {"ok": True, "steps": [t[0] for t in TOUR]})
         if self.path == "/tour/stop":
