@@ -25,6 +25,8 @@
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .src { display:block; margin-top:5px; font-size:0.68rem; color:var(--muted); }
+  .deeper { display:inline-block; margin-top:6px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
 </style></head>
 <body>
 <svg style="display:none"><symbol id="bot" viewBox="0 0 48 48">
@@ -72,17 +74,31 @@ function add(cls, text) {
   else d.textContent = text;
   chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
 }
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const q = input.value.trim(); if (!q) return;
-  add('me', q); input.value = ''; input.disabled = true;
+async function ask(q, force) {
+  input.disabled = true;
   const t = add('bot', ''); t.lastChild.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
   try {
-    const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ q }) });
+    const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(force ? { q, force: 'ai' } : { q }) });
     const j = await r.json();
     t.lastChild.textContent = j.a || j.error || 'Hmm, something went wrong.';
+    const badge = document.createElement('span');
+    badge.className = 'src';
+    badge.textContent = j.src === 'ai' ? '\ud83e\udd16 AI' : '\ud83d\udcd6 from the manual (instant, offline)';
+    t.lastChild.appendChild(badge);
+    if (j.src === 'manual' && j.can_escalate) {
+      const b = document.createElement('button');
+      b.className = 'deeper'; b.textContent = '\ud83e\udd16 deeper answer';
+      b.addEventListener('click', () => { b.remove(); ask(q, true); });
+      t.lastChild.appendChild(b);
+    }
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
+}
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = input.value.trim(); if (!q) return;
+  add('me', q); input.value = '';
+  ask(q, false);
 });
 </script>
 </body></html>

@@ -21,6 +21,117 @@ STYLE = ("\n\n(Answer for a chat bubble: plain text, no markdown headings, "
          "max ~90 words unless asked for more.)")
 
 
+# ---------------------------------------------------------------- tier 1
+# Offline answers: a tiny full-text index over the bundled manual, the
+# knowledge file, and the machine's live keybindings. No LLM required.
+import re as _re
+
+_WORD = _re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
+_STOP = set("the a an and or of to in on for with how do i does what is are my "
+            "you your it this that can where when omarchy".split())
+
+
+def _tokens(text):
+    return [w.lower() for w in _WORD.findall(text) if w.lower() not in _STOP]
+
+
+def _sections():
+    docs = []
+    for base, tag in ((os.path.join(DIR, "manual"), "manual"),
+                      (DIR, "notes")):
+        try:
+            names = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for name in names:
+            if not name.endswith(".md"):
+                continue
+            if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):
+                continue
+            try:
+                text = open(os.path.join(base, name)).read()
+            except OSError:
+                continue
+            title = name
+            for part in _re.split(r"\n(?=#{1,3} )", text):
+                lines = part.strip().splitlines()
+                if not lines:
+                    continue
+                head = lines[0].lstrip("# ").strip() or title
+                body = "\n".join(lines[1:]).strip()
+                if body:
+                    docs.append((f"{head}", body, tag))
+    return docs
+
+
+def _keybinds():
+    try:
+        out = subprocess.run(["omarchy", "menu", "keybindings", "--print"],
+                             capture_output=True, text=True, timeout=10)
+        return out.stdout
+    except Exception:
+        return ""
+
+
+_index = {"sig": None, "docs": []}
+
+
+def _index_sig():
+    sig = []
+    for base in (os.path.join(DIR, "manual"), DIR):
+        try:
+            for n in os.listdir(base):
+                if n.endswith(".md"):
+                    sig.append((n, os.path.getmtime(os.path.join(base, n))))
+        except OSError:
+            pass
+    return tuple(sorted(sig))
+
+
+def get_index():
+    sig = _index_sig()
+    if sig != _index["sig"]:
+        _index["docs"] = _sections()
+        _index["sig"] = sig
+    return _index["docs"]
+
+
+def local_answer(q):
+    """Best-matching manual/knowledge section for q, or None."""
+    qt = _tokens(q)
+    if not qt:
+        return None
+    qset = set(qt)
+    best, score = None, 0.0
+    for head, body, tag in get_index():
+        ht, bt = _tokens(head), _tokens(body)
+        if not bt:
+            continue
+        bset = set(bt)
+        s = 3.0 * len(qset & set(ht)) + len(qset & bset)
+        s /= (1 + 0.02 * len(bt))          # prefer focused sections
+        if s > score:
+            best, score = (head, body, tag), s
+    # keybinding questions: grep the live bindings too
+    kb_hit = ""
+    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
+                               "super", "press", "hotkey")):
+        kb = _keybinds()
+        hits = [l for l in kb.splitlines()
+                if any(w in l.lower() for w in qt)][:4]
+        kb_hit = "\n".join(hits)
+    if score < 2.0 and not kb_hit:
+        return None
+    parts = []
+    if best:
+        body = best[1]
+        body = body if len(body) <= 700 else body[:700].rsplit(" ", 1)[0] + " …"
+        parts.append(f"From the {'manual' if best[2] == 'manual' else 'notes'} — {best[0]}:\n{body}")
+    if kb_hit:
+        parts.append("Your live keybindings say:\n" + kb_hit)
+    return "\n\n".join(parts)
+
+
 def hypr(cmd):
     """Send one command to the Hyprland socket (works even when the server
     was started outside the session env)."""
@@ -107,24 +218,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"error": "not found"})
         n = int(self.headers.get("Content-Length", 0))
         try:
-            q = json.loads(self.rfile.read(n)).get("q", "").strip()[:2000]
+            body = json.loads(self.rfile.read(n))
+            q = body.get("q", "").strip()[:2000]
+            force = body.get("force")
         except Exception:
             return self._send(400, {"error": "bad request"})
         if not q:
             return self._send(400, {"error": "empty"})
+
+        import shutil
+        have_ai = bool(shutil.which("claude"))
+
+        # Tier 1: instant offline answer from the manual/notes/keybindings.
+        local = None if force == "ai" else local_answer(q)
+        if local is not None:
+            return self._send(200, {"a": local, "src": "manual",
+                                    "can_escalate": have_ai})
+        if not have_ai:
+            return self._send(200, {
+                "a": "I couldn't find that in the local manual, and no AI is "
+                     "connected on this machine (install & sign in to Claude "
+                     "Code for deeper answers). Try rephrasing with a keyword "
+                     "from the manual.",
+                "src": "manual", "can_escalate": False})
+
+        # Tier 2: the LLM — when escalating a manual hit, hand it that hit
+        # as grounding (on a genuine local miss there's nothing to add).
+        context = local_answer(q) if force == "ai" else None
+        prompt = q
+        if context:
+            prompt += "\n\n(Local search context, may help:\n" + context[:900] + ")"
         with lock:
             try:
-                answer = ask_claude(q, resume=True)
+                answer = ask_claude(prompt, resume=True)
             except subprocess.TimeoutExpired:
                 answer = "That took too long — try a simpler question."
             except Exception:
                 # A stale/broken session shouldn't kill the chat: retry fresh.
                 state["sid"] = None
                 try:
-                    answer = ask_claude(q, resume=False)
+                    answer = ask_claude(prompt, resume=False)
                 except Exception as e:
                     answer = "I hit a snag: " + str(e)[-300:]
-        self._send(200, {"a": answer})
+        self._send(200, {"a": answer, "src": "ai"})
 
 
 if __name__ == "__main__":

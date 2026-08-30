@@ -5,6 +5,11 @@ away. Ask it anything — "how do workspaces work?", "how do I install an
 app?", "what does SUPER+S do?" — and it answers in plain language, grounded
 in YOUR machine, not a stale manual.
 
+**Two tiers:** simple questions are answered instantly and offline from a
+bundled copy of the official manual (plus your live keybindings) — no LLM
+call, no cost, works without any AI signed in. The AI tier kicks in only for
+deeper questions, or when you tap "deeper answer".
+
 Under the hood it's a [Claude Code](https://claude.com/claude-code) session
 (Omarchy ships Claude Code) preloaded with:
 
