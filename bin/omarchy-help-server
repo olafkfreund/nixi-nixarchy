@@ -189,7 +189,7 @@ def own_window_address():
             return c.get("address")
     return None
 lock = threading.Lock()
-state = {"sid": None}
+state = {"sid": None, "primed": ""}
 
 
 def agent_ready():
@@ -306,6 +306,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         pass
                     break
             return self._send(200, {"ready": agent_ready(), "faq": entries})
+        elif self.path == "/prime":
+            q = state.pop("primed", "")
+            self._send(200, {"q": q})
         elif self.path == "/status":
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
@@ -314,6 +317,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/prime":
+            # A teaching question queued by the tip watcher: the widget asks
+            # it automatically the next time it becomes visible.
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                state["primed"] = json.loads(self.rfile.read(n)).get("q", "")[:500]
+            except Exception:
+                return self._send(400, {"error": "bad request"})
+            return self._send(200, {"ok": True})
         if self.path == "/show":
             # Idempotent reveal: toggle the overlay ON only if it's hidden.
             # (A blind toggle raced the window-rule's auto-show: first open

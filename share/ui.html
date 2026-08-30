@@ -112,6 +112,17 @@ async function ask(q) {
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 }
+async function checkPrimed() {
+  try {
+    const j = await (await fetch('/prime')).json();
+    if (j.q) { add('me', j.q); ask(j.q); }
+  } catch (e) {}
+}
+checkPrimed();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkPrimed();
+});
+
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const q = input.value.trim(); if (!q) return;

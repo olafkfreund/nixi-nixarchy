@@ -8,6 +8,12 @@ DIR="${OMARCHY_HELP_DIR:-$HOME/.config/omarchy-help}"
 PORT="${OMARCHY_HELP_PORT:-8642}"
 [[ -f "$DIR/CLAUDE.md" ]] || { echo "omarchy-helper not installed at $DIR (run install.sh)"; exit 1; }
 
+ASK=""
+if [[ "${1:-}" == "--ask" ]]; then
+  ASK="${2:?--ask needs a question}"
+  shift 2
+fi
+
 if [[ "${1:-}" == "--tui" ]]; then
   cd "$DIR"; exec claude "${2:-Greet me in one short line as the Omarchy Helper and ask what I want to know.}"
 fi
@@ -19,12 +25,21 @@ if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     sleep 0.2
   done
 fi
+if [[ -n "$ASK" ]]; then
+  curl -fsS -X POST "http://127.0.0.1:$PORT/prime" -H "Content-Type: application/json" \
+    -d "$(python3 -c "import json,sys; print(json.dumps({'q': sys.argv[1]}))" "$ASK")" >/dev/null 2>&1
+fi
+
 # Website-bubble toggle: the widget lives on the special:helper overlay
 # (window rule). If it exists, show/hide the overlay; else open it fresh
 # and reveal the overlay once the window is mapped.
 toggle() { curl -fsS -X POST "http://127.0.0.1:$PORT/minimize" >/dev/null 2>&1; }
 if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true'; then
-  toggle
+  if [[ -n "$ASK" ]]; then
+    curl -fsS -X POST "http://127.0.0.1:$PORT/show" >/dev/null 2>&1   # reveal, never hide, when carrying a question
+  else
+    toggle
+  fi
   exit 0
 fi
 omarchy-launch-webapp "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true

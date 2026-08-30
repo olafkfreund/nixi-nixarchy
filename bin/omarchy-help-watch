@@ -29,18 +29,21 @@ TIP_GAP = float(os.environ.get("OMARCHY_TIPS_TIP_GAP", str(14 * 24 * 3600)))
 TERMINALS = {"foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty"}
 
 TIPS = {
-    "sidebyside": ("Tired of flipping between two windows?",
-                   "Put them side by side: SUPER+SHIFT+arrows swaps positions, "
-                   "SUPER+arrows moves focus instantly. Ask the helper "
-                   "(SUPER+SHIFT+H) for more."),
-    "workspaces": ("All your windows on one desk?",
-                   "Workspaces are extra desks: SUPER+2 opens a fresh one, "
-                   "SUPER+SHIFT+2 sends a window there. One context per desk "
-                   "feels great. Ask the helper (SUPER+SHIFT+H) for more."),
-    "scratchpad": ("Opening terminals over and over?",
-                   "Keep ONE always ready: send it to the scratchpad with "
-                   "SUPER+ALT+S, then SUPER+S drops it over anything and hides "
-                   "it again. Ask the helper (SUPER+SHIFT+H) for more."),
+    # Teaching questions, offered ONLY when the feature is observably unused
+    # while the situation that wants it keeps happening.
+    "workspaces": ("Do you know how to use your workspaces?",
+                   "You have several desks, not one \u2014 and everything's "
+                   "piling onto the first. Click and I'll show you in 30 seconds.",
+                   "How do I use workspaces? Teach me the basics briefly."),
+    "scratchpad": ("Do you know about the scratchpad?",
+                   "You keep opening fresh terminals \u2014 there's a hidden one "
+                   "that drops over anything with one key. Click and I'll show you.",
+                   "What is the scratchpad and how do I use it? Teach me briefly."),
+    "sidebyside": ("Do you know the window-moving keys?",
+                   "You've been flipping between the same two windows a lot \u2014 "
+                   "side by side might feel better. Click and I'll show you.",
+                   "How do I arrange two windows side by side and move focus "
+                   "between them? Teach me briefly."),
 }
 
 
@@ -63,11 +66,11 @@ def fire(tip_id):
         return False
     if now - st.get("last_" + tip_id, 0) < TIP_GAP:
         return False
-    title, body = TIPS[tip_id]
+    title, body, question = TIPS[tip_id]
     try:
         subprocess.run(["omarchy-notification-wait"], timeout=30)
         subprocess.run(["omarchy-notification-send", "--glyph", "\U0001f4a1",
-                        "Tip: " + title, body, "--exec", "omarchy-help"],
+                        title, body, "--exec", "omarchy-help", "--ask", question],
                        timeout=15)
     except FileNotFoundError:
         print(f"TIP[{tip_id}]: {title} — {body}")  # test mode / no notifier
@@ -83,6 +86,8 @@ class Day:
 
     def reset(self):
         self.start = time.time()
+        self.used_special = False
+        self.workspace_switches = 0
         self.workspaces = set()
         self.opens_by_class = {}
         self.total_opens = 0
@@ -100,7 +105,14 @@ class Day:
             return
         ev, _, data = line.partition(">>")
         if ev == "workspace":
-            self.workspaces.add(data.strip())
+            name = data.strip()
+            self.workspaces.add(name)
+            self.workspace_switches += 1
+            if name.startswith("special"):
+                self.used_special = True
+        elif ev in ("activespecial", "activespecialv2"):
+            if data.strip(","):
+                self.used_special = True
         elif ev == "openwindow":
             parts = data.split(",", 3)
             if len(parts) >= 3:
@@ -110,6 +122,7 @@ class Day:
                 self.total_opens += 1
                 if (cls in TERMINALS
                         and self.opens_by_class[cls] >= TERM_CHURN
+                        and not self.used_special
                         and fire("scratchpad")):
                     self.opens_by_class[cls] = 0
                 if (self.total_opens >= MONO_WINDOWS
