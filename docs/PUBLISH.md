@@ -1,4 +1,4 @@
-# Publishing Archie — the runbook
+# Publishing Archy — the runbook
 
 Everything below is prepared; the two accounts are the only gates.
 
@@ -6,8 +6,8 @@ Everything below is prepared; the two accounts are the only gates.
 
     cd ~/rcl-system/coding/omarchy-helper
     # secrets sweep is done (see below) — repo contains no tokens/IPs/keys
-    gh repo create archie-omarchy --public --source . --push \
-      --description "Archie — a live guided tour and AI tutor for new Omarchy users"
+    gh repo create archy-omarchy --public --source . --push \
+      --description "Archy — a live guided tour and AI tutor for new Omarchy users"
 
 Secrets sweep checklist (re-run before push if anything changed):
 no `.env`, no tokens, no tailnet IPs/hostnames, no personal paths beyond
@@ -18,12 +18,12 @@ no `.env`, no tokens, no tailnet IPs/hostnames, no personal paths beyond
 Tag a release first: `git tag v0.9.0 && git push --tags`.
 Then claim + push the package:
 
-    git clone ssh://aur@aur.archlinux.org/archie-omarchy.git /tmp/aur-archie
-    cp packaging/PKGBUILD /tmp/aur-archie/ && cd /tmp/aur-archie
+    git clone ssh://aur@aur.archlinux.org/archy-omarchy.git /tmp/aur-archy
+    cp packaging/PKGBUILD /tmp/aur-archy/ && cd /tmp/aur-archy
     updpkgsums && makepkg --printsrcinfo > .SRCINFO
-    git add -A && git commit -m "archie-omarchy v0.9.0" && git push
+    git add -A && git commit -m "archy-omarchy v0.9.0" && git push
 
-After that, anyone: SUPER+SPACE → Install → AUR → archie-omarchy.
+After that, anyone: SUPER+SPACE → Install → AUR → archy-omarchy.
 
 ## 3. The demo (Luke, ~10 min)
 

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Archie</title>
+<title>Archy</title>
 <style>
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
   * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
@@ -54,7 +54,7 @@
 </symbol></svg>
 <header>
   <svg class="avatar"><use href="#bot"/></svg>
-  <div style="flex:1"><h1>Archie</h1><p>your Omarchy guide</p></div>
+  <div style="flex:1"><h1>Archy</h1><p>your Omarchy guide</p></div>
   <button id="mini" title="Minimize (bring back with your helper key)" aria-label="Minimize">&#8212;</button>
 </header>
 <div id="chat">
@@ -117,7 +117,7 @@ async function ask(q) {
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 }
-// --- Archie's mission controls: live tour + learning path -------------
+// --- Archy's mission controls: live tour + learning path -------------
 const actions = document.createElement('div'); actions.className = 'actions';
 const tourBtn = document.createElement('button'); tourBtn.className = 'act primary'; tourBtn.textContent = '🚀 Live tour';
 const learnBtn = document.createElement('button'); learnBtn.className = 'act'; learnBtn.textContent = '🎓 Teach me something new';

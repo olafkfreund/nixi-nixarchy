@@ -33,7 +33,7 @@ systemctl --user enable --now omarchy-help-watch.service 2>/dev/null || true
 
 # First-boot welcome (fires once ever, via Omarchy's post-boot hooks).
 mkdir -p "$HOME/.config/omarchy/hooks/post-boot.d"
-install -m755 "$ROOT/hooks/archie-welcome.hook" "$HOME/.config/omarchy/hooks/post-boot.d/archie-welcome.hook"
+install -m755 "$ROOT/hooks/archy-welcome.hook" "$HOME/.config/omarchy/hooks/post-boot.d/archy-welcome.hook"
 "$HOME/.local/bin/omarchy-help-update-manual" || true
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"

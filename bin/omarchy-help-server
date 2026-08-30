@@ -175,7 +175,7 @@ CURRICULUM = [
 ]
 
 
-# ---- the LIVE tour: Archie instructs, the event socket confirms ----------
+# ---- the LIVE tour: Archy instructs, the event socket confirms ----------
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
@@ -441,14 +441,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("/*__THEME__*/", css)
             if agent_ready():
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archie \U0001F916 your Omarchy guide. Ask me anything \u2014 "
+                    "Hey, I\u2019m Archy \U0001F916 your Omarchy guide. Ask me anything \u2014 "
                     "or hit \U0001f680 for the live tour and I\u2019ll teach you the "
                     "moves hands-on.")
                 html = html.replace("__HINT__",
                     "answers come from your AI, grounded in this machine")
             else:
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archie \U0001F916 your Omarchy guide. No AI agent is "
+                    "Hey, I\u2019m Archy \U0001F916 your Omarchy guide. No AI agent is "
                     "connected yet \u2014 tap a quick answer below to get going "
                     "(\u201cSet up your AI agent\u201d unlocks the full chat).")
                 html = html.replace("__HINT__",
@@ -530,7 +530,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 "brave-127.0.0.1__-Default", "true"], timeout=10)
             return self._send(200, {"ok": True})
         if self.path == "/minimize":
-            # Archie is a PINNED widget (visible on every workspace); hiding
+            # Archy is a PINNED widget (visible on every workspace); hiding
             # means closing the window — the chat survives server-side and is
             # restored on reopen. Targeted close: focus it, close the active.
             addr = own_window_address()
