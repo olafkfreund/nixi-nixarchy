@@ -1,0 +1,26 @@
+# Maintainer: Luke <respira.crece.lidera@gmail.com>
+pkgname=archie-omarchy
+pkgver=0.9.0
+pkgrel=1
+pkgdesc="Archie — live guided tour + AI tutor for new Omarchy users (built on Omarchy's own patterns)"
+arch=('any')
+url="https://github.com/respira-crece-lidera/archie-omarchy"
+license=('MIT')
+depends=('python' 'curl')
+optdepends=('claude-code: AI answers via Claude'
+            'codex: AI answers via Codex')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -d "$pkgdir/usr/share/$pkgname"
+  cp -r bin share skills systemd hooks install.sh README.md LICENSE "$pkgdir/usr/share/$pkgname/"
+  chmod 755 "$pkgdir/usr/share/$pkgname"/bin/* "$pkgdir/usr/share/$pkgname/install.sh" \
+            "$pkgdir/usr/share/$pkgname"/hooks/*.hook
+  # One per-user setup command (copies config, enables the user services,
+  # adds the menu entry) — run once after install: archie-setup
+  install -d "$pkgdir/usr/bin"
+  ln -s "/usr/share/$pkgname/install.sh" "$pkgdir/usr/bin/archie-setup"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

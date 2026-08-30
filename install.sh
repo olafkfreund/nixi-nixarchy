@@ -5,7 +5,7 @@
 # - links the launcher command into ~/.local/bin
 # - adds a Help entry to the Omarchy menu (merged, non-destructive)
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 DIR="$HOME/.config/omarchy-help"
 mkdir -p "$DIR" "$HOME/.local/share/omarchy-help" "$HOME/.local/bin" "$HOME/.config/omarchy/extensions"
 cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$ROOT/share/ui.html" "$ROOT/share/faq.json" "$ROOT/share/AGENTS.md" "$DIR/"
