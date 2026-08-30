@@ -359,6 +359,22 @@ def hypr(cmd):
     return out
 
 
+_rule = {"at": 0.0}
+
+
+def ensure_window_rule():
+    """Float/pin the widget bottom-right for ANY chromium-family browser
+    (class = <browser>-127.0.0.1__...). Injected at runtime via the shell's
+    eval channel: no user config files touched, reapplied cheaply since a
+    Hyprland reload clears runtime rules. Throttled to avoid stacking."""
+    if time.time() - _rule["at"] < 600:
+        return
+    _rule["at"] = time.time()
+    hypr('eval hl.window_rule({ match = { class = "^.*-127\\.0\\.0\\.1__.*$" }, '
+         'float = true, pin = true, size = { 360, 480 }, '
+         'move = { "(monitor_w-368)", "(monitor_h-488)" } })')
+
+
 def own_window_address():
     data = json.loads(hypr("j/clients") or "[]")
     for c in data:
@@ -502,6 +518,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              "total": len(items),
                              "toured": load_learning().get("toured", False)})
         elif self.path == "/status":
+            ensure_window_rule()   # widget is about to open/toggle
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
             self._send(200, read_theme())
@@ -612,5 +629,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    try:
+        ensure_window_rule()
+    except Exception:
+        pass
     server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     server.serve_forever()
