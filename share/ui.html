@@ -185,7 +185,7 @@ async function pollTour() {
     if (t.note) add('bot', t.note);
     while (tourStep < t.step && tourStep < TOUR_STEPS.length) {
       tourStep++;
-      if (tourStep < TOUR_STEPS.length) add('bot', '✅ Got it! ' + TOUR_STEPS[tourStep]);
+      if (tourStep < TOUR_STEPS.length) add('bot', '✅ ' + TOUR_STEPS[tourStep]);
     }
     if (t.finished) {
       clearInterval(tourTimer); tourTimer = null;
