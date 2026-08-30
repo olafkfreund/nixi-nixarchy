@@ -272,6 +272,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "--on-accent": "#ffffff" if light else (t.get("darker_background") or "#111"),
                     }.items() if v) + "}"
                 html = html.replace("/*__THEME__*/", css)
+            if agent_ready():
+                html = html.replace("__GREETING__",
+                    "Hey! I\u2019m your Omarchy helper \U0001F916 Ask me anything about "
+                    "your system \u2014 what a key does, how to set something up, why "
+                    "something behaves the way it does.")
+                html = html.replace("__HINT__",
+                    "answers come from your AI, grounded in this machine")
+            else:
+                html = html.replace("__GREETING__",
+                    "Hey! I\u2019m your Omarchy helper \U0001F916 No AI agent is "
+                    "connected yet \u2014 tap a quick answer below to get going "
+                    "(\u201cSet up your AI agent\u201d unlocks the full chat).")
+                html = html.replace("__HINT__",
+                    "quick answers work offline \u00b7 connect an agent for everything else")
             self._send(200, html.encode(), "text/html")
         elif self.path == "/health":
             self._send(200, {"ok": True})
