@@ -21,8 +21,7 @@
   form { display:flex; gap:8px; padding:12px; background:var(--panel); border-top:1px solid var(--line); }
   input { flex:1; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--ink); font:inherit; outline:none; }
   input:focus { border-color:var(--ember); }
-  button { background:var(--ember); border:none; border-radius:12px; padding:0 16px; font-weight:700; color:var(--on-accent,#1a1206); cursor:pointer; }
-  button:disabled { opacity:.5; }
+  input:disabled { opacity:.5; }
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
@@ -46,8 +45,7 @@
   <div class="hint">answers are grounded in this machine's real setup</div>
 </div>
 <form id="f">
-  <input id="q" autocomplete="off" placeholder="Type a question…" autofocus>
-  <button id="send">Ask</button>
+  <input id="q" autocomplete="off" placeholder="Type a question and press Enter…" autofocus>
 </form>
 <script>
 // Match the active Omarchy theme (served from its colors.toml).
@@ -67,7 +65,7 @@ fetch('/theme').then(r => r.json()).then(t => {
 document.getElementById('mini').addEventListener('click', () =>
   fetch('/minimize', { method: 'POST' }).catch(() => {}));
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
-      input = document.getElementById('q'), send = document.getElementById('send');
+      input = document.getElementById('q');
 function add(cls, text) {
   const d = document.createElement('div'); d.className = 'msg ' + cls;
   if (cls === 'bot') d.innerHTML = '<svg class="avatar"><use href="#bot"/></svg><div></div>', d.lastChild.textContent = text;
@@ -77,14 +75,14 @@ function add(cls, text) {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = input.value.trim(); if (!q) return;
-  add('me', q); input.value = ''; send.disabled = true;
+  add('me', q); input.value = ''; input.disabled = true;
   const t = add('bot', ''); t.lastChild.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
   try {
     const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ q }) });
     const j = await r.json();
     t.lastChild.textContent = j.a || j.error || 'Hmm, something went wrong.';
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
-  send.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
+  input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 });
 </script>
 </body></html>

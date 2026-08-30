@@ -17,15 +17,17 @@ if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     sleep 0.2
   done
 fi
-# Toggle behavior: if the widget window already exists, show/hide its
-# special workspace (website-bubble style); otherwise open it fresh.
-if curl -fsS -X POST "http://127.0.0.1:$PORT/minimize" 2>/dev/null | grep -q '"ok": true'; then
-  RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-  SIG="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$RUN/hypr" 2>/dev/null | head -1)}"
-  [[ -n "$SIG" ]] && printf "dispatch togglespecialworkspace helper" | python3 -c "
-import socket,sys,os
-s=socket.socket(socket.AF_UNIX); s.connect(os.path.join(\"$RUN\",\"hypr\",\"$SIG\",\".socket.sock\"))
-s.send(sys.stdin.buffer.read()); s.recv(100)"
+# Website-bubble toggle: the widget lives on the special:helper overlay
+# (window rule). If it exists, show/hide the overlay; else open it fresh
+# and reveal the overlay once the window is mapped.
+toggle() { curl -fsS -X POST "http://127.0.0.1:$PORT/minimize" >/dev/null 2>&1; }
+if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true'; then
+  toggle
   exit 0
 fi
-exec omarchy-launch-webapp "http://127.0.0.1:$PORT"
+omarchy-launch-webapp "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true
+for _ in $(seq 1 40); do
+  curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true' && { toggle; exit 0; }
+  sleep 0.25
+done
+echo "helper window did not appear" >&2; exit 1

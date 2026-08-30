@@ -82,6 +82,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, open(UI, "rb").read(), "text/html")
         elif self.path == "/health":
             self._send(200, {"ok": True})
+        elif self.path == "/status":
+            self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
             # The active Omarchy theme's palette, so the widget always matches.
             try:
@@ -96,18 +98,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/minimize":
-            # Website-bubble behavior: stash the widget on its own hidden
-            # special workspace; the launcher key toggles it back. If the
-            # overlay is currently visible, also flip it off so the button
-            # hides it immediately.
-            addr = own_window_address()
-            if addr:
-                hypr(f"dispatch movetoworkspacesilent special:helper,address:{addr}")
-                mons = json.loads(hypr("j/monitors") or "[]")
-                if any(m.get("specialWorkspace", {}).get("name") == "special:helper"
-                       for m in mons):
-                    hypr("dispatch togglespecialworkspace helper")
-            return self._send(200, {"ok": bool(addr)})
+            # The widget lives on special:helper (window rule); hiding is just
+            # flipping that overlay off. v4's lua IPC syntax, learned the hard
+            # way: dispatch hl.dsp.workspace.toggle_special("helper").
+            hypr('dispatch hl.dsp.workspace.toggle_special("helper")')
+            return self._send(200, {"ok": True})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
         n = int(self.headers.get("Content-Length", 0))
