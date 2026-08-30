@@ -181,6 +181,12 @@ lock = threading.Lock()
 state = {"sid": None}
 
 
+def agent_ready():
+    import shutil
+    agent = default_agent()
+    return agent in HEADLESS_AGENTS and bool(shutil.which(agent))
+
+
 def default_agent():
     """Omarchy's chosen agent (~/.config/omarchy/defaults/agent), like the
     crash checker: the helper serves whichever agent the user picked."""
@@ -241,10 +247,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/health":
             self._send(200, {"ok": True})
         elif self.path == "/faq":
+            # The starter chips are onboarding: shown only while no AI agent
+            # is connected (Luke: with an agent they're clutter).
+            entries = []
             for p in (os.path.join(DIR, "faq.json"), os.path.join(DATA, "faq.json")):
                 if os.path.exists(p):
-                    return self._send(200, open(p, "rb").read())
-            return self._send(200, b"[]")
+                    try:
+                        entries = json.load(open(p))
+                    except Exception:
+                        pass
+                    break
+            return self._send(200, {"ready": agent_ready(), "faq": entries})
         elif self.path == "/status":
             self._send(200, {"window": bool(own_window_address())})
         elif self.path == "/theme":
@@ -278,9 +291,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not q:
             return self._send(400, {"error": "empty"})
 
-        import shutil
         agent = default_agent()
-        have_ai = agent in HEADLESS_AGENTS and bool(shutil.which(agent))
+        have_ai = agent_ready()
         if not have_ai:
             hint = ("No AI agent is connected yet. Omarchy is AI-first: pick "
                     "your coding agent once with SUPER+SPACE \u2192 Setup \u2192 "

@@ -80,7 +80,8 @@ function add(cls, text) {
 }
 let FAQ = [];
 fetch('/faq').then(r => r.json()).then(f => {
-  FAQ = f || [];
+  if (f && f.ready) return;               // agent connected: no starter chips
+  FAQ = (f && f.faq) || f || [];
   if (!FAQ.length) return;
   const box = document.createElement('div'); box.className = 'chips';
   let lastCat = null;
