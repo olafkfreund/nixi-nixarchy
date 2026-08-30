@@ -118,6 +118,17 @@ class Day:
             if data.strip(","):
                 self.used_special = True
         elif ev == "openwindow":
+            # A pinned widget floats above everything — including the
+            # screensaver. When the screensaver starts, Archy bows out
+            # (the chat survives server-side; the helper key recalls it).
+            if "org.omarchy.screensaver" in data:
+                try:
+                    import urllib.request
+                    urllib.request.urlopen(urllib.request.Request(
+                        "http://127.0.0.1:8642/minimize", method="POST"), timeout=5)
+                except Exception:
+                    pass
+                return
             parts = data.split(",", 3)
             if len(parts) >= 3:
                 cls = parts[2].strip().lower()
