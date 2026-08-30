@@ -357,12 +357,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "SUPER+A for a full agent session.")
             return self._send(200, {"a": hint, "src": "manual"})
 
-        # Tier 2: the LLM — when escalating a manual hit, hand it that hit
-        # as grounding (on a genuine local miss there's nothing to add).
-        context = local_answer(q) if force == "ai" else None
+        # Ground every AI question locally first: with the matching manual
+        # excerpt and keybindings already in the prompt, the agent can usually
+        # answer without spawning tool calls — the main latency saver.
+        context = local_answer(q)
         prompt = q
         if context:
-            prompt += "\n\n(Local search context, may help:\n" + context[:900] + ")"
+            prompt += ("\n\n(Local search context — answer directly from this "
+                       "when it suffices, verify live only if it doesn't:\n"
+                       + context[:1200] + ")")
         with lock:
             try:
                 answer = ask_agent(prompt, resume=True)
