@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Omarchy Helper: a Claude Code tutor session preloaded with verified
-# Omarchy 4 knowledge, this machine's learned facts, and live grounding.
-# Optional arg: the question. Requires Claude Code (ships with Omarchy).
+# Omarchy Helper: opens the corner chat widget (grounded Claude answers).
+# --tui opens the plain terminal session instead. Requires Claude Code.
 set -euo pipefail
 DIR="${OMARCHY_HELP_DIR:-$HOME/.config/omarchy-help}"
+PORT="${OMARCHY_HELP_PORT:-8642}"
 [[ -f "$DIR/CLAUDE.md" ]] || { echo "omarchy-helper not installed at $DIR (run install.sh)"; exit 1; }
-cd "$DIR"
-if [[ $# -ge 1 ]]; then
-  exec claude "$*"
-else
-  exec claude "Greet me in one short line as the Omarchy Helper and ask what I want to know."
+
+if [[ "${1:-}" == "--tui" ]]; then
+  cd "$DIR"; exec claude "${2:-Greet me in one short line as the Omarchy Helper and ask what I want to know.}"
 fi
+
+if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+  setsid omarchy-help-server >/dev/null 2>&1 < /dev/null &
+  for _ in $(seq 1 30); do
+    curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break
+    sleep 0.2
+  done
+fi
+exec omarchy-launch-webapp "http://127.0.0.1:$PORT"

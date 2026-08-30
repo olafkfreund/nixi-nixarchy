@@ -8,8 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$HOME/.config/omarchy-help"
 mkdir -p "$DIR" "$HOME/.local/bin" "$HOME/.config/omarchy/extensions"
-cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$DIR/"
+cp "$ROOT/share/CLAUDE.md" "$ROOT/share/KNOWLEDGE.md" "$ROOT/share/ui.html" "$DIR/"
 install -m755 "$ROOT/bin/omarchy-help" "$HOME/.local/bin/omarchy-help"
+install -m755 "$ROOT/bin/omarchy-help-server" "$HOME/.local/bin/omarchy-help-server"
 
 EXT="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 if ! grep -q '"help"' "$EXT" 2>/dev/null; then
@@ -29,7 +30,7 @@ EOF
   echo "menu: Help entry added"
 fi
 
-echo "Installed. Try: omarchy-help \"how do workspaces work?\""
+echo "Installed. Run omarchy-help for the chat widget (omarchy-help --tui for a terminal session)."
 echo "Optional: a compact floating helper window — add to ~/.config/hypr/bindings.lua:"
 echo "  o.bind(\"SUPER + SHIFT + H\", \"Omarchy helper\", \"foot --app-id=omarchy-help --title='Omarchy Help' -e omarchy-help\")"
 echo '  o.window("^omarchy-help$", { float = true, center = true, size = { 620, 700 } })'
