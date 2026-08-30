@@ -179,8 +179,6 @@ CURRICULUM = [
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
-    # (instruction, kind, matcher, count) — count = how many matching actions
-    # complete the step. Poll steps auto-complete if already true.
     ("First things first: connect your AI. Press SUPER+SPACE, go to Setup \u2192 "
      "Default agent, and pick one (Claude Code, Codex\u2026). Everything smart in "
      "Omarchy flows through it \u2014 including me.",
@@ -193,12 +191,16 @@ TOUR = [
     ("One more terminal: SUPER+RETURN again \u2014 and watch how the windows "
      "share the screen evenly, no overlapping, no dragging. That\u2019s tiling.",
      "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
-    ("Getting crowded? Tidy up: click a window, SUPER+W closes it. Close TWO "
-     "of them.",
+    ("Here\u2019s the move that kills the mouse: SUPER+arrow keys jump focus "
+     "between panes \u2014 watch the highlight border travel. Bounce around a "
+     "few times.",
+     "event", lambda ev, d: ev == "activewindow", 4),
+    ("Now steer focus onto a window with the arrows and press SUPER+W \u2014 "
+     "closed, no titlebar needed. Close TWO of them.",
      "event", lambda ev, d: ev == "closewindow", 2),
-    ("Now the front door of the whole OS: SUPER+SPACE opens the menu \u2014 "
-     "apps, install, themes, setup, everything. Type any app\u2019s name and "
-     "launch it from there.",
+    ("The front door of the whole OS: SUPER+SPACE opens the menu \u2014 apps, "
+     "install, themes, setup, everything. Type any app\u2019s name and launch "
+     "it from there.",
      "event", lambda ev, d: ev == "openwindow", 1),
     ("Desks: press SUPER+2 for a fresh workspace. (I\u2019ll come along \u2014 "
      "I\u2019m pinned.)",
@@ -206,8 +208,8 @@ TOUR = [
     ("A clean context for anything \u2014 one project per desk works great. "
      "Hop back: SUPER+1.",
      "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1", 1),
-    ("Last trick: CLICK a window (so it has focus, not me!) and press SUPER+T "
-     "\u2014 it floats free. Press SUPER+T again to tile it back.",
+    ("Last trick: arrow your focus onto a window (leave me out of it \U0001f605) "
+     "and press SUPER+T \u2014 it floats free. SUPER+T again tiles it back.",
      "event", lambda ev, d: ev == "changefloatingmode", 2),
 ]
 tour = {"active": False, "step": 0, "finished": False, "note": "", "hits": 0}
@@ -260,7 +262,7 @@ def tour_thread():
                 if own and ev in ("changefloatingmode", "closewindow") \
                         and own in d.replace("0x", ""):
                     tour["note"] = ("Careful \u2014 that one hit ME, not the "
-                                    "terminal \U0001f605 Click the other window "
+                                    "terminal \U0001f605 Arrow your focus onto another window "
                                     "first, then try the key again. (If I ever "
                                     "look broken: SUPER+W on me, then "
                                     "SUPER+SHIFT+H brings me back fresh.)")
