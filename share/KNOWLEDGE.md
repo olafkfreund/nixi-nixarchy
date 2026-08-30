@@ -8,6 +8,8 @@
   customizations. The ground truth for "what key does X".
 - **SUPER+W** closes a window (many apps have no titlebar — this is how).
 - Default terminal is **foot** (`xdg-terminal-exec` opens it).
+- **SUPER+C / SUPER+V / SUPER+X** — universal copy/paste/cut, the SAME keys
+  everywhere including the terminal; **SUPER+CTRL+V** opens clipboard history.
 - **SUPER+RETURN** terminal · **SUPER+SHIFT+RETURN** browser ·
   **SUPER+ALT+RETURN** tmux · **SUPER+CTRL+RETURN** Herdr (all verified live).
 

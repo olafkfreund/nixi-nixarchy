@@ -185,7 +185,9 @@ TOUR = [
      "Default agent, and pick one (Claude Code, Codex\u2026). Everything smart in "
      "Omarchy flows through it \u2014 including me.",
      "poll", lambda: bool(default_agent()), 1),
-    ("Now the essentials. SUPER+RETURN opens a terminal \u2014 try it.",
+    ("Now the essentials. SUPER+RETURN opens a terminal \u2014 try it. "
+     "(Bonus: SUPER+C / SUPER+V copy-paste works EVERYWHERE here \u2014 even "
+     "inside the terminal, same keys.)",
      "event", lambda ev, d: ev == "openwindow" and ",foot," in "," + d.lower() + ",", 1),
     ("Your browser has its own key too: SUPER+SHIFT+RETURN. Open it.",
      "event", lambda ev, d: ev == "openwindow" and any(

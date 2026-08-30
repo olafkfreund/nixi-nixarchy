@@ -16,6 +16,11 @@
  },
  {
   "cat": "Start here",
+  "q": "Copy & paste everywhere",
+  "a": "SUPER+C copies, SUPER+V pastes, SUPER+X cuts — the same keys in every app, including the terminal (no more Ctrl+Shift+C gymnastics). SUPER+CTRL+V opens your clipboard history so you can paste something from earlier."
+ },
+ {
+  "cat": "Start here",
   "q": "Close and move windows",
   "a": "SUPER+W closes the focused window (many apps here have no titlebar buttons — this is the way). Hold SUPER and drag with the left mouse button to move a floating window; SUPER + right-button drag resizes it."
  },
