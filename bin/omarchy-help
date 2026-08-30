@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Omarchy Helper: a Claude Code tutor session preloaded with verified
+# Omarchy 4 knowledge, this machine's learned facts, and live grounding.
+# Optional arg: the question. Requires Claude Code (ships with Omarchy).
+set -euo pipefail
+DIR="${OMARCHY_HELP_DIR:-$HOME/.config/omarchy-help}"
+[[ -f "$DIR/CLAUDE.md" ]] || { echo "omarchy-helper not installed at $DIR (run install.sh)"; exit 1; }
+cd "$DIR"
+if [[ $# -ge 1 ]]; then
+  exec claude "$*"
+else
+  exec claude "Greet me in one short line as the Omarchy Helper and ask what I want to know."
+fi
