@@ -20,7 +20,20 @@ ALLOWED = ",".join([
 STYLE = ("\n\n(Answer for a chat bubble: plain text, no markdown headings, "
          "max ~90 words unless asked for more.)")
 lock = threading.Lock()
-state = {"first": True}
+state = {"sid": None}
+
+
+def ask_claude(q, resume):
+    args = ["claude", "-p", "--output-format", "json"]
+    if resume and state["sid"]:
+        args += ["--resume", state["sid"]]
+    args += ["--allowedTools", ALLOWED, q + STYLE]
+    out = subprocess.run(args, cwd=DIR, capture_output=True, text=True, timeout=240)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
+    data = json.loads(out.stdout)
+    state["sid"] = data.get("session_id") or state["sid"]
+    return (data.get("result") or "").strip() or "Sorry — I came back empty. Try asking again."
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -54,19 +67,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not q:
             return self._send(400, {"error": "empty"})
         with lock:
-            args = ["claude", "-p"]
-            if not state["first"]:
-                args.append("--continue")
-            args += ["--allowedTools", ALLOWED, q + STYLE]
             try:
-                out = subprocess.run(args, cwd=DIR, capture_output=True,
-                                     text=True, timeout=240)
-                state["first"] = False
-                answer = out.stdout.strip() or "Sorry — I came back empty. Try asking again."
-                if out.returncode != 0:
-                    answer = "I hit a snag: " + (out.stderr.strip()[-300:] or "unknown error")
+                answer = ask_claude(q, resume=True)
             except subprocess.TimeoutExpired:
                 answer = "That took too long — try a simpler question."
+            except Exception:
+                # A stale/broken session shouldn't kill the chat: retry fresh.
+                state["sid"] = None
+                try:
+                    answer = ask_claude(q, resume=False)
+                except Exception as e:
+                    answer = "I hit a snag: " + str(e)[-300:]
         self._send(200, {"a": answer})
 
 
