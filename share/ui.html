@@ -143,6 +143,11 @@ fetch('/history').then(r => r.json()).then(h => {
 
 let TOUR_STEPS = [], tourStep = -1, tourTimer = null;
 fetch('/tour/state').then(r => r.json()).then(t => {
+  if (t.finished && t.fresh_finish) {
+    add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: SUPER+K shows EVERY binding whenever you're lost. Tap 🎓 for your next trick any time, or just ask me things.");
+    refreshLearn();
+    return;
+  }
   if (t.active && !tourTimer) {
     TOUR_STEPS = t.steps || [];
     tourStep = t.step;
@@ -171,7 +176,7 @@ async function pollTour() {
     }
     if (t.finished) {
       clearInterval(tourTimer); tourTimer = null;
-      add('bot', "✅ That's the tour — you're set up and you know the core moves. One homework key: SUPER+K shows EVERY binding on this machine whenever you're lost. Tap 🎓 for your next trick any time, or just ask me things.");
+      add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: SUPER+K shows EVERY binding whenever you're lost. Tap 🎓 for your next trick any time, or just ask me things.");
       refreshLearn();
     } else if (!t.active && tourStep < TOUR_STEPS.length) {
       clearInterval(tourTimer); tourTimer = null;

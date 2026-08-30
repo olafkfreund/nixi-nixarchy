@@ -208,9 +208,13 @@ TOUR = [
     ("A clean context for anything \u2014 one project per desk works great. "
      "Hop back: SUPER+1.",
      "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1", 1),
-    ("Last trick: arrow your focus onto a window (leave me out of it \U0001f605) "
+    ("Arrow your focus onto a window (leave me out of it \U0001f605) "
      "and press SUPER+T \u2014 it floats free. SUPER+T again tiles it back.",
      "event", lambda ev, d: ev == "changefloatingmode", 2),
+    ("Last one \u2014 about me. Dismiss me any time with SUPER+W on my window. "
+     "Whenever you need me again: SUPER+SHIFT+H. Go on \u2014 close me and "
+     "call me back!",
+     "event", lambda ev, d: ev == "openwindow" and "127.0.0.1" in d, 1),
 ]
 tour = {"active": False, "step": 0, "finished": False, "note": "", "hits": 0}
 
@@ -230,6 +234,7 @@ def _maybe_finish():
     if tour["step"] >= len(TOUR):
         tour["active"] = False
         tour["finished"] = True
+        tour["finished_at"] = time.time()
         st = load_learning()
         st["toured"] = True
         save_learning(st)
@@ -260,7 +265,8 @@ def tour_thread():
                 line, buf = buf.split(b"\n", 1)
                 ev, _, d = line.decode(errors="replace").partition(">>")
                 if own and ev in ("changefloatingmode", "closewindow") \
-                        and own in d.replace("0x", ""):
+                        and own in d.replace("0x", "") \
+                        and tour["step"] < len(TOUR) - 1:
                     tour["note"] = ("Careful \u2014 that one hit ME, not the "
                                     "terminal \U0001f605 Arrow your focus onto another window "
                                     "first, then try the key again. (If I ever "
@@ -469,6 +475,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             note = tour.pop("note", "") if tour.get("note") else ""
             self._send(200, {"active": tour["active"], "step": tour["step"],
                              "finished": tour["finished"], "note": note,
+                             "fresh_finish": time.time() - tour.get("finished_at", 0) < 120,
                              "steps": [t[0] for t in TOUR]})
         elif self.path == "/history":
             self._send(200, {"turns": history[-40:]})
