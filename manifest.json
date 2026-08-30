@@ -3,9 +3,9 @@
   "id": "io.github.respira-crece-lidera.archy",
   "name": "Archy",
   "version": "0.9.0",
-  "author": "Luke (Respira Crece Lidera)",
+  "author": "Luke Warren Wills (@lukemallorca on Instagram)",
   "license": "MIT",
-  "description": "Archy, your Omarchy guide — a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the bar icon to summon.",
+  "description": "Archy, your Omarchy guide \u2014 a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the bar icon to summon.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Archy",
-    "description": "Your Omarchy guide — tour, lessons, and answers",
+    "description": "Your Omarchy guide \u2014 tour, lessons, and answers",
     "category": "System",
     "allowMultiple": false
   }

@@ -68,3 +68,7 @@ in with your account.
   tutor reads it if present (useful for fleet/dotfile setups).
 - Knowledge lives in plain Markdown — PRs that correct or extend
   KNOWLEDGE.md are the whole point.
+
+## Credits
+
+Created by **Luke Warren Wills** — [@lukemallorca](https://instagram.com/lukemallorca) on Instagram. Open source under the MIT license: use it, fork it, improve it.
