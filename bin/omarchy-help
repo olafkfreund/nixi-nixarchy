@@ -9,6 +9,11 @@ PORT="${OMARCHY_HELP_PORT:-8642}"
 [[ -f "$DIR/CLAUDE.md" ]] || { echo "omarchy-helper not installed at $DIR (run install.sh)"; exit 1; }
 
 ASK=""
+WANT_TOUR=""
+if [[ "${1:-}" == "--tour" ]]; then
+  WANT_TOUR=1
+  shift
+fi
 if [[ "${1:-}" == "--ask" ]]; then
   ASK="${2:?--ask needs a question}"
   shift 2
@@ -25,6 +30,10 @@ if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     sleep 0.2
   done
 fi
+if [[ -n "$WANT_TOUR" ]]; then
+  curl -fsS -X POST "http://127.0.0.1:$PORT/tour/start" >/dev/null 2>&1
+fi
+
 if [[ -n "$ASK" ]]; then
   curl -fsS -X POST "http://127.0.0.1:$PORT/prime" -H "Content-Type: application/json" \
     -d "$(python3 -c "import json,sys; print(json.dumps({'q': sys.argv[1]}))" "$ASK")" >/dev/null 2>&1
