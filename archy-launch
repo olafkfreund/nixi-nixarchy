@@ -8,7 +8,12 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 MARKER="$HOME/.local/share/omarchy-help/.installed-version"
 WANT=$(python3 -c "import json;print(json.load(open('$HERE/manifest.json'))['version'])" 2>/dev/null || echo dev)
 HAVE=$(cat "$MARKER" 2>/dev/null || echo none)
-if ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
+# A symlinked server binary means a dotfile manager owns this install —
+# never overwrite it with plugin copies (learned 2026-08-31: install -m755
+# replaces symlinks and silently froze a managed setup on a stale version).
+if [[ -L "$HOME/.local/bin/omarchy-help-server" ]]; then
+  :
+elif ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
   bash "$HERE/install.sh" >/tmp/archy-setup.log 2>&1 || {
     omarchy-notification-send --urgency critical "Archy setup failed" \
       "See /tmp/archy-setup.log" 2>/dev/null || true
