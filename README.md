@@ -1,24 +1,36 @@
 # Archy — the Omarchy guide
 
-A beginner-friendly tutor for [Omarchy](https://omarchy.org), one keypress
-away. Ask it anything — "how do workspaces work?", "how do I install an
-app?", "what does SUPER+S do?" — and it answers in plain language, grounded
-in YOUR machine, not a stale manual.
+![Archy](preview.png)
 
-**Two tiers:** simple questions are answered instantly and offline from a
-bundled copy of the official manual (plus your live keybindings) — no LLM
-call, no cost, works without any AI signed in. The AI tier kicks in only for
-deeper questions, or when you tap "deeper answer".
+Your corner robot for [Omarchy](https://omarchy.org), one keypress away.
+Archy grows with you — from your first boot to bending the OS to your will:
 
-Under the hood it's a [Claude Code](https://claude.com/claude-code) session
-(Omarchy ships Claude Code) preloaded with:
+- **🚀 A live guided first tour.** Not a slideshow — Archy watches the
+  compositor and verifies every step as you *actually do it*: open windows,
+  close them keyboard-only, tile, float, switch workspaces, drive the menu.
+  Eleven steps, about two minutes, and it starts by helping you connect
+  your AI agent — the Omarchy way.
+- **🎓 A learning path.** Fourteen stops from beginner to advanced,
+  usage-aware: it skips what you already do daily.
+- **👀 Gentle coaching.** "I noticed you haven't used workspaces — want to
+  see how?" Evidence-based nudges, at most one a day, only for features you
+  genuinely aren't using. Never a tip for a tip's sake.
+- **💬 Answers to everything — about *your* machine.** The chat answers
+  through your own configured Omarchy agent, grounded in the locally
+  fetched official manual, your real live keybindings, and your machine's
+  facts (terminal, browser, monitors). Omarchy-first answers: it says
+  **SUPER+C**, not Ctrl+C. Real Markdown, and every file path it mentions
+  is clickable — one click opens it in your editor.
+- **🔧 "Do it for me."** Not ready to edit config files yourself? One button
+  under the answer and Archy applies the fix — user-level config only,
+  every file backed up first, the change verified, and the one-line undo
+  reported back. Your click is the consent; nothing changes without it.
+- **📚 It learns.** Verified facts and your corrections are appended to
+  `LEARNED.md`, so it gets better on your machine over time.
 
-- **KNOWLEDGE.md** — verified Omarchy 4 facts (keys, workspaces, scratchpad,
-  webapps, themes, updates, config layout)
-- **Live grounding** — before asserting a keybinding it checks
-  `omarchy menu keybindings --print`, so it knows *your* customizations too
-- **LEARNED.md** — it appends what it verifies and what you correct, so it
-  gets better on your machine over time
+No agent connected yet? The tour, learning path, coaching, and a curated
+set of getting-started answers all work with no AI at all — and the first
+thing Archy teaches is how to connect one.
 
 ## Install (Omarchy plugin — recommended)
 
@@ -42,28 +54,29 @@ files, nothing runs as root, no existing configuration is overwritten.
 ## Dependencies
 
 - `python` (stdlib only) and `curl` — required
-- An AI agent for the chat tier: whatever `omarchy default agent` is set to
-  (Claude Code and Codex supported headless; the tour, starter chips, and
-  coaching work with **no agent at all**)
-- License: MIT. No telemetry; all traffic stays on 127.0.0.1 except your
+- An AI agent for the chat and 🔧 tiers: whatever `omarchy default agent` is
+  set to (Claude Code and Codex supported headless; the tour, learning path,
+  starter chips, and coaching work with **no agent at all**)
+- License: MIT. No telemetry; everything runs on 127.0.0.1 except your
   agent's own API calls and the optional manual refresh from GitHub.
+  Markdown rendering (marked + DOMPurify) is vendored — no CDN.
 
 ## Install (manual / non-plugin)
 
-    git clone <this repo> && cd omarchy-helper && ./install.sh
+    git clone https://github.com/respira-crece-lidera/archy-omarchy.git
+    cd archy-omarchy && ./install.sh
 
 Then run `omarchy-help`, find **Help** in the Omarchy menu (SUPER+SPACE), or
-bind a key (the installer prints the one-liner). Requires Claude Code signed
-in with your account.
-
-## Uninstall
-
-    rm -rf ~/.config/omarchy-help ~/.local/bin/omarchy-help
-    # plus the "help" entry in ~/.config/omarchy/extensions/omarchy-menu.jsonc
+bind a key (the installer prints the one-liner). Removal is the same as the
+plugin's minus the `omarchy plugin remove` line.
 
 ## Design notes
 
-- No daemon, no sudo, no telemetry: three text files and a shell script.
+- Two small systemd **user** services: the widget server (Python stdlib,
+  bound to 127.0.0.1) and the Hyprland-event watcher behind the tour and
+  the coaching. No sudo, no telemetry, no root anything.
+- The 🔧 mode is deliberately scoped: user-level config only, an explicit
+  allowlist of commands, backup-before-edit, verify-after, undo reported.
 - Machine-specific notes can go in `~/.config/omarchy-help/LOCAL.md` — the
   tutor reads it if present (useful for fleet/dotfile setups).
 - Knowledge lives in plain Markdown — PRs that correct or extend
