@@ -2,7 +2,8 @@
 
 ![Archy](preview.png)
 
-Your corner robot for [Omarchy](https://omarchy.org), one keypress away.
+The guide that should come with [Omarchy](https://omarchy.org) — one
+keypress away.
 Archy grows with you — from your first boot to bending the OS to your will:
 
 - **🚀 A live guided first tour.** Not a slideshow — Archy watches the

@@ -5,7 +5,7 @@
 ---
 
 **Archy grows with the user — from first boot to bending the OS to your
-will, one corner robot.** Starter basics with no AI connected; a live tour
+will.** Starter basics with no AI connected; a live tour
 that *sees* each keypress; a learning path that skips what you already use;
 grounded answers that know your machine; and a \U0001f527 button that applies the
 fix for you — backed up, verified, reversible.
