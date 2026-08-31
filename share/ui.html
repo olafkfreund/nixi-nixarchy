@@ -37,6 +37,15 @@
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
   .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+  .bot p { margin: 0 0 8px; } .bot p:last-child { margin-bottom: 0; }
+  .bot ul, .bot ol { margin: 4px 0 8px; padding-left: 1.35em; }
+  .bot li { margin: 3px 0; }
+  .bot li::marker { color: var(--ember); }
+  .bot h1, .bot h2, .bot h3, .bot h4 { font-size: 0.95em; color: var(--ember); margin: 10px 0 4px; }
+  .bot pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 6px 0; }
+  .bot a { color: var(--ember); }
+  .bot strong { color: var(--ember); font-weight: 600; }
+  .bot blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted); }
   .msg .li { padding-left: 1.1em; position: relative; margin-top: 5px; }
   .msg .li::before { content: "•"; position: absolute; left: 0.2em; color: var(--ember); }
   .msg code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 0.85em; }
@@ -75,6 +84,8 @@
 <form id="f">
   <input id="q" autocomplete="off" placeholder="Type a question and press Enter…" autofocus>
 </form>
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
 <script>
 // Theme palette is baked in server-side (no flash).
 document.getElementById('mini').addEventListener('click', () =>
@@ -82,14 +93,14 @@ document.getElementById('mini').addEventListener('click', () =>
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q');
 function md(text) {
+  // The industry convention: render the model's actual Markdown.
+  if (window.marked && window.DOMPurify) {
+    return DOMPurify.sanitize(marked.parse(text, { breaks: true }));
+  }
+  // fallback mini-renderer (vendor files missing)
   let h = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
-  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  return h.split('\n').map(l => {
-    if (/^\s*[-•] /.test(l)) return '<div class="li">' + l.replace(/^\s*[-•] /, '') + '</div>';
-    if (l.trim() === '') return '<div class="gap"></div>';
-    return '<div class="ln">' + l + '</div>';
-  }).join('');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  return h.split('\n').map(l => '<div class="ln">' + l + '</div>').join('');
 }
 function add(cls, text) {
   const d = document.createElement('div'); d.className = 'msg ' + cls;

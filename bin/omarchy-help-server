@@ -24,9 +24,9 @@ ALLOWED = ",".join([
     "Bash(ls /usr/share/omarchy/bin)",
 ])
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
-         "then 2-4 bullet lines starting with '- ' for steps or options. Bold "
-         "key names like **SUPER+K**. No headings, no long paragraphs, max "
-         "~80 words unless asked for more. OMARCHY-FIRST, always: copy/paste "
+         "then real Markdown: '-' bullets or numbered steps, short paragraphs "
+         "separated by blank lines, **bold** key names like **SUPER+K**. No big "
+         "headings, max ~90 words unless asked for more. OMARCHY-FIRST, always: copy/paste "
          "is **SUPER+C/V/X** (never Ctrl+C/V here, even in the terminal), "
          "prefer omarchy menu flows and omarchy commands over generic Linux "
          "answers. NEVER ask the user about their setup \u2014 the machine "
@@ -569,6 +569,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("__HINT__",
                     "quick answers work offline \u00b7 connect an agent for everything else")
             self._send(200, html.encode(), "text/html")
+        elif self.path.startswith("/vendor/"):
+            name = os.path.basename(self.path)
+            p = os.path.join(DIR, "vendor", name)
+            if name.endswith(".js") and os.path.isfile(p):
+                return self._send(200, open(p, "rb").read(), "application/javascript")
+            return self._send(404, {"error": "not found"})
         elif self.path == "/health":
             self._send(200, {"ok": True})
         elif self.path == "/faq":
