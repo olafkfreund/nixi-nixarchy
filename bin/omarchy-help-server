@@ -130,6 +130,50 @@ def default_agent():
 
 HEADLESS_AGENTS = ("claude", "codex")  # agents we can call inline for the chat
 
+# DO-IT-FOR-ME mode: user-consented (button click), deliberately scoped —
+# file edits plus only the commands an Omarchy config change needs. No blanket
+# shell access; Codex additionally stays inside $HOME via workspace sandbox.
+ACT_ALLOWED = ",".join([
+    "Read", "Grep", "Glob", "Edit", "Write",
+    "Bash(hyprctl *)", "Bash(omarchy *)", "Bash(omarchy-* *)",
+    "Bash(cp *)", "Bash(mkdir *)", "Bash(xdg-settings *)",
+    "Bash(systemctl --user *)",
+])
+ACT_BRIEF = (
+    "\n\n(The user clicked DO-IT-FOR-ME: they explicitly consent to you making "
+    "this change on their machine now. Rules: touch ONLY user-level Omarchy "
+    "config (~/.config/hypr/*.lua, ~/.config/omarchy/**, app settings under "
+    "~/.config) — NEVER /usr/share/omarchy or system files. Back up every "
+    "file you edit first (cp X X.bak-archy). Apply via the sanctioned "
+    "override files and hyprctl reload / omarchy commands. VERIFY the change "
+    "took effect. Then report chat-style: what changed, how you verified it, "
+    "and the one-line undo. If part of the request is dangerous or unclear, "
+    "do only the safe part and say what you skipped.)")
+
+
+def ask_act(q):
+    """Consented action: the agent may edit user-level Omarchy config."""
+    agent = default_agent() or "claude"
+    prompt = q + ACT_BRIEF + "\n(Machine facts: " + machine_facts() + ")"
+    home = os.path.expanduser("~")
+    if agent == "codex":
+        out = subprocess.run(
+            ["codex", "exec", "--sandbox", "workspace-write", prompt],
+            cwd=home, capture_output=True, text=True, timeout=300)
+        if out.returncode != 0:
+            out = subprocess.run(["codex", "exec", prompt], cwd=home,
+                                 capture_output=True, text=True, timeout=300)
+        if out.returncode != 0:
+            raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
+        return out.stdout.strip()[-2500:] or "Done (no summary returned)."
+    out = subprocess.run(["claude", "-p", prompt, "--output-format", "json",
+                          "--allowedTools=" + ACT_ALLOWED],
+                         cwd=home, capture_output=True, text=True, timeout=300)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
+    data = json.loads(out.stdout)
+    return (data.get("result") or "").strip() or "Done (no summary returned)."
+
 
 def ask_claude(q, resume):
     # NOTE: --allowedTools is variadic — keep the prompt ahead of it and use
@@ -327,6 +371,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "Switch with: omarchy default agent claude \u2014 or use "
                         "SUPER+A for a full agent session.")
             return self._send(200, {"a": hint, "src": "manual"})
+
+        if force == "act":
+            plan = str(body.get("plan", ""))[:700]
+            aq = q + ("\n(Your earlier advice was: " + plan + ")" if plan else "")
+            with lock:
+                try:
+                    answer = ask_act(aq)
+                except subprocess.TimeoutExpired:
+                    answer = ("That change took too long — nothing may have "
+                              "been applied; ask me to check.")
+                except Exception as e:
+                    answer = "I hit a snag acting on that: " + str(e)[-300:]
+            if not ephemeral:
+                history.append(("me", "\U0001f527 " + q))
+                history.append(("bot", answer))
+            return self._send(200, {"a": answer, "src": "act"})
 
         # Ground every AI question locally first: with the matching manual
         # excerpt and keybindings already in the prompt, the agent can usually

@@ -38,7 +38,13 @@ next step.
    override layer (`~/.config/hypr/*.lua`, `~/.config/omarchy/`), never at
    Omarchy's own tree, and hand off to the `omarchy` skill for the edit.
 4. **Never change the system unless explicitly asked in this session**; keep
-   any change small and reversible.
+   any change small and reversible. The exception is a DO-IT-FOR-ME request
+   (the user clicked the 🔧 button — that click IS the explicit consent):
+   then act — back up each file first (`cp X X.bak-archy`), edit only the
+   user override layer, apply with `hyprctl reload` / omarchy commands,
+   verify it took effect, and report what changed plus the one-line undo.
+   When merely *advising* on a fixable setting, you may mention that the
+   🔧 button under your answer will apply it.
 5. A "(Local search context…)" block may arrive with the question — the
    widget's offline tier already searched the manual. Build on it, don't
    repeat it.

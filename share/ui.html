@@ -34,6 +34,7 @@
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
   .msg .li { padding-left: 1.1em; position: relative; margin-top: 5px; }
   .msg .li::before { content: "•"; position: absolute; left: 0.2em; color: var(--ember); }
   .msg code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 0.85em; }
@@ -120,17 +121,31 @@ fetch('/faq').then(r => r.json()).then(f => {
   chat.insertBefore(box, chat.children[1] || null);
 }).catch(() => {});
 
-async function ask(q) {
+async function ask(q, act, plan) {
   input.disabled = true;
   const t = add('bot', ''); t.lastChild.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
   try {
-    const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ q }) });
+    const payload = act ? { q, force: 'act', plan: plan || '' } : { q };
+    const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const j = await r.json();
     t.lastChild.innerHTML = md(j.a || j.error || 'Hmm, something went wrong.');
-    if (j.src === 'ai') {
-      const badge = document.createElement('span'); badge.className = 'src';
+    const badge = document.createElement('span'); badge.className = 'src';
+    if (j.src === 'act') {
+      badge.textContent = '🔧 done by Archy';
+      t.lastChild.appendChild(badge);
+    } else if (j.src === 'ai') {
       badge.textContent = '🤖 AI';
       t.lastChild.appendChild(badge);
+      // Offer to apply it: consent = this click, scoped to user-level config.
+      const fix = document.createElement('button');
+      fix.className = 'deeper'; fix.textContent = '🔧 Do it for me';
+      const answerText = j.a || '';
+      fix.addEventListener('click', () => {
+        fix.remove();
+        add('me', '🔧 Do it for me');
+        ask(q, true, answerText);
+      });
+      t.lastChild.appendChild(fix);
     }
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
