@@ -2,6 +2,7 @@
 Description=Omarchy Helper widget server (offline manual answers + agent relay)
 
 [Service]
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
 Type=exec
 ExecStart=%h/.local/bin/omarchy-help-server
 Restart=on-failure

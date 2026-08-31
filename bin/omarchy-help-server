@@ -23,6 +23,13 @@ ALLOWED = ",".join([
     "Bash(hyprctl binds)", "Bash(hyprctl clients)", "Bash(hyprctl workspaces)",
     "Bash(ls /usr/share/omarchy/bin)",
 ])
+# systemd user services start with a bare PATH; the user's agent binary
+# usually lives in ~/.local/bin or a version-manager shim dir (mise, asdf).
+for _d in ("~/.local/bin", "~/.local/share/mise/shims", "~/.asdf/shims"):
+    _d = os.path.expanduser(_d)
+    if os.path.isdir(_d) and _d not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = _d + os.pathsep + os.environ.get("PATH", "")
+
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "then real Markdown: '-' bullets or numbered steps, short paragraphs "
          "separated by blank lines, **bold** key names like **SUPER+K**. No big "

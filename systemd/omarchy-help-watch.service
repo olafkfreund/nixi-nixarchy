@@ -2,6 +2,7 @@
 Description=Omarchy Helper tip watcher (suggests workflow improvements, max one per day)
 
 [Service]
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
 Type=exec
 ExecStart=%h/.local/bin/omarchy-help-watch
 Restart=on-failure
