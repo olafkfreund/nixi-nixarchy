@@ -26,318 +26,12 @@ ALLOWED = ",".join([
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "then 2-4 bullet lines starting with '- ' for steps or options. Bold "
          "key names like **SUPER+K**. No headings, no long paragraphs, max "
-         "~80 words unless asked for more.)")
-
-
-# ---------------------------------------------------------------- tier 1
-# Offline answers: a tiny full-text index over the bundled manual, the
-# knowledge file, and the machine's live keybindings. No LLM required.
-import re as _re
-
-_WORD = _re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
-_STOP = set("the a an and or of to in on for with how do i does what is are my "
-            "you your it this that can where when omarchy use using used why "
-            "work works working different way ways get set new want would "
-            "should could there some more make makes".split())
-
-
-def _tokens(text):
-    out = []
-    for w in _WORD.findall(text):
-        w = w.lower()
-        if w in _STOP:
-            continue
-        # cheap stemming so app/apps, theme/themes, keybinding/keybindings meet
-        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
-            w = w[:-1]
-        out.append(w)
-    return out
-
-
-def _sections():
-    docs = []
-    for base, tag in ((os.path.join(DATA, "manual"), "manual"),
-                      (DIR, "notes"), (DATA, "notes")):
-        try:
-            names = sorted(os.listdir(base))
-        except OSError:
-            continue
-        for name in names:
-            if not name.endswith(".md"):
-                continue
-            if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):  # noqa
-                continue
-            try:
-                text = open(os.path.join(base, name)).read()
-            except OSError:
-                continue
-            fname_words = " ".join(name[:-3].split("-"))
-            for part in _re.split(r"\n(?=#{1,3} )", text):
-                lines = part.strip().splitlines()
-                if not lines:
-                    continue
-                head = (lines[0].lstrip("# ").strip() or name) + " " + fname_words
-                body = "\n".join(lines[1:]).strip()
-                if body:
-                    docs.append((f"{head}", body, tag))
-    return docs
-
-
-def _keybinds():
-    try:
-        out = subprocess.run(["omarchy", "menu", "keybindings", "--print"],
-                             capture_output=True, text=True, timeout=10)
-        return out.stdout
-    except Exception:
-        return ""
-
-
-_index = {"sig": None, "docs": []}
-
-
-def _index_sig():
-    sig = []
-    for base in (os.path.join(DATA, "manual"), DIR, DATA):
-        try:
-            for n in os.listdir(base):
-                if n.endswith(".md"):
-                    sig.append((n, os.path.getmtime(os.path.join(base, n))))
-        except OSError:
-            pass
-    return tuple(sorted(sig))
-
-
-def get_index():
-    sig = _index_sig()
-    if sig != _index["sig"]:
-        _index["docs"] = _sections()
-        _index["sig"] = sig
-    return _index["docs"]
-
-
-def local_answer(q):
-    """Best-matching manual/knowledge section for q, or None."""
-    qt = _tokens(q)
-    if not qt:
-        return None
-    qset = set(qt)
-    best, score = None, 0.0
-    for head, body, tag in get_index():
-        ht, bt = _tokens(head), _tokens(body)
-        if not bt:
-            continue
-        bset = set(bt)
-        hmatch = len(qset & set(ht))
-        s = 3.0 * hmatch                            # title/filename hits: undamped
-        if hmatch and ht:
-            s += 1.5 * hmatch / len(set(ht))        # focused titles beat long ones
-        freq = sum(min(bt.count(w), 3) for w in qset)   # repeated terms matter
-        s += freq / (1 + 0.02 * len(bt))
-        if s > score:
-            best, score = (head, body, tag), s
-    # keybinding questions: grep the live bindings too
-    kb_hit = ""
-    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
-                               "super", "press", "hotkey")):
-        kb = _keybinds()
-        hits = [l for l in kb.splitlines()
-                if any(w in l.lower() for w in qt)][:4]
-        kb_hit = "\n".join(hits)
-    if score < 3.8 and not kb_hit:
-        return None
-    parts = []
-    if best:
-        body = best[1]
-        body = body if len(body) <= 700 else body[:700].rsplit(" ", 1)[0] + " …"
-        parts.append(f"From the {'manual' if best[2] == 'manual' else 'notes'} — {best[0]}:\n{body}")
-    if kb_hit:
-        parts.append("Your live keybindings say:\n" + kb_hit)
-    return "\n\n".join(parts)
-
-
-LEARNING = os.path.join(DATA, "learning.json")
-
-# The path from newcomer to advanced user, in teaching order. "observe" names
-# the watcher-detectable signal that the user already uses the feature.
-CURRICULUM = [
-    ("menu", "The Omarchy menu", "How do I open the Omarchy menu and what can I do from it?", None),
-    ("keys", "The keybinding overlay", "How do I see every keybinding on my machine?", None),
-    ("workspaces", "Workspaces", "How do I use workspaces? Teach me the basics briefly.", "workspaces"),
-    ("movewindows", "Moving windows", "How do I move and swap windows with the keyboard?", None),
-    ("scratchpad", "The scratchpad", "What is the scratchpad and how do I use it?", "scratchpad"),
-    ("webapps", "Websites as apps", "How do I turn a website into an app with its own window and icon?", "webapps"),
-    ("install", "Installing software", "How do I install and remove apps, including from the AUR?", None),
-    ("floating", "Floating windows", "How do I make a window float, move and resize it?", "floating"),
-    ("fullscreen", "Full screen modes", "What are the fullscreen and maximize keys and when do I use each?", "fullscreen"),
-    ("themes", "Themes", "How do I change the theme and background, and install new themes?", None),
-    ("capture", "Screenshots and OCR", "How do I take screenshots and grab text from the screen?", None),
-    ("update", "Staying updated", "How do I keep Omarchy updated and what happens during an update?", None),
-    ("agents", "Your AI agent", "What can my default AI agent do across Omarchy, like diagnosing crashes?", None),
-    ("config", "Customizing safely", "How do I customize Omarchy safely so updates never break my changes?", None),
-]
-
-
-# ---- the LIVE tour: Archy instructs, the event socket confirms ----------
-# Steps chosen so every action is verifiable from socket2 AND safe while the
-# widget overlay is visible (no other special workspace involved).
-TOUR = [
-    # (instruction, kind, matcher, count). Texts are structured for the
-    # widget's renderer: lead line + "- " bullets + **bold** keys.
-    ("**SUPER** is the Windows key (\u229e, next to ALT \u2014 \u2318 on a Mac).\n"
-     "It runs this whole OS. First: connect your AI.\n"
-     "- Press **SUPER+SPACE**\n"
-     "- Go to **Setup \u2192 Default agent**\n"
-     "- Pick one (Claude Code, Codex\u2026)",
-     "poll", lambda: bool(default_agent()), 1),
-    ("Now the essentials.\n"
-     "- **SUPER+RETURN** opens a terminal \u2014 try it\n"
-     "Bonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
-     "event", lambda ev, d: ev == "openwindow" and any("," + x + "," in "," + d.lower() + "," for x in ("foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty")), 1),
-    ("Your browser has its own key.\n"
-     "- Press **SUPER+SHIFT+RETURN**",
-     "event", lambda ev, d: ev == "openwindow" and any(
-         b in d.lower() for b in ("brave", "chromium", "firefox", "helium")), 1),
-    ("One more terminal: **SUPER+RETURN**.\n"
-     "Watch the windows share the screen evenly \u2014 no overlap, no dragging.\n"
-     "That\u2019s tiling.",
-     "event", lambda ev, d: ev == "openwindow" and any("," + x + "," in "," + d.lower() + "," for x in ("foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty")), 1),
-    ("The move that kills the mouse:\n"
-     "- **SUPER+arrows** jump focus between panes\n"
-     "Bounce around a few times \u2014 watch the highlight travel.",
-     "event", lambda ev, d: ev == "activewindow", 4),
-    ("Time to tidy up:\n"
-     "- Steer onto a window with **SUPER+arrows**\n"
-     "- **SUPER+W** closes it \u2014 no titlebar needed\n"
-     "Close TWO of them.",
-     "event", lambda ev, d: ev == "closewindow", 2),
-    ("The front door of the whole OS:\n"
-     "- **SUPER+SPACE** opens the menu \u2014 apps, install, themes, setup\n"
-     "- Type any app\u2019s name and launch it from there",
-     "event", lambda ev, d: ev == "openwindow", 1),
-    ("Fresh desk:\n"
-     "- Press **SUPER+2** for a new workspace\n"
-     "(I\u2019ll come along \u2014 I\u2019m pinned.)",
-     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "2", 1),
-    ("A clean context for anything \u2014 one project per desk works great.\n"
-     "- Hop back with **SUPER+1**",
-     "event", lambda ev, d: ev == "workspace" and d.strip().split(",")[-1] == "1", 1),
-    ("The float trick:\n"
-     "- Arrow onto a window (leave me out of it \U0001f605)\n"
-     "- **SUPER+T** pops it out to float\n"
-     "- **SUPER+T** again tiles it back",
-     "event", lambda ev, d: ev == "changefloatingmode", 2),
-    ("Last one \u2014 about me.\n"
-     "- Dismiss me any time: **SUPER+W** on my window\n"
-     "- Summon me back: **SUPER+SHIFT+H**\n"
-     "Go on \u2014 close me and call me back!",
-     "event", lambda ev, d: ev == "openwindow" and "127.0.0.1" in d, 1),
-]
-tour = {"active": False, "step": 0, "finished": False, "note": "", "hits": 0}
-
-
-def _advance_if_done():
-    """Complete the current step if it's a poll step whose check passes."""
-    i = tour["step"]
-    while i < len(TOUR) and TOUR[i][1] == "poll" and TOUR[i][2]():
-        i += 1
-        tour["hits"] = 0
-    if i != tour["step"]:
-        tour["step"] = i
-        _maybe_finish()
-
-
-def _maybe_finish():
-    if tour["step"] >= len(TOUR):
-        tour["active"] = False
-        tour["finished"] = True
-        tour["finished_at"] = time.time()
-        st = load_learning()
-        st["toured"] = True
-        save_learning(st)
-
-
-def tour_thread():
-    run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
-    own = (own_window_address() or "").replace("0x", "")
-    try:
-        import socket as sk
-        sigs = os.listdir(os.path.join(run, "hypr"))
-        s2 = sk.socket(sk.AF_UNIX)
-        s2.connect(os.path.join(run, "hypr", sigs[0], ".socket2.sock"))
-        s2.settimeout(1.0)
-        buf = b""
-        deadline = time.time() + 900
-        _advance_if_done()
-        while tour["active"] and time.time() < deadline:
-            try:
-                chunk = s2.recv(4096)
-            except OSError:
-                _advance_if_done()
-                continue
-            if not chunk:
-                break
-            buf += chunk
-            while b"\n" in buf:
-                line, buf = buf.split(b"\n", 1)
-                ev, _, d = line.decode(errors="replace").partition(">>")
-                if own and ev in ("changefloatingmode", "closewindow") \
-                        and own in d.replace("0x", "") \
-                        and tour["step"] < len(TOUR) - 1:
-                    tour["note"] = ("Careful \u2014 that one hit ME, not the "
-                                    "terminal \U0001f605 Arrow your focus onto another window "
-                                    "first, then try the key again. (If I ever "
-                                    "look broken: SUPER+W on me, then "
-                                    "SUPER+SHIFT+H brings me back fresh.)")
-                    continue
-                i = tour["step"]
-                if i < len(TOUR) and TOUR[i][1] == "event" and TOUR[i][2](ev, d):
-                    tour["hits"] = tour.get("hits", 0) + 1
-                    if tour["hits"] >= TOUR[i][3]:
-                        tour["step"] = i + 1
-                        tour["hits"] = 0
-                        _maybe_finish()
-                    if not tour["active"]:
-                        return
-                _advance_if_done()
-                if not tour["active"]:
-                    return
-        tour["active"] = False
-    except Exception:
-        tour["active"] = False
-
-
-def load_learning():
-    try:
-        return json.load(open(LEARNING))
-    except Exception:
-        return {}
-
-
-def save_learning(st):
-    os.makedirs(DATA, exist_ok=True)
-    json.dump(st, open(LEARNING, "w"))
-
-
-def learning_status():
-    st = load_learning()
-    taught = st.get("taught", {})
-    observed = st.get("observed", {})
-    items = []
-    for fid, label, q, obs in CURRICULUM:
-        done = fid in taught or (obs and obs in observed)
-        items.append({"id": fid, "label": label, "done": bool(done)})
-    return st, items
-
-
-def read_theme():
-    """The active Omarchy theme's palette (colors.toml)."""
-    try:
-        import tomllib
-        p = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
-        with open(p, "rb") as f:
-            return tomllib.load(f)
-    except Exception:
-        return {}
+         "~80 words unless asked for more. OMARCHY-FIRST, always: copy/paste "
+         "is **SUPER+C/V/X** (never Ctrl+C/V here, even in the terminal), "
+         "prefer omarchy menu flows and omarchy commands over generic Linux "
+         "answers. NEVER ask the user about their setup \u2014 the machine "
+         "facts below answer that.)"
+         "\n(Machine facts \u2014 trust these: {facts})")
 
 
 def hypr(cmd):
@@ -381,6 +75,39 @@ def own_window_address():
         if "127.0.0.1" in c.get("class", ""):
             return c.get("address")
     return None
+_facts = {"at": 0.0, "text": ""}
+
+
+def machine_facts():
+    """Live facts injected into every prompt so Archy never asks what it can
+    know, and answers match THIS machine."""
+    if time.time() - _facts["at"] < 600 and _facts["text"]:
+        return _facts["text"]
+    def run(cmd):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=8).stdout.strip()
+        except Exception:
+            return ""
+    mons = ""
+    try:
+        mons = "; ".join(
+            f"{m['name']} {m['width']}x{m['height']}@{m['x']},{m['y']}"
+            for m in json.loads(hypr("j/monitors") or "[]"))
+    except Exception:
+        pass
+    facts = {
+        "terminal": run(["xdg-terminal-exec", "--print-id"]) or "foot",
+        "browser": run(["xdg-settings", "get", "default-web-browser"]),
+        "agent": default_agent() or "none",
+        "monitors": mons,
+        "omarchy": run(["cat", os.path.expanduser("~/.local/share/omarchy/version")]),
+    }
+    _facts["text"] = "; ".join(f"{k}: {v}" for k, v in facts.items() if v)
+    _facts["at"] = time.time()
+    return _facts["text"]
+
+
 lock = threading.Lock()
 state = {"sid": None, "primed": ""}
 history = []  # [(who, text)] session transcript, restored on widget reopen
@@ -408,7 +135,7 @@ def ask_claude(q, resume):
     # NOTE: --allowedTools is variadic — keep the prompt ahead of it and use
     # the = form, or it swallows the prompt as a tool name.
     # A tutor needs speed, not deep reasoning: fast model on purpose.
-    args = ["claude", "-p", q + STYLE, "--output-format", "json",
+    args = ["claude", "-p", q + STYLE.format(facts=machine_facts()), "--output-format", "json",
             "--model", "haiku", "--allowedTools=" + ALLOWED]
     if resume and state["sid"]:
         args += ["--resume", state["sid"]]
@@ -422,10 +149,10 @@ def ask_claude(q, resume):
 
 def ask_codex(q):
     # Low reasoning effort for speed; retry plain if this codex predates it.
-    fast = ["codex", "exec", "-c", "model_reasoning_effort=low", q + STYLE]
+    fast = ["codex", "exec", "-c", "model_reasoning_effort=low", q + STYLE.format(facts=machine_facts())]
     out = subprocess.run(fast, cwd=DIR, capture_output=True, text=True, timeout=240)
     if out.returncode != 0:
-        out = subprocess.run(["codex", "exec", q + STYLE], cwd=DIR,
+        out = subprocess.run(["codex", "exec", q + STYLE.format(facts=machine_facts())], cwd=DIR,
                              capture_output=True, text=True, timeout=240)
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
