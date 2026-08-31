@@ -44,6 +44,7 @@
   .bot h1, .bot h2, .bot h3, .bot h4 { font-size: 0.95em; color: var(--ember); margin: 10px 0 4px; }
   .bot pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 6px 0; }
   .bot a { color: var(--ember); }
+  .bot a.path { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
   .bot strong { color: var(--ember); font-weight: 600; }
   .bot blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted); }
   .msg .li { padding-left: 1.1em; position: relative; margin-top: 5px; }
@@ -102,9 +103,41 @@ function md(text) {
   h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/`([^`\n]+)`/g, '<code>$1</code>');
   return h.split('\n').map(l => '<div class="ln">' + l + '</div>').join('');
 }
+const PATHRE = /(?:~|\$HOME|\/(?:etc|usr|opt|var|srv|tmp|home))\/[A-Za-z0-9._+@\/-]*[A-Za-z0-9_+-]/g;
+function linkifyPaths(root) {
+  // File paths in Archy's answers become click-to-open links (POST /open).
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  while (w.nextNode()) {
+    const n = w.currentNode;
+    if (n.parentElement && n.parentElement.closest('a')) continue;
+    PATHRE.lastIndex = 0;
+    if (PATHRE.test(n.nodeValue)) hits.push(n);
+  }
+  hits.forEach(n => {
+    const s = n.nodeValue, frag = document.createDocumentFragment();
+    let last = 0, m; PATHRE.lastIndex = 0;
+    while ((m = PATHRE.exec(s))) {
+      frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const a = document.createElement('a');
+      a.className = 'path'; a.href = '#'; a.textContent = m[0];
+      a.dataset.path = m[0]; a.title = 'Open in your editor';
+      frag.appendChild(a); last = m.index + m[0].length;
+    }
+    frag.appendChild(document.createTextNode(s.slice(last)));
+    n.parentNode.replaceChild(frag, n);
+  });
+}
+chat.addEventListener('click', (e) => {
+  const a = e.target.closest('a.path');
+  if (!a) return;
+  e.preventDefault();
+  fetch('/open', { method: 'POST', headers: {'Content-Type':'application/json'},
+                   body: JSON.stringify({ path: a.dataset.path }) }).catch(() => {});
+});
 function add(cls, text) {
   const d = document.createElement('div'); d.className = 'msg ' + cls;
-  if (cls === 'bot') d.innerHTML = '<svg class="avatar"><use href="#bot"/></svg><div></div>', d.lastChild.innerHTML = md(text);
+  if (cls === 'bot') d.innerHTML = '<svg class="avatar"><use href="#bot"/></svg><div></div>', d.lastChild.innerHTML = md(text), linkifyPaths(d.lastChild);
   else d.textContent = text;
   chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
 }
@@ -141,7 +174,7 @@ async function ask(q, act, plan) {
     const payload = act ? { q, force: 'act', plan: plan || '' } : { q };
     const r = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const j = await r.json();
-    t.lastChild.innerHTML = md(j.a || j.error || 'Hmm, something went wrong.');
+    t.lastChild.innerHTML = md(j.a || j.error || 'Hmm, something went wrong.'), linkifyPaths(t.lastChild);
     const badge = document.createElement('span'); badge.className = 'src';
     if (j.src === 'act') {
       badge.textContent = '🔧 done by Archy';

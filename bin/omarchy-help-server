@@ -30,7 +30,9 @@ STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "is **SUPER+C/V/X** (never Ctrl+C/V here, even in the terminal), "
          "prefer omarchy menu flows and omarchy commands over generic Linux "
          "answers. NEVER ask the user about their setup \u2014 the machine "
-         "facts below answer that.)"
+         "facts below answer that. When you mention a config or file, "
+         "write its FULL path like ~/.config/hypr/bindings.lua \u2014 paths in "
+         "your answers are clickable and open in the editor.)"
          "\n(Machine facts \u2014 trust these: {facts})")
 
 
@@ -645,6 +647,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 return self._send(400, {"error": "bad request"})
             return self._send(200, {"ok": True})
+        if self.path == "/open":
+            # Click-to-open: file paths in Archy's answers are links. Only
+            # launches the sanctioned editor flow on an existing file under
+            # known roots -- never executes anything from the path itself.
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                p = json.loads(self.rfile.read(n)).get("path", "")[:500]
+            except Exception:
+                return self._send(400, {"error": "bad request"})
+            p = os.path.realpath(os.path.expanduser(p.replace("$HOME", "~")))
+            home = os.path.expanduser("~")
+            roots = (home + "/", "/etc/", "/usr/", "/opt/", "/var/", "/srv/", "/tmp/")
+            if p.startswith(roots) and os.path.isfile(p):
+                subprocess.Popen(["omarchy-launch-config-editor", p],
+                                 start_new_session=True)
+                return self._send(200, {"ok": True})
+            subprocess.Popen(["omarchy-notification-send", "Archy",
+                              "Can\u2019t open " + p +
+                              " \u2014 it doesn\u2019t exist (yet?)"],
+                             start_new_session=True)
+            return self._send(200, {"ok": False})
         if self.path == "/show":
             # Pinned widget is always visible when open; just focus it.
             if own_window_address():
