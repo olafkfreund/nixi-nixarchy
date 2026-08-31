@@ -58,9 +58,8 @@ files, nothing runs as root, no existing configuration is overwritten.
 - An AI agent for the chat and 🔧 tiers: whatever `omarchy default agent` is
   set to (Claude Code and Codex supported headless; the tour, learning path,
   starter chips, and coaching work with **no agent at all**)
-- License: MIT. No telemetry; everything runs on 127.0.0.1 except your
-  agent's own API calls and the optional manual refresh from GitHub.
-  Markdown rendering (marked + DOMPurify) is vendored — no CDN.
+- License: MIT. Markdown rendering (marked + DOMPurify) is vendored — no
+  CDN, everything serves from 127.0.0.1.
 
 ## Install (manual / non-plugin)
 
@@ -70,6 +69,20 @@ files, nothing runs as root, no existing configuration is overwritten.
 Then run `omarchy-help`, find **Help** in the Omarchy menu (SUPER+SPACE), or
 bind a key (the installer prints the one-liner). Removal is the same as the
 plugin's minus the `omarchy plugin remove` line.
+
+## Your AI, your account, your data
+
+- **Archy has no backend and no API key of its own.** AI answers run through
+  the agent *you* already set up on Omarchy (Claude Code or Codex), on your
+  own subscription or credits. Archy is tuned to be cheap about it: chat
+  answers use the fastest model tier (e.g. Haiku / low reasoning effort),
+  and the tour, learning path, coaching, and starter answers cost nothing
+  at all — they never call an AI.
+- **We collect nothing.** No telemetry, no analytics, no accounts, no phoning
+  home. Everything Archy knows about you — your questions, its LEARNED.md,
+  your tour progress — lives in plain files on your machine and goes nowhere.
+  The only network traffic is your own agent's API calls and the optional
+  manual refresh from GitHub's public repo.
 
 ## Design notes
 
@@ -84,5 +97,9 @@ plugin's minus the `omarchy plugin remove` line.
   KNOWLEDGE.md are the whole point.
 
 ## Credits
+
+I built Archy for myself, learning Omarchy the way it deserves to be
+learned — hands-on, keyboard-first, AI when it helps — and it grows the same
+way: every rough edge I hit in daily use becomes the next improvement.
 
 Created by **Luke Warren Wills** — [@lukemallorca](https://instagram.com/lukemallorca) on Instagram. Open source under the MIT license: use it, fork it, improve it.
