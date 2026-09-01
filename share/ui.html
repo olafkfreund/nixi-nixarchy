@@ -254,7 +254,7 @@ fetch('/history').then(r => r.json()).then(h => {
 let TOUR_STEPS = [], tourStep = -1, tourTimer = null;
 fetch('/tour/state').then(r => r.json()).then(t => {
   if (t.finished && t.fresh_finish) {
-    add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: SUPER+K shows EVERY binding whenever you're lost. Tap 🎓 for your next trick any time, or just ask me things.");
+    add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: I don't just explain fixes — a 🔧 button under my answers applies them for you. How much I'm allowed to touch is your call, in the ⚙ menu up top: **Fixer** (config tweaks only, the safe default) or **Mechanic** (my full toolbox). Either way I ask first and back up everything.\n\nTap 🎓 for your next trick any time, or just ask me things.");
     refreshLearn();
     return;
   }
@@ -286,7 +286,7 @@ async function pollTour() {
     }
     if (t.finished) {
       clearInterval(tourTimer); tourTimer = null;
-      add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: SUPER+K shows EVERY binding whenever you're lost. Tap 🎓 for your next trick any time, or just ask me things.");
+      add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: I don't just explain fixes — a 🔧 button under my answers applies them for you. How much I'm allowed to touch is your call, in the ⚙ menu up top: **Fixer** (config tweaks only, the safe default) or **Mechanic** (my full toolbox). Either way I ask first and back up everything.\n\nTap 🎓 for your next trick any time, or just ask me things.");
       refreshLearn();
     } else if (!t.active && tourStep < TOUR_STEPS.length) {
       clearInterval(tourTimer); tourTimer = null;
