@@ -36,6 +36,13 @@
   input:disabled { opacity:.5; }
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
+  #gear { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 8px; line-height:1.4; cursor:pointer; }
+  #gear:hover { color:var(--ember); border-color:var(--ember); }
+  #trustmenu { position:absolute; top:54px; right:12px; z-index:9; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; width:240px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+  #trustmenu .lvl { display:block; width:100%; text-align:left; background:none; border:1px solid transparent; border-radius:8px; padding:6px 8px; color:var(--ink); cursor:pointer; font:inherit; }
+  #trustmenu .lvl small { display:block; color:var(--muted); font-size:0.72rem; }
+  #trustmenu .lvl.on { border-color:var(--ember); }
+  #trustmenu .lvl.on b { color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
   .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
   .bot p { margin: 0 0 8px; } .bot p:last-child { margin-bottom: 0; }
@@ -77,8 +84,13 @@
 <header>
   <svg class="avatar"><use href="#bot"/></svg>
   <div style="flex:1"><h1>Archy</h1><p>your Omarchy guide</p></div>
+  <button id="gear" title="Trust level — what the 🔧 may do" aria-label="Trust level">&#9881;</button>
   <button id="mini" title="Minimize (bring back with your helper key)" aria-label="Minimize">&#8212;</button>
 </header>
+<div id="trustmenu" hidden>
+  <button class="lvl" data-t="fixer"><b>Fixer</b><small>Config fixes only — scoped commands, fast model. The safe default.</small></button>
+  <button class="lvl" data-t="mechanic"><b>Mechanic</b><small>Your agent&#8217;s full powers + strongest model. Still asks per fix, still backs up first.</small></button>
+</div>
 <div id="chat">
   <div class="msg bot"><svg class="avatar"><use href="#bot"/></svg><div>__GREETING__</div></div>
   <div class="hint">__HINT__</div>
@@ -92,6 +104,24 @@
 // Theme palette is baked in server-side (no flash).
 document.getElementById('mini').addEventListener('click', () =>
   fetch('/minimize', { method: 'POST' }).catch(() => {}));
+const tmenu = document.getElementById('trustmenu');
+function paintTrust(t) {
+  tmenu.querySelectorAll('.lvl').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+document.getElementById('gear').addEventListener('click', () => {
+  tmenu.hidden = !tmenu.hidden;
+  if (!tmenu.hidden) fetch('/trust').then(r => r.json()).then(j => paintTrust(j.trust)).catch(() => {});
+});
+tmenu.addEventListener('click', (e) => {
+  const b = e.target.closest('.lvl'); if (!b) return;
+  fetch('/trust', { method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ trust: b.dataset.t }) })
+    .then(r => r.json()).then(j => { paintTrust(j.trust); setTimeout(() => tmenu.hidden = true, 350); })
+    .catch(() => {});
+});
+document.addEventListener('click', (e) => {
+  if (!tmenu.hidden && !e.target.closest('#trustmenu') && !e.target.closest('#gear')) tmenu.hidden = true;
+});
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q');
 function md(text) {
