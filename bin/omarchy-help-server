@@ -602,16 +602,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("/*__THEME__*/", css)
             if agent_ready():
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archy \U0001F916 your Omarchy guide. Ask me anything \u2014 "
-                    "or hit \U0001f680 for the live tour and I\u2019ll teach you the "
-                    "moves hands-on.")
+                    "Hey, I\u2019m Archy \U0001F916 I\u2019ll teach you Omarchy "
+                    "hands-on (\U0001f680 starts the live tour), answer anything "
+                    "about *this* machine \u2014 and with the \U0001f527 under my "
+                    "answers I can make the fixes for you. Ask away.")
                 html = html.replace("__HINT__",
-                    "answers come from your AI, grounded in this machine")
+                    "your AI \u00b7 grounded in this machine \u00b7 \u2699 sets "
+                    "what I may change")
             else:
                 html = html.replace("__GREETING__",
                     "Hey, I\u2019m Archy \U0001F916 your Omarchy guide. No AI agent is "
                     "connected yet \u2014 tap a quick answer below to get going "
-                    "(\u201cSet up your AI agent\u201d unlocks the full chat).")
+                    "(\u201cSet up your AI agent\u201d unlocks the full chat, and "
+                    "then I can fix things for you, not just explain them).")
                 html = html.replace("__HINT__",
                     "quick answers work offline \u00b7 connect an agent for everything else")
             self._send(200, html.encode(), "text/html")
