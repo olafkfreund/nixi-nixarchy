@@ -283,7 +283,7 @@ TOUR = [
      "event", lambda ev, d: ev == "changefloatingmode", 2),
     ("Last one \u2014 about me.\n"
      "- Dismiss me any time: **SUPER+W** on my window\n"
-     "- Summon me back: **SUPER+SHIFT+H**\n"
+     "- Summon me back: **SUPER+H**\n"
      "Go on \u2014 close me and call me back!",
      "event", lambda ev, d: ev == "openwindow" and "127.0.0.1" in d, 1),
 ]
@@ -342,7 +342,7 @@ def tour_thread():
                                     "terminal \U0001f605 Arrow your focus onto another window "
                                     "first, then try the key again. (If I ever "
                                     "look broken: SUPER+W on me, then "
-                                    "SUPER+SHIFT+H brings me back fresh.)")
+                                    "SUPER+H brings me back fresh.)")
                     continue
                 i = tour["step"]
                 if i < len(TOUR) and TOUR[i][1] == "event" and TOUR[i][2](ev, d):

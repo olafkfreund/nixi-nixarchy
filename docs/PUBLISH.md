@@ -27,7 +27,7 @@ After that, anyone: SUPER+SPACE → Install → AUR → archy-omarchy.
 
 ## 3. The demo (Luke, ~10 min)
 
-Record the live tour once on a fresh-ish session: SUPER+SHIFT+H → 🚀 → do the
+Record the live tour once on a fresh-ish session: SUPER+H → 🚀 → do the
 11 steps → the dismiss-and-recall finale. Omarchy screen recording captures
 it; keep it under 60s (2x speed is fine). Upload as GIF/mp4 to the repo and
 embed at the top of README.
