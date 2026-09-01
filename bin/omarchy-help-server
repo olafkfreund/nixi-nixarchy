@@ -73,9 +73,19 @@ def ensure_window_rule():
     if time.time() - _rule["at"] < 600:
         return
     _rule["at"] = time.time()
+    # 346 wide, 2px right inset: pixel-matched to the shell's own popout
+    # panels so Archy lines up with the tray popouts. With the bar at the
+    # bottom, drop the widget higher so it clears the bar (approx height 26).
+    y = "(monitor_h-488)"
+    try:
+        cfg = json.load(open(os.path.expanduser("~/.config/omarchy/shell.json")))
+        if (cfg.get("bar") or {}).get("position") == "bottom":
+            y = "(monitor_h-518)"
+    except Exception:
+        pass
     hypr('eval hl.window_rule({ match = { class = "^.*-127\\.0\\.0\\.1__.*$" }, '
-         'float = true, pin = true, size = { 360, 480 }, '
-         'move = { "(monitor_w-368)", "(monitor_h-488)" } })')
+         'float = true, pin = true, size = { 346, 480 }, '
+         'move = { "(monitor_w-348)", "' + y + '" } })')
 
 
 def own_window_address():
