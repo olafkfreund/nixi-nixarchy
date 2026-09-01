@@ -604,11 +604,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("/*__THEME__*/", css)
             if agent_ready():
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archy \U0001F916 Ask me anything \u2014 I know this "
-                    "machine inside out. New to Omarchy? Hit \U0001f680 and "
-                    "I\u2019ll walk you through it live. And when something needs "
-                    "changing, I don\u2019t just explain the fix \u2014 I can make it "
-                    "for you.")
+                    "Hey, I\u2019m Archy \U0001F916 your Omarchy helper. Ask me "
+                    "anything \u2014 I know this machine inside out. New to "
+                    "Omarchy? Hit \U0001f680 and I\u2019ll walk you through it "
+                    "live. And when something needs changing, I don\u2019t just "
+                    "explain the fix \u2014 I can make it for you.")
                 html = html.replace("__HINT__",
                     "your AI \u00b7 grounded in this machine \u00b7 \u2699 sets "
                     "what I may change")
