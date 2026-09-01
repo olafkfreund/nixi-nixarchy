@@ -64,7 +64,6 @@ EOF
 fi
 
 echo "Installed. Run omarchy-help for the chat widget (omarchy-help --tui for a terminal session)."
-echo "Optional: a compact floating helper window — add to ~/.config/hypr/bindings.lua:"
-echo "  o.bind(\"SUPER + SHIFT + H\", \"Omarchy helper\", \"foot --app-id=omarchy-help --title='Omarchy Help' -e omarchy-help\")"
-echo '  o.window("^omarchy-help$", { float = true, center = true, size = { 620, 700 } })'
+echo "Optional: bind SUPER+H (free in stock Omarchy) — add to ~/.config/hypr/bindings.lua:"
+echo "  o.bind(\"SUPER + H\", \"Archy (Omarchy help)\", \"omarchy-help\")"
 echo "Uninstall: rm -rf ~/.config/omarchy-help ~/.local/bin/omarchy-help (and the menu entry)."
