@@ -22,14 +22,13 @@ Archy grows with you — from your first boot to bending the OS to your will:
   facts (terminal, browser, monitors). Omarchy-first answers: it says
   **SUPER+C**, not Ctrl+C. Real Markdown, and every file path it mentions
   is clickable — one click opens it in your editor.
-- **🔧 "Do it for me."** Not ready to edit config files yourself? One button
-  under the answer and Archy applies the fix — every file backed up first,
-  the change verified, and the one-line undo reported back. Your click is
-  the consent; nothing changes without it. Two trust levels in the ⚙ menu:
-  **Fixer** (default) sticks to user-level config with a scoped command
-  allowlist on a fast model; **Mechanic** gives your own agent its normal
-  working powers on its strongest model — for when you want real changes
-  done properly. Both still ask per fix, back up first, and never escalate privileges.
+- **🔧 "Do it for me" — only if you say so.** By default Archy is a
+  **Guide**: it explains and instructs, and is never given a tool that can
+  change anything on your machine. Flip the ⚙ menu to **Mechanic** and your
+  own agent gets its normal working powers on its strongest model — it still
+  asks before each fix, backs up every file first, verifies the change, and
+  reports the one-line undo. Two levels only, so neither claims a boundary
+  it can't enforce.
 - **📚 It learns.** Verified facts and your corrections are appended to
   `LEARNED.md`, so it gets better on your machine over time.
 
@@ -113,40 +112,53 @@ The helper binds to 127.0.0.1 — and treats even that as hostile, because
   the page itself, `/health`, and the vendored scripts are token-free.
   Host and Origin are allowlisted (no DNS rebinding), bodies are JSON-only
   with a hard cap, chunked encoding is refused, no CORS headers are sent.
-- **Descriptor-bound state.** Private state (token, trust level, learning
-  progress) lives in a directory that must be yours and not group/world
-  writable, opened once and retained; files are opened relative to it with
-  `O_NOFOLLOW|O_NONBLOCK`, validated by `fstat` (regular, yours, 0600,
-  bounded) before a byte is read, and written through an `O_EXCL` random
-  0600 temp with file + directory `fsync` and a rename that never replaces
-  a symlink. Served content is read bounded and regular-file-checked.
-- **Supervised subprocesses.** Every agent and helper command runs in its
-  own process group under a single supervisor: output is capped at the
-  producer (2 MB) and **overflow kills the whole group immediately**, as
-  do timeouts, errors, and server shutdown; nothing is silently truncated.
-  Desktop launches that must outlive a request (your editor, a
-  notification) are detached with no pipes and no inherited descriptors.
-- **Sandboxes are never weakened.** Codex always runs with
-  `--sandbox workspace-write` (Fixer's workspace is `~/.config`, matching its
-  stated scope; Mechanic's is `$HOME` by explicit choice). Claude's Fixer
-  allowlist is a fixed set of Omarchy config commands.
+- **Descriptor-bound state.** Every directory the helper touches is
+  reached by walking each path component from `$HOME` with
+  `O_NOFOLLOW|O_DIRECTORY`, validating every step (yours, never
+  world-writable, group-writable only if the group is provably yours
+  alone); the leaf descriptor is retained for all relative operations.
+  State files are opened `O_NOFOLLOW|O_NONBLOCK`, `fstat`-validated
+  (regular, yours, 0600, bounded) before a byte is read, and written through
+  an `O_EXCL` random 0600 temp with file + directory `fsync` and a rename
+  that never replaces a symlink. Served content is read bounded and
+  regular-file-checked.
+- **Supervised subprocesses.** Every agent and helper command runs inside
+  its own transient systemd user scope — a cgroup with a unique,
+  never-reused name — and cleanup kills the scope *by name*, so no numeric
+  PID or process group is ever signalled after it could have been reused.
+  Output is capped at the producer (2 MB) and **overflow kills the scope
+  immediately**, as do timeouts, errors, and server shutdown; nothing is
+  silently truncated. Desktop launches that must outlive a request (your
+  editor, a notification) are detached with no pipes and no inherited
+  descriptors.
+- **No level claims what it can't enforce.** Guide (default) never
+  receives a write-capable tool; tutoring runs Codex in `--sandbox
+  read-only` and Claude with read-only tools, and learned facts are appended
+  by the helper, not the agent. Mechanic is the user's explicit opt-in to
+  their own agent's normal powers.
 - **Installer.** All placements are descriptor-bound, atomic, journaled and
-  rolled back on any failure; symlink targets are refused. Each persistent
-  integration is a separate consent.
+  rolled back on any failure — files *and* service state (enable/active is
+  snapshotted and restored, every `systemctl` result checked); symlink
+  targets are refused; the setup log is written through the same
+  primitive. Each persistent integration is a separate consent.
 - **Manual updater.** Pins one upstream commit, downloads one tarball at
   that immutable SHA, verifies every page's git blob hash against the pinned
-  tree, and swaps the complete verified set in atomically.
+  tree, and publishes descriptor-relative: random staging directory inside
+  the validated state dir, `O_EXCL` writes, `renameat` swap against the
+  retained parent, old tree removed by descriptor.
 
 ## Design notes
 
 - Two small systemd **user** services: the widget server (Python stdlib,
   bound to 127.0.0.1) and the Hyprland-event watcher behind the tour and
   the coaching. No privilege escalation, no telemetry, nothing runs as root.
-- The 🔧 mode is deliberately scoped by trust level (a plain-text file at
-  `~/.config/omarchy-help/trust`, set from the widget's ⚙ menu): Fixer =
-  explicit command allowlist + user-level config only; Mechanic = broad
-  tools on your agent's strongest model. Both: backup-before-edit,
-  verify-after, undo reported, never any privilege escalation, consent per click.
+- Trust is a two-state file in the private state dir, set only from the
+  widget's ⚙ menu: **Guide** (default) never hands the agent a write-capable
+  tool; **Mechanic** is the user's explicit, honestly-unconfined choice —
+  backup-before-edit, verify-after, undo reported, never any privilege
+  escalation, consent per click. Ordinary tutoring is read-only by
+  construction (Codex `--sandbox read-only`; Claude with read tools only),
+  and what Archy learns is written by the helper, never by the agent.
 - Machine-specific notes can go in `~/.config/omarchy-help/LOCAL.md` — the
   tutor reads it if present (useful for fleet/dotfile setups).
 - Knowledge lives in plain Markdown — PRs that correct or extend

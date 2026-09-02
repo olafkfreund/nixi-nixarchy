@@ -97,8 +97,8 @@
   <button id="mini" title="Minimize (bring back with your helper key)" aria-label="Minimize">&#8212;</button>
 </header>
 <div id="trustmenu" hidden>
-  <button class="lvl" data-t="fixer"><b>Fixer</b><small>Config fixes only — scoped commands, fast model. The safe default.</small></button>
-  <button class="lvl" data-t="mechanic"><b>Mechanic</b><small>Your agent&#8217;s full powers + strongest model. Still asks per fix, still backs up first.</small></button>
+  <button class="lvl" data-t="guide"><b>Guide</b><small>Explains and instructs. Never changes anything on your machine. The default.</small></button>
+  <button class="lvl" data-t="mechanic"><b>Mechanic</b><small>Your own agent with its normal powers, strongest model. Asks before each fix, backs up first.</small></button>
   <div class="cat" style="margin-top:8px">Integrations</div>
   <div id="integrations"></div>
 </div>
@@ -322,7 +322,7 @@ fetch('/history').then(r => r.json()).then(h => {
 let TOUR_STEPS = [], tourStep = -1, tourTimer = null;
 fetch('/tour/state').then(r => r.json()).then(t => {
   if (t.finished && t.fresh_finish) {
-    add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: I don't just explain fixes — a 🔧 button under my answers applies them for you. How much I'm allowed to touch is your call, in the ⚙ menu up top: **Fixer** (config tweaks only, the safe default) or **Mechanic** (my full toolbox). Either way I ask first and back up everything.\n\nTap 🎓 for your next trick any time, or just ask me things.");
+    add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: by default I'm a **Guide** — I explain and instruct, and never change anything on your machine. If you ever want me to apply a fix for you, switch to **Mechanic** in the ⚙ menu: that hands your own agent its normal powers, and I still ask before each fix and back up every file first.\n\nTap 🎓 for your next trick any time, or just ask me things.");
     refreshLearn();
     return;
   }
@@ -354,7 +354,7 @@ async function pollTour() {
     }
     if (t.finished) {
       clearInterval(tourTimer); tourTimer = null;
-      add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: I don't just explain fixes — a 🔧 button under my answers applies them for you. How much I'm allowed to touch is your call, in the ⚙ menu up top: **Fixer** (config tweaks only, the safe default) or **Mechanic** (my full toolbox). Either way I ask first and back up everything.\n\nTap 🎓 for your next trick any time, or just ask me things.");
+      add('bot', "✅ Tour complete — and you just proved you can always find me. One homework key: **SUPER+K** shows EVERY binding whenever you're lost.\n\nLast thing worth knowing: by default I'm a **Guide** — I explain and instruct, and never change anything on your machine. If you ever want me to apply a fix for you, switch to **Mechanic** in the ⚙ menu: that hands your own agent its normal powers, and I still ask before each fix and back up every file first.\n\nTap 🎓 for your next trick any time, or just ask me things.");
       refreshLearn();
     } else if (!t.active && tourStep < TOUR_STEPS.length) {
       clearInterval(tourTimer); tourTimer = null;

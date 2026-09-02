@@ -57,36 +57,65 @@ _PUBLIC_GET = ("/", "/index.html", "/health")
 # directory, fsync'd, renamed over a target that must not be a symlink, then
 # the directory itself is fsync'd. Kept in sync with install.py.
 _UID = os.getuid()
+_HOME = os.path.abspath(os.path.expanduser("~"))
 
 
-def _dir_trusted(st):
-    """Ours, never world-writable; group-writable only for the user's own
-    private group with no other members (umask 002 systems)."""
-    if st.st_uid != _UID or (st.st_mode & 0o002):
+def _group_exclusive(gid):
+    """A group-writable directory is acceptable only if the group is provably
+    ours alone: our primary group, no other account has it as primary, and
+    no member other than us."""
+    import grp
+    import pwd
+    if gid != os.getgid():
+        return False
+    try:
+        g = grp.getgrgid(gid)
+        me = pwd.getpwuid(_UID).pw_name
+    except KeyError:
+        return False
+    if any(m != me for m in g.gr_mem):
+        return False
+    return not any(p.pw_gid == gid and p.pw_uid != _UID for p in pwd.getpwall())
+
+
+def _dir_ok(st):
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != _UID or (st.st_mode & 0o002):
         return False
     if st.st_mode & 0o020:
-        if st.st_gid != os.getgid():
-            return False
-        try:
-            import grp
-            return not grp.getgrgid(st.st_gid).gr_mem
-        except KeyError:
-            return False
+        return _group_exclusive(st.st_gid)
     return True
 
 
-def _dirfd(path, create=False):
-    if create:
-        os.makedirs(path, mode=0o700, exist_ok=True)
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+def _dirfd(path, create=False, mode=0o700):
+    """Open a directory under $HOME by walking every component from the
+    $HOME anchor with O_NOFOLLOW|O_DIRECTORY, validating each directory
+    (ours, never world-writable, group-writable only if exclusive). A
+    symlink anywhere on the path is refused. Returns the leaf descriptor;
+    callers keep it for every relative operation that follows."""
+    path = os.path.abspath(path)
+    if path != _HOME and not path.startswith(_HOME + os.sep):
+        raise PermissionError("outside $HOME: " + path)
+    fd = os.open(_HOME, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        st = os.fstat(fd)
-        if not _dir_trusted(st):
-            raise PermissionError("untrusted directory: " + path)
+        if not _dir_ok(os.fstat(fd)):
+            raise PermissionError("untrusted $HOME")
+        for comp in [c for c in path[len(_HOME):].split(os.sep) if c]:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+            try:
+                nfd = os.open(comp, flags, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(comp, mode, dir_fd=fd)
+                nfd = os.open(comp, flags, dir_fd=fd)
+            os.close(fd)
+            fd = nfd
+            if not _dir_ok(os.fstat(fd)):
+                raise PermissionError("untrusted directory: " + path)
+        return fd
     except BaseException:
         os.close(fd)
         raise
-    return fd
 
 
 def _read_fd_bounded(fd, cap, private):
@@ -203,7 +232,7 @@ def _repair_private_modes():
     except (OSError, PermissionError):
         return
     try:
-        for name in ("learning.json", "tips.json", "trust", ".token"):
+        for name in ("learning.json", "tips.json", "trust", ".token", "LEARNED.md"):
             try:
                 fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
                              dir_fd=dfd)
@@ -220,27 +249,50 @@ def _repair_private_modes():
 
 
 # ---- supervised subprocess boundary ---------------------------------------
+# Each command runs inside its own transient systemd user SCOPE (a cgroup
+# with a unique, never-reused unit name). Cleanup kills the scope by NAME —
+# an identity-bound handle — so no numeric PID/PGID is ever signalled after
+# it could have been reused. Without systemd-run the fallback only signals
+# the group while the leader is provably alive (before it is reaped).
+import shutil as _shutil
 MAX_OUT = 2_000_000  # bytes of agent stdout/stderr we will ever buffer
-_LIVE = set()
+_HAVE_SCOPE = bool(_shutil.which("systemd-run")) and bool(_shutil.which("systemctl"))
+_LIVE = {}            # unit name -> Popen
 _LIVE_LOCK = threading.Lock()
 
 
-def _killpg(p):
+def _scope_kill(unit):
     try:
-        os.killpg(p.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
+        subprocess.run(["systemctl", "--user", "kill", "--signal=SIGKILL", unit + ".scope"],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=10)
+    except Exception:
         pass
 
 
 def run_capped(cmd, timeout, cwd=None):
-    """Run cmd in its own process group under supervision. The whole group
-    is SIGKILLed and reaped on output overflow, timeout, any error, and
-    server shutdown; overflow is an error, never a silent truncation."""
-    p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL,
+    """Run cmd under supervision. Output is capped at the producer; overflow,
+    timeout, any error and server shutdown kill the whole scope (or, in the
+    fallback, the live group) and reap it. Overflow is an error, never a
+    silent truncation."""
+    unit = "archy-" + secrets.token_hex(6)
+    full = (["systemd-run", "--user", "--scope", "--quiet", "--collect",
+             "--unit=" + unit, "--"] + list(cmd)) if _HAVE_SCOPE else list(cmd)
+    p = subprocess.Popen(full, cwd=cwd, stdin=subprocess.DEVNULL,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                          start_new_session=True, close_fds=True)
     with _LIVE_LOCK:
-        _LIVE.add(p)
+        _LIVE[unit] = p
+
+    def kill():
+        if _HAVE_SCOPE:
+            _scope_kill(unit)
+        elif p.poll() is None:            # leader alive => PGID identity valid
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+
     overflow = threading.Event()
 
     def drain(stream, sink):
@@ -252,7 +304,7 @@ def run_capped(cmd, timeout, cwd=None):
                 if len(sink) + len(chunk) > MAX_OUT:
                     sink.extend(chunk[:MAX_OUT - len(sink)])
                     overflow.set()
-                    _killpg(p)          # stop the producer NOW, not at deadline
+                    kill()                # stop the producer NOW, not at deadline
                     return
                 sink.extend(chunk)
         except (OSError, ValueError):
@@ -265,20 +317,14 @@ def run_capped(cmd, timeout, cwd=None):
     try:
         try:
             p.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            _killpg(p)
-            p.wait()
-            raise
         except BaseException:
-            _killpg(p)
+            kill()                        # timeout or any other error
             p.wait()
             raise
+        kill()                            # leader done: clear descendants by NAME
     finally:
-        # Leader is gone: kill any descendants still in the group (they hold
-        # the pipe ends), then release our ends so the drains cannot hang.
-        _killpg(p)
         with _LIVE_LOCK:
-            _LIVE.discard(p)
+            _LIVE.pop(unit, None)
     to.join(5); te.join(5)
     for f in (p.stdout, p.stderr):
         try:
@@ -286,7 +332,7 @@ def run_capped(cmd, timeout, cwd=None):
         except OSError:
             pass
     if overflow.is_set():
-        raise RuntimeError("output limit exceeded; the process group was terminated")
+        raise RuntimeError("output limit exceeded; the process scope was terminated")
     return p.returncode, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
 
 
@@ -300,9 +346,15 @@ def spawn_detached(cmd):
 
 def _shutdown(*_):
     with _LIVE_LOCK:
-        live = list(_LIVE)
-    for p in live:
-        _killpg(p)
+        live = list(_LIVE.items())
+    for unit, p in live:
+        if _HAVE_SCOPE:
+            _scope_kill(unit)
+        elif p.poll() is None:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
     sys.exit(0)
 
 
@@ -315,7 +367,10 @@ STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "answers. NEVER ask the user about their setup \u2014 the machine "
          "facts below answer that. When you mention a config or file, "
          "write its FULL path like ~/.config/hypr/bindings.lua \u2014 paths in "
-         "your answers are clickable and open in the editor.)"
+         "your answers are clickable and open in the editor. You have NO "
+         "write access: if you verified a NEW fact about this machine or the "
+         "user corrected you, add a final line starting with LEARNED: and one "
+         "sentence \u2014 the helper records it for you.)"
          "\n(Machine facts \u2014 trust these: {facts})")
 
 
@@ -778,16 +833,20 @@ HEADLESS_AGENTS = ("claude", "codex")  # agents we can call inline for the chat
 # shell access; Codex additionally stays inside $HOME via workspace sandbox.
 TRUST_FILE = "trust"   # in DATA (private state dir); legacy copy migrated once
 
+# Two levels, and only two, so no level claims a boundary it cannot enforce:
+#   guide    (default) — explains and instructs; the agent is never given a
+#                        write-capable tool. Nothing on the machine changes.
+#   mechanic (opt-in)  — the user's own agent with its normal working powers
+#                        on its strongest model; consent per click; described
+#                        honestly as unconfined.
+
 
 def trust_level():
-    """User-chosen power for DO-IT-FOR-ME: 'fixer' (default, scoped tools,
-    fast model) or 'mechanic' (broad tools, strongest model). Set only via
-    the widget's gear menu; per-click consent applies at every level."""
     try:
         t = secure_read(DATA, TRUST_FILE, 64).decode("utf-8", "replace").strip().lower()
-        return t if t in ("fixer", "mechanic") else "fixer"
+        return "mechanic" if t == "mechanic" else "guide"
     except (OSError, ValueError):
-        return "fixer"
+        return "guide"
 
 
 def save_trust(t):
@@ -795,7 +854,8 @@ def save_trust(t):
 
 
 def _migrate_legacy_trust():
-    """v0.9.4 kept trust in the config dir; move it into private state."""
+    """v0.9.4 kept trust in the config dir; move it into private state.
+    Any older 'fixer' value degrades to guide (fixer no longer exists)."""
     try:
         secure_read(DATA, TRUST_FILE, 64)
         return
@@ -803,79 +863,81 @@ def _migrate_legacy_trust():
         pass
     try:
         t = bounded_read(os.path.join(DIR, "trust"), 64).decode().strip().lower()
-        if t in ("fixer", "mechanic"):
+        if t == "mechanic":
             save_trust(t)
     except (OSError, ValueError):
         pass
 
 
-ACT_ALLOWED = ",".join([
-    "Read", "Grep", "Glob", "Edit", "Write",
-    "Bash(hyprctl *)", "Bash(omarchy *)", "Bash(omarchy-* *)",
-    "Bash(cp *)", "Bash(mkdir *)", "Bash(xdg-settings *)",
-    "Bash(systemctl --user *)",
-])
-ACT_BRIEF = (
-    "\n\n(The user clicked DO-IT-FOR-ME: they explicitly consent to you making "
-    "this change on their machine now. Rules: touch ONLY user-level Omarchy "
-    "config (~/.config/hypr/*.lua, ~/.config/omarchy/**, app settings under "
-    "~/.config) — NEVER /usr/share/omarchy or system files. Back up every "
-    "file you edit first (cp X X.bak-archy). Apply via the sanctioned "
-    "override files and hyprctl reload / omarchy commands. VERIFY the change "
-    "took effect. Then report chat-style: what changed, how you verified it, "
-    "and the one-line undo. If part of the request is dangerous or unclear, "
-    "do only the safe part and say what you skipped.)")
-ACT_HINT = (
-    "\n(If the allowed tools are too narrow for this request, do what you "
-    "can and tell the user that Mechanic trust — Archy's gear menu — would "
-    "let you do the rest.)")
-# Mechanic: the user's own agent with its normal working powers, on the
-# strongest model — chosen deliberately in the gear menu, consented per
-# click. Same red lines as always: no privilege escalation, no data deletion, backup first.
+GUIDE_ONLY = ("I’m in **Guide** mode, so I explain and instruct but never "
+              "change anything on your machine. If you’d like me to apply "
+              "this for you, switch to **Mechanic** in the ⚙ menu — that "
+              "gives your own agent its normal powers, and I’ll still ask "
+              "before each fix and back up every file first.")
+
 MECH_ALLOWED = ",".join(["Read", "Grep", "Glob", "Edit", "Write", "Bash"])
 MECH_BRIEF = (
     "\n\n(The user clicked DO-IT-FOR-ME at MECHANIC trust: they explicitly "
-    "consent to you making this change on their machine now, with broad "
-    "powers. Rules: prefer user-level config and sanctioned omarchy/hyprctl "
-    "flows; back up EVERY file you edit first (cp X X.bak-archy); never "
-    "escalate privileges or run anything as root, never delete user data, "
-    "never touch credentials or secrets. "
-    "VERIFY the change took effect. Then report chat-style: what changed, "
-    "how you verified it, and the one-line undo. If part of the request is "
-    "dangerous or unclear, do only the safe part and say what you skipped.)")
+    "consent to you making this change on their machine now, with your "
+    "normal powers. Rules: prefer user-level config and sanctioned "
+    "omarchy/hyprctl flows; back up EVERY file you edit first "
+    "(cp X X.bak-archy); never escalate privileges or run anything as root, "
+    "never delete user data, never touch credentials or secrets. VERIFY the "
+    "change took effect. Then report chat-style: what changed, how you "
+    "verified it, and the one-line undo. If part of the request is dangerous "
+    "or unclear, do only the safe part and say what you skipped.)")
 
 
 def ask_act(q):
-    """Consented action: the agent may edit user-level Omarchy config."""
+    """Consented action at MECHANIC trust only; Guide never reaches here."""
     agent = default_agent() or "claude"
-    level = trust_level()
-    brief = MECH_BRIEF if level == "mechanic" else ACT_BRIEF + ACT_HINT
-    prompt = q + brief + "\n(Machine facts: " + machine_facts() + ")"
+    prompt = q + MECH_BRIEF + "\n(Machine facts: " + machine_facts() + ")"
     home = os.path.expanduser("~")
     if agent == "codex":
-        # The sandbox is the boundary: NEVER retried without it (review
-        # finding). Fixer confines writes to ~/.config — the stated scope —
-        # by anchoring the workspace there; Mechanic is the user's explicit
-        # broad choice and works from $HOME.
-        ws = home if level == "mechanic" else os.path.join(home, ".config")
         rc, out, err = run_capped(
             ["codex", "exec", "--sandbox", "workspace-write", prompt],
-            timeout=300, cwd=ws)
+            timeout=300, cwd=home)
         if rc != 0:
-            raise RuntimeError(err.strip()[-300:] or "codex exec failed "
-                               "(sandbox mode is required; not retried without it)")
+            raise RuntimeError(err.strip()[-300:] or "codex exec failed")
         return out.strip()[-2500:] or "Done (no summary returned)."
-    tools = MECH_ALLOWED if level == "mechanic" else ACT_ALLOWED
-    # Fixer stays on a fast mid model; Mechanic runs on the user's default
-    # (strongest) model — fixes are rare, they deserve the real brain.
-    model = [] if level == "mechanic" else ["--model", "sonnet"]
     rc, out, err = run_capped(["claude", "-p", prompt, "--output-format", "json",
-                               *model, "--allowedTools=" + tools],
+                               "--allowedTools=" + MECH_ALLOWED],
                               timeout=300, cwd=home)
     if rc != 0:
         raise RuntimeError(err.strip()[-300:] or "unknown error")
     data = json.loads(out)
     return (data.get("result") or "").strip() or "Done (no summary returned)."
+
+
+# ---- learning broker: the tutor never writes; it reports, the server appends
+_LEARN_MARK = "LEARNED:"
+
+
+def absorb_learned(answer):
+    """Strip trailing 'LEARNED: ...' lines from a tutor answer and append them
+    (bounded, private, atomic) to the state dir's LEARNED.md."""
+    keep, learned = [], []
+    for line in answer.splitlines():
+        if line.strip().startswith(_LEARN_MARK):
+            fact = line.strip()[len(_LEARN_MARK):].strip()[:300]
+            if fact:
+                learned.append(fact)
+        else:
+            keep.append(line)
+    if learned:
+        try:
+            try:
+                cur = secure_read(DATA, "LEARNED.md", 262144).decode("utf-8", "replace")
+            except (OSError, ValueError):
+                cur = "# Learned on this machine\n"
+            day = time.strftime("%Y-%m-%d")
+            cur += "".join(f"- {day}: {f}\n" for f in learned[:5])
+            if len(cur) > 262144:                       # keep the newest
+                cur = cur[-200000:]
+            secure_write(DATA, "LEARNED.md", cur)
+        except Exception:
+            pass
+    return "\n".join(keep).strip()
 
 
 def ask_claude(q, resume):
@@ -897,10 +959,13 @@ def ask_claude(q, resume):
 def ask_codex(q):
     # Low reasoning effort for speed; retry plain if this codex predates it.
     prompt = q + STYLE.format(facts=machine_facts())
-    rc, out, err = run_capped(["codex", "exec", "-c", "model_reasoning_effort=low",
-                               prompt], timeout=240, cwd=DIR)
-    if rc != 0:  # older codex without the reasoning knob; same sandbox default
-        rc, out, err = run_capped(["codex", "exec", prompt], timeout=240, cwd=DIR)
+    # Tutoring is explicitly read-only: the sandbox is the boundary.
+    rc, out, err = run_capped(["codex", "exec", "--sandbox", "read-only",
+                               "-c", "model_reasoning_effort=low", prompt],
+                              timeout=240, cwd=DIR)
+    if rc != 0:  # older codex without the reasoning knob; same read-only sandbox
+        rc, out, err = run_capped(["codex", "exec", "--sandbox", "read-only", prompt],
+                                  timeout=240, cwd=DIR)
     if rc != 0:
         raise RuntimeError(err.strip()[-300:] or "unknown error")
     return out.strip()[-2000:] or "Sorry — I came back empty."
@@ -1197,8 +1262,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 t = str(self._read_json().get("trust", "")).strip().lower()
             except Exception:
                 return self._send(400, {"error": "bad request"})
-            if t not in ("fixer", "mechanic"):
-                return self._send(400, {"error": "fixer or mechanic"})
+            if t not in ("guide", "mechanic"):
+                return self._send(400, {"error": "guide or mechanic"})
             save_trust(t)
             return self._send(200, {"trust": t})
         if self.path == "/open":
@@ -1270,6 +1335,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"a": hint, "src": "manual"})
 
         if force == "act":
+            if trust_level() != "mechanic":
+                return self._send(200, {"a": GUIDE_ONLY, "src": "ai"})
             plan = str(body.get("plan", ""))[:700]
             aq = q + ("\n(Your earlier advice was: " + plan + ")" if plan else "")
             with lock:
@@ -1307,6 +1374,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     answer = ask_agent(prompt, resume=False)
                 except Exception as e:
                     answer = "I hit a snag: " + str(e)[-300:]
+        answer = absorb_learned(answer)
         if not ephemeral:
             history.append(("me", q))
             history.append(("bot", answer))

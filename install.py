@@ -36,41 +36,76 @@ SKILLS = os.path.join(HOME, ".claude", "skills", "omarchy-help")
 HOOKS_BOOT = os.path.join(HOME, ".config", "omarchy", "hooks", "post-boot.d")
 HOOKS_UPD = os.path.join(HOME, ".config", "omarchy", "hooks", "post-update.d")
 EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
-_UID = os.getuid()
 NO_SYSTEMD = "--no-systemd" in sys.argv
-
 FEATURES = ("watcher", "skill", "hooks")
+_LOG = []
 
 
-# ---------------------------------------------------------------- primitives
-def _dir_trusted(st):
-    """Ours, never world-writable; group-writable only for the user's own
-    private group with no other members (umask 002 systems)."""
-    if st.st_uid != _UID or (st.st_mode & 0o002):
+def log(msg):
+    _LOG.append(str(msg))
+    print(msg, file=sys.stderr if msg.startswith(("install failed", "rollback")) else sys.stdout)
+
+
+_UID = os.getuid()
+_HOME = os.path.abspath(os.path.expanduser("~"))
+
+
+def _group_exclusive(gid):
+    """A group-writable directory is acceptable only if the group is provably
+    ours alone: our primary group, no other account has it as primary, and
+    no member other than us."""
+    import grp
+    import pwd
+    if gid != os.getgid():
+        return False
+    try:
+        g = grp.getgrgid(gid)
+        me = pwd.getpwuid(_UID).pw_name
+    except KeyError:
+        return False
+    if any(m != me for m in g.gr_mem):
+        return False
+    return not any(p.pw_gid == gid and p.pw_uid != _UID for p in pwd.getpwall())
+
+
+def _dir_ok(st):
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != _UID or (st.st_mode & 0o002):
         return False
     if st.st_mode & 0o020:
-        if st.st_gid != os.getgid():
-            return False
-        try:
-            import grp
-            return not grp.getgrgid(st.st_gid).gr_mem
-        except KeyError:
-            return False
+        return _group_exclusive(st.st_gid)
     return True
 
 
-def _dirfd(path, create=False, mode=0o755):
-    if create:
-        os.makedirs(path, mode=mode, exist_ok=True)
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+def _dirfd(path, create=False, mode=0o700):
+    """Open a directory under $HOME by walking every component from the
+    $HOME anchor with O_NOFOLLOW|O_DIRECTORY, validating each directory
+    (ours, never world-writable, group-writable only if exclusive). A
+    symlink anywhere on the path is refused. Returns the leaf descriptor;
+    callers keep it for every relative operation that follows."""
+    path = os.path.abspath(path)
+    if path != _HOME and not path.startswith(_HOME + os.sep):
+        raise PermissionError("outside $HOME: " + path)
+    fd = os.open(_HOME, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        st = os.fstat(fd)
-        if not _dir_trusted(st):
-            raise PermissionError("untrusted directory: " + path)
+        if not _dir_ok(os.fstat(fd)):
+            raise PermissionError("untrusted $HOME")
+        for comp in [c for c in path[len(_HOME):].split(os.sep) if c]:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+            try:
+                nfd = os.open(comp, flags, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(comp, mode, dir_fd=fd)
+                nfd = os.open(comp, flags, dir_fd=fd)
+            os.close(fd)
+            fd = nfd
+            if not _dir_ok(os.fstat(fd)):
+                raise PermissionError("untrusted directory: " + path)
+        return fd
     except BaseException:
         os.close(fd)
         raise
-    return fd
 
 
 def read_src(path, cap=8_000_000):
@@ -163,7 +198,7 @@ class Journal:
                 finally:
                     os.close(dfd)
             except Exception as e:
-                print(f"rollback: could not restore {dirpath}/{name}: {e}", file=sys.stderr)
+                log(f"rollback: could not restore {dirpath}/{name}: {e}")
 
 
 def _write(dfd, name, data, mode):
@@ -195,6 +230,7 @@ def _write(dfd, name, data, mode):
 
 
 def systemctl(*args):
+    """Run a user-manager command; returns the exit code (checked by callers)."""
     if NO_SYSTEMD:
         return 0
     try:
@@ -205,10 +241,47 @@ def systemctl(*args):
         return 1
 
 
+def must(rc, what):
+    if rc != 0:
+        raise RuntimeError(what + " failed (systemctl rc=%d)" % rc)
+
+
 def is_enabled(unit):
     if NO_SYSTEMD:
         return os.path.exists(os.path.join(UNITS, unit))
     return systemctl("is-enabled", "--quiet", unit) == 0
+
+
+def is_active(unit):
+    if NO_SYSTEMD:
+        return False
+    return systemctl("is-active", "--quiet", unit) == 0
+
+
+class Services:
+    """Journal of service state so rollback restores enable/active status."""
+
+    def __init__(self):
+        self.prior = {}   # unit -> (enabled, active)
+
+    def snapshot(self, unit):
+        if unit not in self.prior:
+            self.prior[unit] = (is_enabled(unit), is_active(unit))
+
+    def enable_now(self, unit):
+        self.snapshot(unit)
+        must(systemctl("daemon-reload"), "daemon-reload")
+        must(systemctl("enable", "--now", unit), "enable " + unit)
+
+    def disable_now(self, unit):
+        self.snapshot(unit)
+        must(systemctl("disable", "--now", unit), "disable " + unit)
+
+    def rollback(self):
+        for unit, (enabled, active) in self.prior.items():
+            systemctl("daemon-reload")
+            systemctl("enable" if enabled else "disable", unit)
+            systemctl("start" if active else "stop", unit)
 
 
 # ------------------------------------------------------------------- pieces
@@ -216,7 +289,7 @@ def src(*parts):
     return os.path.join(ROOT, *parts)
 
 
-def install_core(j):
+def install_core(j, svc):
     for f in ("CLAUDE.md", "KNOWLEDGE.md", "ui.html", "faq.json", "AGENTS.md"):
         j.place(DIR, f, read_src(src("share", f)), dir_mode=0o700)
     vendor = os.path.join(DIR, "vendor")
@@ -230,8 +303,7 @@ def install_core(j):
     j.place(DATA, "source_root", (ROOT + "\n").encode(), mode=0o600, dir_mode=0o700)
     j.place(DATA, ".installed-version", (version + "\n").encode(), mode=0o600, dir_mode=0o700)
     merge_menu(j)
-    systemctl("daemon-reload")
-    systemctl("enable", "--now", "omarchy-help.service")
+    svc.enable_now("omarchy-help.service")
 
 
 def merge_menu(j):
@@ -243,8 +315,7 @@ def merge_menu(j):
         try:
             cur = _read_existing(dfd, "omarchy-menu.jsonc", cap=262144)
         except PermissionError:
-            print("menu: omarchy-menu.jsonc is not a regular file — leaving it alone; "
-                  "add the 'help' entry yourself", file=sys.stderr)
+            log("menu: omarchy-menu.jsonc is not a regular file — leaving it alone; add the 'help' entry yourself")
             return
     finally:
         os.close(dfd)
@@ -265,32 +336,31 @@ def merge_menu(j):
         sep = "," if body.endswith(("}", '"', "]")) and not body.endswith("{") else ""
         out = body + sep + "\n  " + row + "\n}\n"
     j.place(EXT_DIR, "omarchy-menu.jsonc", out.encode())
-    print("menu: Help entry added (backup: omarchy-menu.jsonc.bak-archy)")
+    log("menu: Help entry added (backup: omarchy-menu.jsonc.bak-archy)")
 
 
-def enable_watcher(j):
+def enable_watcher(j, svc):
     j.place(BIN, "omarchy-help-watch", read_src(src("bin", "omarchy-help-watch")), mode=0o755)
     j.place(UNITS, "omarchy-help-watch.service",
             read_src(src("systemd", "omarchy-help-watch.service")))
-    systemctl("daemon-reload")
-    systemctl("enable", "--now", "omarchy-help-watch.service")
+    svc.enable_now("omarchy-help-watch.service")
 
 
-def disable_watcher(j):
-    systemctl("disable", "--now", "omarchy-help-watch.service")
+def disable_watcher(j, svc):
+    svc.disable_now("omarchy-help-watch.service")
     j.remove(UNITS, "omarchy-help-watch.service")
     j.remove(BIN, "omarchy-help-watch")
-    systemctl("daemon-reload")
+    must(systemctl("daemon-reload"), "daemon-reload")
 
 
-def enable_skill(j):
+def enable_skill(j, svc):
     for f in sorted(os.listdir(src("skills", "omarchy-help"))):
         if f.endswith(".md"):
             j.place(SKILLS, f, read_src(src("skills", "omarchy-help", f)))
     j.place(DIR, "SKILL.md", read_src(src("skills", "omarchy-help", "SKILL.md")), dir_mode=0o700)
 
 
-def disable_skill(j):
+def disable_skill(j, svc):
     for f in ("SKILL.md",):
         j.remove(SKILLS, f)
         j.remove(DIR, f)
@@ -300,23 +370,22 @@ def disable_skill(j):
         pass
 
 
-def enable_hooks(j):
+def enable_hooks(j, svc):
     j.place(HOOKS_BOOT, "archy-welcome.hook", read_src(src("hooks", "archy-welcome.hook")), mode=0o755)
     j.place(HOOKS_UPD, "archy-manual-refresh.hook",
             read_src(src("hooks", "archy-manual-refresh.hook")), mode=0o755)
     for u in ("omarchy-help-manual.service", "omarchy-help-manual.timer"):
         j.place(UNITS, u, read_src(src("systemd", u)))
-    systemctl("daemon-reload")
-    systemctl("enable", "--now", "omarchy-help-manual.timer")
+    svc.enable_now("omarchy-help-manual.timer")
 
 
-def disable_hooks(j):
-    systemctl("disable", "--now", "omarchy-help-manual.timer")
+def disable_hooks(j, svc):
+    svc.disable_now("omarchy-help-manual.timer")
     j.remove(HOOKS_BOOT, "archy-welcome.hook")
     j.remove(HOOKS_UPD, "archy-manual-refresh.hook")
     for u in ("omarchy-help-manual.service", "omarchy-help-manual.timer"):
         j.remove(UNITS, u)
-    systemctl("daemon-reload")
+    must(systemctl("daemon-reload"), "daemon-reload")
 
 
 def status():
@@ -333,7 +402,7 @@ DISABLE = {"watcher": disable_watcher, "skill": disable_skill, "hooks": disable_
 
 
 def main(argv):
-    args = [a for a in argv if a != "--no-systemd"]
+    args = [a for a in argv if a not in ("--no-systemd", "--log")]
     if args == ["--status"]:
         print(json.dumps(status()))
         return 0
@@ -353,17 +422,19 @@ def main(argv):
             return 64
     if want_on and not core:
         core = True
-    j = Journal()
+    j, svc = Journal(), Services()
     try:
         if core:
-            install_core(j)
+            install_core(j, svc)
         for f in want_on:
-            ENABLE[f](j)
+            ENABLE[f](j, svc)
         for f in want_off:
-            DISABLE[f](j)
+            DISABLE[f](j, svc)
     except Exception as e:
-        print("install failed: %s — rolling back" % e, file=sys.stderr)
+        log("install failed: %s — rolling back" % e)
+        svc.rollback()
         j.rollback()
+        write_log()
         return 1
     if core:
         try:
@@ -372,14 +443,31 @@ def main(argv):
                            stderr=subprocess.DEVNULL, timeout=300, start_new_session=True)
         except Exception:
             pass
-        print("Installed. Run omarchy-help for the chat widget; find Help in the Omarchy "
-              "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Archy (Omarchy help)\", "
-              "\"omarchy-help\") in ~/.config/hypr/bindings.lua")
+        log("Installed. Run omarchy-help for the chat widget; find Help in the Omarchy "
+            "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Archy (Omarchy help)\", "
+            "\"omarchy-help\") in ~/.config/hypr/bindings.lua")
     for f in want_on:
-        print("enabled: " + f)
+        log("enabled: " + f)
     for f in want_off:
-        print("disabled: " + f)
+        log("disabled: " + f)
+    write_log()
     return 0
+
+
+def write_log():
+    """The setup log lives in the private state dir, written through the
+    same descriptor-bound primitive as everything else (never a shell
+    redirection through a symlink)."""
+    if "--log" not in sys.argv:
+        return
+    try:
+        dfd = _dirfd(DATA, create=True)
+        try:
+            _write(dfd, "setup.log", ("\n".join(_LOG) + "\n").encode(), 0o600)
+        finally:
+            os.close(dfd)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

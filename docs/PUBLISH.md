@@ -13,17 +13,15 @@ Secrets sweep checklist (re-run before push if anything changed):
 no `.env`, no tokens, no tailnet IPs/hostnames, no personal paths beyond
 `$HOME`-relative. `grep -rniE "token|secret|passw|100\.|\.ts\.net" .`
 
-## 2. AUR package (needs: an AUR account + SSH key, aur.archlinux.org)
+## 2. AUR package (lives in the AUR, not in this tree)
 
-Tag a release first: `git tag v0.9.0 && git push --tags`.
-Then claim + push the package:
-
-    git clone ssh://aur@aur.archlinux.org/archy-omarchy.git /tmp/aur-archy
-    cp packaging/PKGBUILD /tmp/aur-archy/ && cd /tmp/aur-archy
-    updpkgsums && makepkg --printsrcinfo > .SRCINFO
-    git add -A && git commit -m "archy-omarchy v0.9.0" && git push
-
-After that, anyone: SUPER+SPACE → Install → AUR → archy-omarchy.
+The marketplace installs from git; AUR packaging is a separate distribution
+channel and is maintained in the AUR repository itself, where the PKGBUILD
+can pin a real `sha256sums` for the exact tagged release tarball (a PKGBUILD
+inside the plugin tree can never carry the checksum of the archive that
+contains it). Tag a release (`git tag vX.Y.Z && git push --tags`), then in
+the AUR clone: write the PKGBUILD for that tag, `updpkgsums`,
+`makepkg --printsrcinfo > .SRCINFO`, commit, push.
 
 ## 3. The demo (Luke, ~10 min)
 
