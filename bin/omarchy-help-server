@@ -831,7 +831,7 @@ ACT_HINT = (
     "let you do the rest.)")
 # Mechanic: the user's own agent with its normal working powers, on the
 # strongest model — chosen deliberately in the gear menu, consented per
-# click. Same red lines as always: no sudo, no data deletion, backup first.
+# click. Same red lines as always: no privilege escalation, no data deletion, backup first.
 MECH_ALLOWED = ",".join(["Read", "Grep", "Glob", "Edit", "Write", "Bash"])
 MECH_BRIEF = (
     "\n\n(The user clicked DO-IT-FOR-ME at MECHANIC trust: they explicitly "
