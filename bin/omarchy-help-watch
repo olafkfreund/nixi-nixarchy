@@ -124,8 +124,14 @@ class Day:
             if "org.omarchy.screensaver" in data:
                 try:
                     import urllib.request
+                    tok = ""
+                    try:
+                        tok = open(os.path.join(DATA, ".token")).read(64).strip()
+                    except OSError:
+                        pass
                     urllib.request.urlopen(urllib.request.Request(
-                        "http://127.0.0.1:8642/minimize", method="POST"), timeout=5)
+                        "http://127.0.0.1:8642/minimize", method="POST",
+                        headers={"X-Archy-Token": tok}), timeout=5)
                 except Exception:
                     pass
                 return

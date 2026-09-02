@@ -123,6 +123,15 @@ tmenu.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   if (!tmenu.hidden && !e.target.closest('#trustmenu') && !e.target.closest('#gear')) tmenu.hidden = true;
 });
+// Per-session capability token (server-injected): sent on every request so
+// no other origin or process without the token can drive privileged routes.
+const TOKEN = '__TOKEN__';
+const _nativeFetch = window.fetch.bind(window);
+window.fetch = (url, opts) => {
+  opts = opts || {};
+  opts.headers = Object.assign({ 'X-Archy-Token': TOKEN }, opts.headers || {});
+  return _nativeFetch(url, opts);
+};
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q');
 function md(text) {

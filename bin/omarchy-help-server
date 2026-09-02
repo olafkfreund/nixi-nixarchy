@@ -7,6 +7,8 @@ Local only (127.0.0.1), stdlib only, no telemetry."""
 import http.server
 import json
 import os
+import secrets
+import signal
 import subprocess
 import threading
 import time
@@ -29,6 +31,66 @@ for _d in ("~/.local/bin", "~/.local/share/mise/shims", "~/.asdf/shims"):
     _d = os.path.expanduser(_d)
     if os.path.isdir(_d) and _d not in os.environ.get("PATH", ""):
         os.environ["PATH"] = _d + os.pathsep + os.environ.get("PATH", "")
+
+# ---- request security ------------------------------------------------------
+# The server is localhost-only, but "localhost" includes every website the
+# user's browser has open (CSRF/DNS-rebinding). Defenses, per the marketplace
+# security review: an unguessable per-session token required on every
+# state-changing request (also delivered to local CLI callers via a 0600
+# file), a strict Host/Origin allowlist, JSON-only bodies with a hard size
+# cap, and no CORS headers ever (so cross-origin reads stay blocked).
+TOKEN = secrets.token_hex(16)
+TOKEN_FILE = os.path.join(DATA, ".token")
+
+
+def _write_token():
+    os.makedirs(DATA, exist_ok=True)
+    tmp = TOKEN_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(TOKEN)
+    os.replace(tmp, TOKEN_FILE)
+
+
+_HOSTS = {"127.0.0.1:%d" % PORT, "localhost:%d" % PORT, "127.0.0.1", "localhost"}
+_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+
+MAX_OUT = 2_000_000  # bytes of agent stdout/stderr we will ever buffer
+
+
+def run_capped(cmd, timeout, cwd=None):
+    """Run cmd in its own process group with producer-side output caps.
+    On deadline the ENTIRE group is SIGKILLed (agents spawn children)."""
+    p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, start_new_session=True)
+
+    def drain(stream, sink):
+        try:
+            while True:
+                chunk = stream.read(65536)
+                if not chunk:
+                    return
+                if len(sink) < MAX_OUT:
+                    sink.extend(chunk[:MAX_OUT - len(sink)])
+        except OSError:
+            pass
+
+    out, err = bytearray(), bytearray()
+    to = threading.Thread(target=drain, args=(p.stdout, out), daemon=True)
+    te = threading.Thread(target=drain, args=(p.stderr, err), daemon=True)
+    to.start(); te.start()
+    try:
+        p.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        p.wait()
+        raise
+    to.join(5); te.join(5)
+    return p.returncode, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+
 
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "then real Markdown: '-' bullets or numbered steps, short paragraphs "
@@ -134,7 +196,8 @@ def _sections():
             if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):  # noqa
                 continue
             try:
-                text = open(os.path.join(base, name)).read()
+                with open(os.path.join(base, name)) as f:
+                    text = f.read(524288)   # bound: manual pages are small
             except OSError:
                 continue
             fname_words = " ".join(name[:-3].split("-"))
@@ -151,9 +214,9 @@ def _sections():
 
 def _keybinds():
     try:
-        out = subprocess.run(["omarchy", "menu", "keybindings", "--print"],
-                             capture_output=True, text=True, timeout=10)
-        return out.stdout
+        _, out, _ = run_capped(["omarchy", "menu", "keybindings", "--print"],
+                               timeout=10)
+        return out
     except Exception:
         return ""
 
@@ -375,15 +438,33 @@ def tour_thread():
 
 
 def load_learning():
+    """Bounded, schema-checked read: a corrupt or oversized state file
+    degrades to empty state instead of feeding the server garbage."""
     try:
-        return json.load(open(LEARNING))
+        fd = os.open(LEARNING, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as f:
+            raw = f.read(65536)
+        st = json.loads(raw)
+        if not isinstance(st, dict):
+            return {}
+        for k in ("taught", "observed"):
+            v = st.get(k)
+            if not isinstance(v, dict) or len(v) > 200:
+                st.pop(k, None)
+        return st
     except Exception:
         return {}
 
 
 def save_learning(st):
     os.makedirs(DATA, exist_ok=True)
-    json.dump(st, open(LEARNING, "w"))
+    tmp = LEARNING + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(st, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, LEARNING)
 
 
 def learning_status():
@@ -419,8 +500,7 @@ def machine_facts():
         return _facts["text"]
     def run(cmd):
         try:
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=8).stdout.strip()
+            return run_capped(cmd, timeout=8)[1].strip()
         except Exception:
             return ""
     mons = ""
@@ -475,10 +555,23 @@ def trust_level():
     fast model) or 'mechanic' (broad tools, strongest model). Set only via
     the widget's gear menu; per-click consent applies at every level."""
     try:
-        t = open(TRUST_FILE).read().strip().lower()
+        fd = os.open(TRUST_FILE, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "r") as f:
+            t = f.read(32).strip().lower()
         return t if t in ("fixer", "mechanic") else "fixer"
     except OSError:
         return "fixer"
+
+
+def save_trust(t):
+    os.makedirs(os.path.dirname(TRUST_FILE), exist_ok=True)
+    tmp = TRUST_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(t + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, TRUST_FILE)
 
 
 ACT_ALLOWED = ",".join([
@@ -524,25 +617,28 @@ def ask_act(q):
     prompt = q + brief + "\n(Machine facts: " + machine_facts() + ")"
     home = os.path.expanduser("~")
     if agent == "codex":
-        out = subprocess.run(
+        # The sandbox is the boundary: NEVER retried without it (review
+        # finding). Fixer confines writes to ~/.config — the stated scope —
+        # by anchoring the workspace there; Mechanic is the user's explicit
+        # broad choice and works from $HOME.
+        ws = home if level == "mechanic" else os.path.join(home, ".config")
+        rc, out, err = run_capped(
             ["codex", "exec", "--sandbox", "workspace-write", prompt],
-            cwd=home, capture_output=True, text=True, timeout=300)
-        if out.returncode != 0:
-            out = subprocess.run(["codex", "exec", prompt], cwd=home,
-                                 capture_output=True, text=True, timeout=300)
-        if out.returncode != 0:
-            raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
-        return out.stdout.strip()[-2500:] or "Done (no summary returned)."
+            timeout=300, cwd=ws)
+        if rc != 0:
+            raise RuntimeError(err.strip()[-300:] or "codex exec failed "
+                               "(sandbox mode is required; not retried without it)")
+        return out.strip()[-2500:] or "Done (no summary returned)."
     tools = MECH_ALLOWED if level == "mechanic" else ACT_ALLOWED
     # Fixer stays on a fast mid model; Mechanic runs on the user's default
     # (strongest) model — fixes are rare, they deserve the real brain.
     model = [] if level == "mechanic" else ["--model", "sonnet"]
-    out = subprocess.run(["claude", "-p", prompt, "--output-format", "json",
-                          *model, "--allowedTools=" + tools],
-                         cwd=home, capture_output=True, text=True, timeout=300)
-    if out.returncode != 0:
-        raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
-    data = json.loads(out.stdout)
+    rc, out, err = run_capped(["claude", "-p", prompt, "--output-format", "json",
+                               *model, "--allowedTools=" + tools],
+                              timeout=300, cwd=home)
+    if rc != 0:
+        raise RuntimeError(err.strip()[-300:] or "unknown error")
+    data = json.loads(out)
     return (data.get("result") or "").strip() or "Done (no summary returned)."
 
 
@@ -554,24 +650,24 @@ def ask_claude(q, resume):
             "--model", "haiku", "--allowedTools=" + ALLOWED]
     if resume and state["sid"]:
         args += ["--resume", state["sid"]]
-    out = subprocess.run(args, cwd=DIR, capture_output=True, text=True, timeout=240)
-    if out.returncode != 0:
-        raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
-    data = json.loads(out.stdout)
+    rc, out, err = run_capped(args, timeout=240, cwd=DIR)
+    if rc != 0:
+        raise RuntimeError(err.strip()[-300:] or "unknown error")
+    data = json.loads(out)
     state["sid"] = data.get("session_id") or state["sid"]
     return (data.get("result") or "").strip() or "Sorry — I came back empty. Try asking again."
 
 
 def ask_codex(q):
     # Low reasoning effort for speed; retry plain if this codex predates it.
-    fast = ["codex", "exec", "-c", "model_reasoning_effort=low", q + STYLE.format(facts=machine_facts())]
-    out = subprocess.run(fast, cwd=DIR, capture_output=True, text=True, timeout=240)
-    if out.returncode != 0:
-        out = subprocess.run(["codex", "exec", q + STYLE.format(facts=machine_facts())], cwd=DIR,
-                             capture_output=True, text=True, timeout=240)
-    if out.returncode != 0:
-        raise RuntimeError(out.stderr.strip()[-300:] or "unknown error")
-    return out.stdout.strip()[-2000:] or "Sorry — I came back empty."
+    prompt = q + STYLE.format(facts=machine_facts())
+    rc, out, err = run_capped(["codex", "exec", "-c", "model_reasoning_effort=low",
+                               prompt], timeout=240, cwd=DIR)
+    if rc != 0:  # older codex without the reasoning knob; same sandbox default
+        rc, out, err = run_capped(["codex", "exec", prompt], timeout=240, cwd=DIR)
+    if rc != 0:
+        raise RuntimeError(err.strip()[-300:] or "unknown error")
+    return out.strip()[-2000:] or "Sorry — I came back empty."
 
 
 def ask_agent(q, resume):
@@ -585,6 +681,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _guard(self, need_token):
+        """Host/Origin allowlist against DNS rebinding; per-session token on
+        every state-changing request. Returns True when the request may
+        proceed (an error response has been sent otherwise)."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host not in _HOSTS:
+            self._send(403, {"error": "bad host"})
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin.strip().lower() not in _ORIGINS:
+            self._send(403, {"error": "bad origin"})
+            return False
+        if need_token and not secrets.compare_digest(
+                self.headers.get("X-Archy-Token", ""), TOKEN):
+            self._send(403, {"error": "missing capability token"})
+            return False
+        return True
+
+    def _read_json(self, limit=16384):
+        """Bounded JSON body: fixed small cap, no chunked encoding, JSON
+        content type only (non-simple, so browsers must preflight it)."""
+        if self.headers.get("Transfer-Encoding"):
+            raise ValueError("chunked")
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            raise ValueError("content type")
+        n = int(self.headers.get("Content-Length"))
+        if n < 0 or n > limit:
+            raise ValueError("length")
+        return json.loads(self.rfile.read(n))
+
     def _send(self, code, body, ctype="application/json"):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code)
@@ -594,8 +721,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if not self._guard(need_token=(self.path == "/history")):
+            return
         if self.path in ("/", "/index.html"):
             html = open(UI).read()
+            html = html.replace("__TOKEN__", TOKEN)
             t = read_theme()
             if t.get("background"):
                 light = t.get("mode") == "light"
@@ -647,7 +777,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for p in (os.path.join(DIR, "faq.json"), os.path.join(DATA, "faq.json")):
                 if os.path.exists(p):
                     try:
-                        entries = json.load(open(p))
+                        with open(p) as f:
+                            entries = json.loads(f.read(262144))
+                        if not isinstance(entries, list):
+                            entries = []
+                        entries = entries[:40]
                     except Exception:
                         pass
                     break
@@ -680,6 +814,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if not self._guard(need_token=True):
+            return
         if self.path == "/tour/start":
             tour.update({"active": True, "step": 0, "finished": False, "note": "", "hits": 0})
             threading.Thread(target=tour_thread, daemon=True).start()
@@ -704,31 +840,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/prime":
             # A teaching question queued by the tip watcher: the widget asks
             # it automatically the next time it becomes visible.
-            n = int(self.headers.get("Content-Length", 0))
             try:
-                state["primed"] = json.loads(self.rfile.read(n)).get("q", "")[:500]
+                state["primed"] = str(self._read_json().get("q", ""))[:500]
             except Exception:
                 return self._send(400, {"error": "bad request"})
             return self._send(200, {"ok": True})
         if self.path == "/trust":
-            n = int(self.headers.get("Content-Length", 0))
             try:
-                t = json.loads(self.rfile.read(n)).get("trust", "").strip().lower()
+                t = str(self._read_json().get("trust", "")).strip().lower()
             except Exception:
                 return self._send(400, {"error": "bad request"})
             if t not in ("fixer", "mechanic"):
                 return self._send(400, {"error": "fixer or mechanic"})
-            os.makedirs(os.path.dirname(TRUST_FILE), exist_ok=True)
-            with open(TRUST_FILE, "w") as f:
-                f.write(t + "\n")
+            save_trust(t)
             return self._send(200, {"trust": t})
         if self.path == "/open":
             # Click-to-open: file paths in Archy's answers are links. Only
             # launches the sanctioned editor flow on an existing file under
             # known roots -- never executes anything from the path itself.
-            n = int(self.headers.get("Content-Length", 0))
             try:
-                p = json.loads(self.rfile.read(n)).get("path", "")[:500]
+                p = str(self._read_json().get("path", ""))[:500]
             except Exception:
                 return self._send(400, {"error": "bad request"})
             p = os.path.realpath(os.path.expanduser(p.replace("$HOME", "~")))
@@ -762,10 +893,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"ok": bool(addr)})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
-        n = int(self.headers.get("Content-Length", 0))
         try:
-            body = json.loads(self.rfile.read(n))
-            q = body.get("q", "").strip()[:2000]
+            body = self._read_json()
+            q = str(body.get("q", "")).strip()[:2000]
             force = body.get("force")
             ephemeral = bool(body.get("ephemeral"))
         except Exception:
@@ -832,6 +962,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _write_token()
     try:
         ensure_window_rule()
     except Exception:

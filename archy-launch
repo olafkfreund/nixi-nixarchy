@@ -14,7 +14,7 @@ HAVE=$(cat "$MARKER" 2>/dev/null || echo none)
 if [[ -L "$HOME/.local/bin/omarchy-help-server" ]]; then
   :
 elif ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
-  bash "$HERE/install.sh" >/tmp/archy-setup.log 2>&1 || {
+  bash "$HERE/install.sh" --all >/tmp/archy-setup.log 2>&1 || {
     omarchy-notification-send --urgency critical "Archy setup failed" \
       "See /tmp/archy-setup.log" 2>/dev/null || true
     exit 1

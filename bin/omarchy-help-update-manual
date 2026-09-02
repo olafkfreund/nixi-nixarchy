@@ -2,16 +2,61 @@
 # omarchy:summary=Refresh the Omarchy Helper's local copy of the official manual
 # Fetch the official Omarchy manual (markdown) into the helper's knowledge dir
 # so answers can cite the real manual, offline. Re-run any time to refresh.
+#
+# Integrity (per marketplace security review): everything is fetched at ONE
+# pinned commit — we resolve the branch head SHA first, list the tree at that
+# exact commit, download each blob by its own immutable SHA, verify the git
+# blob hash of every byte we received, and only then atomically replace the
+# local manual. Mid-push races and tampered transport both fail closed.
 set -euo pipefail
 DIR="${OMARCHY_HELP_DATA:-$HOME/.local/share/omarchy-help}/manual"
-mkdir -p "$DIR"
-API="https://api.github.com/repos/basecamp/omarchy/contents/manual"
-listing=$(curl -fsSL "$API" 2>/dev/null) || { echo "could not reach GitHub — manual not updated"; exit 1; }
-echo "$listing" | python3 -c "
-import json, sys, urllib.request, os
-files = [f for f in json.load(sys.stdin) if f['name'].endswith('.md')]
-for f in files:
-    urllib.request.urlretrieve(f['download_url'], os.path.join('$DIR', f['name']))
-print(f'manual: {len(files)} pages -> $DIR')
-"
-date +%F > "$DIR/.fetched"
+mkdir -p "$(dirname "$DIR")"
+python3 - "$DIR" <<'PY'
+import base64, hashlib, json, os, shutil, sys, tempfile, urllib.request
+
+DEST = sys.argv[1]
+API = "https://api.github.com/repos/basecamp/omarchy"
+
+
+def get(url):
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "archy-omarchy-manual-updater"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read(20_000_000)
+
+
+# 1. Pin the commit; 2. list the manual tree at that exact commit.
+head = json.loads(get(API + "/commits/master"))
+commit = head["sha"]
+tree = json.loads(get(API + "/git/trees/" + head["commit"]["tree"]["sha"]))
+manual = next(e for e in tree["tree"] if e["path"] == "manual" and e["type"] == "tree")
+entries = json.loads(get(API + "/git/trees/" + manual["sha"]))["tree"]
+pages = [e for e in entries if e["type"] == "blob" and e["path"].endswith(".md")
+         and "/" not in e["path"] and e.get("size", 0) < 1_000_000][:200]
+if not pages:
+    raise SystemExit("no manual pages found at pinned commit — not updated")
+
+# 3. Download each blob by its immutable SHA; verify the git blob hash.
+staged = tempfile.mkdtemp(prefix=".manual-", dir=os.path.dirname(DEST) or ".")
+for e in pages:
+    blob = json.loads(get(API + "/git/blobs/" + e["sha"]))
+    data = base64.b64decode(blob["content"])
+    digest = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    if digest != e["sha"]:
+        shutil.rmtree(staged, ignore_errors=True)
+        raise SystemExit(f"hash mismatch for {e['path']} — aborting, nothing replaced")
+    with open(os.path.join(staged, os.path.basename(e["path"])), "wb") as f:
+        f.write(data)
+
+# 4. Swap the complete verified set in; old set out.
+with open(os.path.join(staged, ".fetched"), "w") as f:
+    f.write(commit + "\n")
+old = DEST + ".old"
+shutil.rmtree(old, ignore_errors=True)
+if os.path.isdir(DEST):
+    os.rename(DEST, old)
+os.rename(staged, DEST)
+shutil.rmtree(old, ignore_errors=True)
+print(f"manual: {len(pages)} pages verified at commit {commit[:12]} -> {DEST}")
+PY

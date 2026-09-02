@@ -42,11 +42,16 @@ thing Archy teaches is how to connect one.
     omarchy plugin add https://github.com/respira-crece-lidera/archy-omarchy.git --enable
 
 The 👾 invader appears in your bar (place it with `omarchy bar put`).
-**First click** runs Archy's one-time setup — with that click you consent to:
-per-user config in `~/.config/omarchy-help/`, two user services
-(`omarchy-help`, `omarchy-help-watch`), a Help entry merged (non-destructively)
-into your Omarchy menu, and a one-shot welcome hook. Nothing touches system
-files, nothing runs as root, no existing configuration is overwritten.
+**First click** runs Archy's one-time setup (`install.sh --all`) — with that
+click you consent to: per-user config in `~/.config/omarchy-help/`, two user
+services (`omarchy-help`, `omarchy-help-watch`), an agent skill in
+`~/.claude/skills`, a Help entry merged (non-destructively, atomically, with
+a backup) into your Omarchy menu, a one-shot welcome hook, and a weekly
+manual-refresh timer. Nothing touches system files, nothing runs as root, no
+existing configuration is overwritten, and symlinked (dotfile-managed) files
+are never written through. Installing manually? `./install.sh` with no flags
+installs only the core widget; the watcher, skill, and hooks are opt-in
+flags (`--with-watcher --with-skill --with-hooks`).
 
 ## Remove
 
@@ -87,6 +92,22 @@ plugin's minus the `omarchy plugin remove` line.
   your tour progress — lives in plain files on your machine and goes nowhere.
   The only network traffic is your own agent's API calls and the optional
   manual refresh from GitHub's public repo.
+
+## Security model
+
+The helper binds to 127.0.0.1 — and treats even that as hostile, because
+"localhost" includes every website your browser has open. Every
+state-changing request requires an unguessable per-session capability token
+(minted at server start, injected into the widget page, shared with local
+CLI callers via a 0600 file); Host and Origin headers are allowlisted
+(no DNS-rebinding), bodies are JSON-only with a hard size cap, and no CORS
+headers are ever sent. Agent subprocesses run in their own process groups
+with output caps and whole-group kill on timeout; Codex runs under its
+workspace sandbox always (never retried without it — Fixer's workspace is
+`~/.config`, matching its stated scope). The manual updater pins one
+upstream commit and verifies the git blob hash of every page before
+atomically replacing anything. Trust/learning state is read no-follow,
+size-capped, schema-checked, and written atomically.
 
 ## Design notes
 
