@@ -837,8 +837,9 @@ MECH_BRIEF = (
     "\n\n(The user clicked DO-IT-FOR-ME at MECHANIC trust: they explicitly "
     "consent to you making this change on their machine now, with broad "
     "powers. Rules: prefer user-level config and sanctioned omarchy/hyprctl "
-    "flows; back up EVERY file you edit first (cp X X.bak-archy); never use "
-    "sudo, never delete user data, never touch credentials or secrets. "
+    "flows; back up EVERY file you edit first (cp X X.bak-archy); never "
+    "escalate privileges or run anything as root, never delete user data, "
+    "never touch credentials or secrets. "
     "VERIFY the change took effect. Then report chat-style: what changed, "
     "how you verified it, and the one-line undo. If part of the request is "
     "dangerous or unclear, do only the safe part and say what you skipped.)")

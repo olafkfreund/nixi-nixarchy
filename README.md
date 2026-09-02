@@ -29,7 +29,7 @@ Archy grows with you — from your first boot to bending the OS to your will:
   **Fixer** (default) sticks to user-level config with a scoped command
   allowlist on a fast model; **Mechanic** gives your own agent its normal
   working powers on its strongest model — for when you want real changes
-  done properly. Both still ask per fix, back up first, and never sudo.
+  done properly. Both still ask per fix, back up first, and never escalate privileges.
 - **📚 It learns.** Verified facts and your corrections are appended to
   `LEARNED.md`, so it gets better on your machine over time.
 
@@ -141,12 +141,12 @@ The helper binds to 127.0.0.1 — and treats even that as hostile, because
 
 - Two small systemd **user** services: the widget server (Python stdlib,
   bound to 127.0.0.1) and the Hyprland-event watcher behind the tour and
-  the coaching. No sudo, no telemetry, no root anything.
+  the coaching. No privilege escalation, no telemetry, nothing runs as root.
 - The 🔧 mode is deliberately scoped by trust level (a plain-text file at
   `~/.config/omarchy-help/trust`, set from the widget's ⚙ menu): Fixer =
   explicit command allowlist + user-level config only; Mechanic = broad
   tools on your agent's strongest model. Both: backup-before-edit,
-  verify-after, undo reported, no sudo ever, consent per click.
+  verify-after, undo reported, never any privilege escalation, consent per click.
 - Machine-specific notes can go in `~/.config/omarchy-help/LOCAL.md` — the
   tutor reads it if present (useful for fleet/dotfile setups).
 - Knowledge lives in plain Markdown — PRs that correct or extend
