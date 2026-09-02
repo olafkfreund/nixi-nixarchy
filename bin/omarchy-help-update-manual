@@ -12,10 +12,12 @@ set -euo pipefail
 DIR="${OMARCHY_HELP_DATA:-$HOME/.local/share/omarchy-help}/manual"
 mkdir -p "$(dirname "$DIR")"
 python3 - "$DIR" <<'PY'
-import base64, hashlib, json, os, shutil, sys, tempfile, urllib.request
+import hashlib, json, os, re, shutil, sys, tarfile, tempfile, urllib.request
 
 DEST = sys.argv[1]
-API = "https://api.github.com/repos/basecamp/omarchy"
+# The official manual moved from basecamp/omarchy to the site repo
+# (observed 2026-09-02); the branch is resolved, never assumed.
+API = "https://api.github.com/repos/omacom/omarchy-site"
 
 
 def get(url):
@@ -26,28 +28,110 @@ def get(url):
         return r.read(20_000_000)
 
 
-# 1. Pin the commit; 2. list the manual tree at that exact commit.
-head = json.loads(get(API + "/commits/master"))
+# 1. Pin the commit (of the resolved default branch);
+# 2. list the manual tree at that exact commit.
+branch = json.loads(get(API))["default_branch"]
+head = json.loads(get(API + "/commits/" + branch))
 commit = head["sha"]
 tree = json.loads(get(API + "/git/trees/" + head["commit"]["tree"]["sha"]))
 manual = next(e for e in tree["tree"] if e["path"] == "manual" and e["type"] == "tree")
-entries = json.loads(get(API + "/git/trees/" + manual["sha"]))["tree"]
-pages = [e for e in entries if e["type"] == "blob" and e["path"].endswith(".md")
-         and "/" not in e["path"] and e.get("size", 0) < 1_000_000][:200]
+entries = json.loads(get(API + "/git/trees/" + manual["sha"] + "?recursive=1"))["tree"]
+# The manual publishes as rendered HTML (manual/<slug>/index.html) — no
+# markdown source exists upstream any more. We verify each HTML blob's git
+# hash, then convert to plain markdown locally for the search index.
+pages = [e for e in entries if e["type"] == "blob"
+         and e["path"].endswith("/index.html")
+         and e["path"].count("/") == 1 and e.get("size", 0) < 2_000_000][:200]
 if not pages:
     raise SystemExit("no manual pages found at pinned commit — not updated")
 
-# 3. Download each blob by its immutable SHA; verify the git blob hash.
+from html.parser import HTMLParser
+
+
+class ToMd(HTMLParser):
+    SKIP = {"script", "style", "nav", "footer", "header", "head", "svg", "title"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out, self.skip, self.pre = [], 0, False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.skip += 1
+        elif tag in ("h1", "h2", "h3", "h4"):
+            self.out.append("\n\n" + "#" * int(tag[1]) + " ")
+        elif tag == "li":
+            self.out.append("\n- ")
+        elif tag in ("p", "div", "section", "article", "tr", "br"):
+            self.out.append("\n")
+        elif tag == "pre":
+            self.pre = True
+            self.out.append("\n```\n")
+        elif tag == "code" and not self.pre:
+            self.out.append("`")
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP and self.skip:
+            self.skip -= 1
+        elif tag == "pre":
+            self.pre = False
+            self.out.append("\n```\n")
+        elif tag == "code" and not self.pre:
+            self.out.append("`")
+
+    def handle_data(self, d):
+        if not self.skip:
+            self.out.append(d if self.pre else " ".join(d.split()) and " ".join(d.split()) + " " or "")
+
+
+def html_to_md(html):
+    p = ToMd()
+    p.feed(html)
+    text = "".join(p.out)
+    return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+
+
+# 3. ONE download: the repo tarball at the pinned commit (immutable URL,
+# and codeload has no tight unauthenticated rate limit). Every extracted
+# page is still verified against its git blob hash from the pinned tree.
+want = {("manual/" + e["path"]): e["sha"] for e in pages}
 staged = tempfile.mkdtemp(prefix=".manual-", dir=os.path.dirname(DEST) or ".")
-for e in pages:
-    blob = json.loads(get(API + "/git/blobs/" + e["sha"]))
-    data = base64.b64decode(blob["content"])
-    digest = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-    if digest != e["sha"]:
-        shutil.rmtree(staged, ignore_errors=True)
-        raise SystemExit(f"hash mismatch for {e['path']} — aborting, nothing replaced")
-    with open(os.path.join(staged, os.path.basename(e["path"])), "wb") as f:
-        f.write(data)
+seen = 0
+req = urllib.request.Request(
+    "https://codeload.github.com/omacom/omarchy-site/tar.gz/" + commit,
+    headers={"User-Agent": "archy-omarchy-manual-updater"})
+tb = tempfile.NamedTemporaryFile(dir=staged, suffix=".tgz")
+with urllib.request.urlopen(req, timeout=120) as r:
+    got = 0
+    while True:
+        chunk = r.read(1 << 20)
+        if not chunk:
+            break
+        got += len(chunk)
+        if got > 300_000_000:
+            shutil.rmtree(staged, ignore_errors=True)
+            raise SystemExit("tarball unreasonably large — aborting")
+        tb.write(chunk)
+tb.flush()
+tb.seek(0)
+with tarfile.open(fileobj=tb, mode="r:gz") as tf:
+    for m in tf:
+        rel = m.name.split("/", 1)[1] if "/" in m.name else ""
+        if rel not in want or not m.isfile() or m.size > 2_000_000:
+            continue
+        data = tf.extractfile(m).read()
+        digest = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+        if digest != want[rel]:
+            shutil.rmtree(staged, ignore_errors=True)
+            raise SystemExit(f"hash mismatch for {rel} — aborting, nothing replaced")
+        slug = rel.split("/")[1]
+        md = html_to_md(data.decode("utf-8", "replace"))
+        with open(os.path.join(staged, slug + ".md"), "w") as f:
+            f.write("# " + slug.replace("-", " ") + "\n" + md)
+        seen += 1
+if seen != len(want):
+    shutil.rmtree(staged, ignore_errors=True)
+    raise SystemExit(f"tarball missing pages ({seen}/{len(want)}) — aborting")
 
 # 4. Swap the complete verified set in; old set out.
 with open(os.path.join(staged, ".fetched"), "w") as f:
