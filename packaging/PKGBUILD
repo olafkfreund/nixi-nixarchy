@@ -15,8 +15,8 @@ sha256sums=('SKIP')
 package() {
   cd "$pkgname-$pkgver"
   install -d "$pkgdir/usr/share/$pkgname"
-  cp -r bin share skills systemd hooks install.sh README.md LICENSE "$pkgdir/usr/share/$pkgname/"
-  chmod 755 "$pkgdir/usr/share/$pkgname"/bin/* "$pkgdir/usr/share/$pkgname/install.sh" \
+  cp -r bin share skills systemd hooks install.sh install.py manifest.json README.md LICENSE "$pkgdir/usr/share/$pkgname/"
+  chmod 755 "$pkgdir/usr/share/$pkgname"/bin/* "$pkgdir/usr/share/$pkgname/install.sh" "$pkgdir/usr/share/$pkgname/install.py" \
             "$pkgdir/usr/share/$pkgname"/hooks/*.hook
   # One per-user setup command (copies config, enables the user services,
   # adds the menu entry) — run once after install: archy-setup

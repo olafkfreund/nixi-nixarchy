@@ -45,6 +45,14 @@
   #trustmenu .lvl.on { border-color:var(--ember); }
   #trustmenu .lvl.on b { color:var(--ember); }
   .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .setup { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); }
+  .setup h3 { margin:0 0 6px; font-size:0.9em; color:var(--ember); }
+  .feat { display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--line); }
+  .feat:first-of-type { border-top:none; }
+  .feat .txt { flex:1; min-width:0; } .feat small { display:block; color:var(--muted); font-size:0.72rem; }
+  .feat button { flex:none; background:none; border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:0.76rem; cursor:pointer; }
+  .feat button.on { border-color:var(--ember); color:var(--ember); }
+  .setup .later { margin-top:6px; font-size:0.74rem; color:var(--muted); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
   .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
   .bot p { margin: 0 0 8px; } .bot p:last-child { margin-bottom: 0; }
   .bot ul, .bot ol { margin: 4px 0 8px; padding-left: 1.35em; }
@@ -91,6 +99,8 @@
 <div id="trustmenu" hidden>
   <button class="lvl" data-t="fixer"><b>Fixer</b><small>Config fixes only — scoped commands, fast model. The safe default.</small></button>
   <button class="lvl" data-t="mechanic"><b>Mechanic</b><small>Your agent&#8217;s full powers + strongest model. Still asks per fix, still backs up first.</small></button>
+  <div class="cat" style="margin-top:8px">Integrations</div>
+  <div id="integrations"></div>
 </div>
 <div id="chat">
   <div class="msg bot"><svg class="avatar"><use href="#bot"/></svg><div>__GREETING__</div></div>
@@ -105,13 +115,61 @@
 // Theme palette is baked in server-side (no flash).
 document.getElementById('mini').addEventListener('click', () =>
   fetch('/minimize', { method: 'POST' }).catch(() => {}));
+// ---- feature-specific consent: each persistent integration is a separate,
+// explicit choice made here (the bar click only installed the core).
+let SETUP = null;
+function featRow(f, compact) {
+  const row = document.createElement('div'); row.className = 'feat';
+  const txt = document.createElement('div'); txt.className = 'txt';
+  txt.innerHTML = '<b>' + f.label + '</b>' + (compact ? '' : '<small>' + f.desc + '</small>');
+  const b = document.createElement('button');
+  b.textContent = f.installed ? 'On' : 'Enable';
+  b.className = f.installed ? 'on' : '';
+  b.title = f.installed ? 'Click to disable' : f.desc;
+  b.addEventListener('click', () => {
+    b.disabled = true; b.textContent = '…';
+    fetch('/setup', { method: 'POST', headers: {'Content-Type':'application/json'},
+                      body: JSON.stringify({ feature: f.id, enable: !f.installed }) })
+      .then(r => r.json()).then(j => { if (j.status) SETUP = j.status; renderSetup(); renderIntegrations(); })
+      .catch(() => { b.disabled = false; b.textContent = 'Retry'; });
+  });
+  row.appendChild(txt); row.appendChild(b); return row;
+}
+function renderSetup() {
+  const old = document.getElementById('setupcard'); if (old) old.remove();
+  if (!SETUP || !SETUP.available || SETUP.dismissed) return;
+  if (!SETUP.features.some(f => !f.installed)) return;
+  const card = document.createElement('div'); card.className = 'msg setup'; card.id = 'setupcard';
+  card.innerHTML = '<h3>Optional extras — your call, one by one</h3>';
+  SETUP.features.forEach(f => card.appendChild(featRow(f, false)));
+  const later = document.createElement('button'); later.className = 'later';
+  later.textContent = 'Not now — I can change these later in ⚙';
+  later.addEventListener('click', () => {
+    fetch('/setup/dismiss', { method: 'POST' }).catch(() => {});
+    SETUP.dismissed = true; renderSetup();
+  });
+  card.appendChild(later);
+  chat.insertBefore(card, chat.children[1] || null);
+}
+function renderIntegrations() {
+  const box = document.getElementById('integrations'); box.innerHTML = '';
+  if (!SETUP || !SETUP.available) { box.innerHTML = '<small style="color:var(--muted)">not available in this install</small>'; return; }
+  SETUP.features.forEach(f => box.appendChild(featRow(f, true)));
+}
+function loadSetup() {
+  fetch('/setup').then(r => r.json()).then(j => { SETUP = j; renderSetup(); renderIntegrations(); }).catch(() => {});
+}
+loadSetup();
 const tmenu = document.getElementById('trustmenu');
 function paintTrust(t) {
   tmenu.querySelectorAll('.lvl').forEach(b => b.classList.toggle('on', b.dataset.t === t));
 }
 document.getElementById('gear').addEventListener('click', () => {
   tmenu.hidden = !tmenu.hidden;
-  if (!tmenu.hidden) fetch('/trust').then(r => r.json()).then(j => paintTrust(j.trust)).catch(() => {});
+  if (!tmenu.hidden) {
+    fetch('/trust').then(r => r.json()).then(j => paintTrust(j.trust)).catch(() => {});
+    loadSetup();
+  }
 });
 tmenu.addEventListener('click', (e) => {
   const b = e.target.closest('.lvl'); if (!b) return;

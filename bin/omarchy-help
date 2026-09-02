@@ -46,7 +46,8 @@ fi
 # (window rule). If it exists, show/hide the overlay; else open it fresh
 # and reveal the overlay once the window is mapped.
 toggle() { curl -fsS -X POST -H "X-Archy-Token: $(tok)" "http://127.0.0.1:$PORT/minimize" >/dev/null 2>&1; }
-if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true'; then
+status() { curl -fsS -H "X-Archy-Token: $(tok)" "http://127.0.0.1:$PORT/status" 2>/dev/null; }
+if status | grep -q '"window": true'; then
   if [[ -n "$ASK" ]]; then
     curl -fsS -X POST -H "X-Archy-Token: $(tok)" "http://127.0.0.1:$PORT/show" >/dev/null 2>&1   # reveal, never hide, when carrying a question
   else
@@ -54,9 +55,11 @@ if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": tr
   fi
   exit 0
 fi
+# Apply the float/pin placement rule before the window exists.
+curl -fsS -X POST -H "X-Archy-Token: $(tok)" "http://127.0.0.1:$PORT/prepare" >/dev/null 2>&1 || true
 omarchy-launch-webapp "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true
 for _ in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q '"window": true'; then
+  if status | grep -q '"window": true'; then
     sleep 0.3   # let the window-rule finish placing it
     curl -fsS -X POST -H "X-Archy-Token: $(tok)" "http://127.0.0.1:$PORT/show" >/dev/null 2>&1
     exit 0

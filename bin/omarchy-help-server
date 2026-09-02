@@ -9,7 +9,9 @@ import json
 import os
 import secrets
 import signal
+import stat
 import subprocess
+import sys
 import threading
 import time
 
@@ -36,33 +38,210 @@ for _d in ("~/.local/bin", "~/.local/share/mise/shims", "~/.asdf/shims"):
 # The server is localhost-only, but "localhost" includes every website the
 # user's browser has open (CSRF/DNS-rebinding). Defenses, per the marketplace
 # security review: an unguessable per-session token required on every
-# state-changing request (also delivered to local CLI callers via a 0600
+# state-touching request (also delivered to local CLI callers via a 0600
 # file), a strict Host/Origin allowlist, JSON-only bodies with a hard size
 # cap, and no CORS headers ever (so cross-origin reads stay blocked).
 TOKEN = secrets.token_hex(16)
-TOKEN_FILE = os.path.join(DATA, ".token")
+_HOSTS = {"127.0.0.1:%d" % PORT, "localhost:%d" % PORT, "127.0.0.1", "localhost"}
+_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+# GETs that are pure, token-free reads. Everything else needs the token.
+_PUBLIC_GET = ("/", "/index.html", "/health")
+
+
+# ---- descriptor-bound file I/O --------------------------------------------
+# Private state (token, trust, learning) is only ever touched through a
+# retained directory descriptor: the directory must be ours and not
+# group/world-writable; files are opened relative to it with O_NOFOLLOW |
+# O_NONBLOCK and validated by fstat (regular, ours, private, bounded) before
+# a byte is read; writes go to an O_EXCL random 0600 temp in the same
+# directory, fsync'd, renamed over a target that must not be a symlink, then
+# the directory itself is fsync'd. Kept in sync with install.py.
+_UID = os.getuid()
+
+
+def _dir_trusted(st):
+    """Ours, never world-writable; group-writable only for the user's own
+    private group with no other members (umask 002 systems)."""
+    if st.st_uid != _UID or (st.st_mode & 0o002):
+        return False
+    if st.st_mode & 0o020:
+        if st.st_gid != os.getgid():
+            return False
+        try:
+            import grp
+            return not grp.getgrgid(st.st_gid).gr_mem
+        except KeyError:
+            return False
+    return True
+
+
+def _dirfd(path, create=False):
+    if create:
+        os.makedirs(path, mode=0o700, exist_ok=True)
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        st = os.fstat(fd)
+        if not _dir_trusted(st):
+            raise PermissionError("untrusted directory: " + path)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _read_fd_bounded(fd, cap, private):
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        raise ValueError("not a regular file")
+    if private and (st.st_uid != _UID or (st.st_mode & 0o077)):
+        raise PermissionError("state file not private")
+    if st.st_size > cap:
+        raise ValueError("file too large")
+    buf, total = bytearray(), 0
+    while total <= cap:
+        chunk = os.read(fd, min(65536, cap + 1 - total))
+        if not chunk:
+            break
+        buf.extend(chunk)
+        total += len(chunk)
+    if total > cap:
+        raise ValueError("file grew past cap")
+    return bytes(buf)
+
+
+def secure_read(dirpath, name, cap):
+    """Bounded read of a PRIVATE state file, descriptor-relative."""
+    dfd = _dirfd(dirpath)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=dfd)
+    finally:
+        os.close(dfd)
+    try:
+        return _read_fd_bounded(fd, cap, private=True)
+    finally:
+        os.close(fd)
+
+
+def secure_write(dirpath, name, data, mode=0o600):
+    """Atomic durable replace of a private state file: O_EXCL random temp in
+    the same directory, fsync, rename over a non-symlink target, fsync dir."""
+    if isinstance(data, str):
+        data = data.encode()
+    dfd = _dirfd(dirpath, create=True)
+    tmp = ".%s.%s.tmp" % (name, secrets.token_hex(8))
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     mode, dir_fd=dfd)
+        try:
+            view = memoryview(data)
+            while view:
+                n = os.write(fd, view)
+                view = view[n:]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            cur = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+            if not stat.S_ISREG(cur.st_mode):
+                raise PermissionError("refusing to replace non-regular file: " + name)
+        except FileNotFoundError:
+            pass
+        os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+        os.fsync(dfd)
+    except BaseException:
+        try:
+            os.unlink(tmp, dir_fd=dfd)
+        except OSError:
+            pass
+        raise
+    finally:
+        os.close(dfd)
+
+
+def bounded_read(path, cap):
+    """Bounded read of SERVED content (ui, vendor js, knowledge, faq). These
+    may legitimately be symlinks in dotfile-managed setups, so symlinks are
+    followed, but the target must be a regular file within the size cap."""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        return _read_fd_bounded(fd, cap, private=False)
+    finally:
+        os.close(fd)
+
+
+def _peer_uid(port):
+    """Owner uid of the loopback TCP client on `port`, from /proc/net/tcp.
+    Loopback is shared by every local user; the capability token alone
+    would leak through the token-free page to another account. Fail closed."""
+    want_local = "0100007F:%04X" % port
+    want_rem = "0100007F:%04X" % PORT
+    try:
+        with open("/proc/net/tcp") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) > 7 and parts[1] == want_local and parts[2] == want_rem:
+                    return int(parts[7])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+TOKEN_FILE = ".token"
 
 
 def _write_token():
-    os.makedirs(DATA, exist_ok=True)
-    tmp = TOKEN_FILE + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(TOKEN)
-    os.replace(tmp, TOKEN_FILE)
+    secure_write(DATA, TOKEN_FILE, TOKEN)
 
 
-_HOSTS = {"127.0.0.1:%d" % PORT, "localhost:%d" % PORT, "127.0.0.1", "localhost"}
-_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+def _repair_private_modes():
+    """State files written by older versions were 0644; the private-file
+    check would reject them and silently reset progress. Tighten our own
+    regular files to 0600 once (descriptor-bound, never through symlinks)."""
+    try:
+        dfd = _dirfd(DATA, create=True)
+    except (OSError, PermissionError):
+        return
+    try:
+        for name in ("learning.json", "tips.json", "trust", ".token"):
+            try:
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                             dir_fd=dfd)
+            except OSError:
+                continue
+            try:
+                st = os.fstat(fd)
+                if stat.S_ISREG(st.st_mode) and st.st_uid == _UID and (st.st_mode & 0o077):
+                    os.fchmod(fd, 0o600)
+            finally:
+                os.close(fd)
+    finally:
+        os.close(dfd)
 
+
+# ---- supervised subprocess boundary ---------------------------------------
 MAX_OUT = 2_000_000  # bytes of agent stdout/stderr we will ever buffer
+_LIVE = set()
+_LIVE_LOCK = threading.Lock()
+
+
+def _killpg(p):
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def run_capped(cmd, timeout, cwd=None):
-    """Run cmd in its own process group with producer-side output caps.
-    On deadline the ENTIRE group is SIGKILLed (agents spawn children)."""
-    p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE, start_new_session=True)
+    """Run cmd in its own process group under supervision. The whole group
+    is SIGKILLed and reaped on output overflow, timeout, any error, and
+    server shutdown; overflow is an error, never a silent truncation."""
+    p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         start_new_session=True, close_fds=True)
+    with _LIVE_LOCK:
+        _LIVE.add(p)
+    overflow = threading.Event()
 
     def drain(stream, sink):
         try:
@@ -70,9 +249,13 @@ def run_capped(cmd, timeout, cwd=None):
                 chunk = stream.read(65536)
                 if not chunk:
                     return
-                if len(sink) < MAX_OUT:
+                if len(sink) + len(chunk) > MAX_OUT:
                     sink.extend(chunk[:MAX_OUT - len(sink)])
-        except OSError:
+                    overflow.set()
+                    _killpg(p)          # stop the producer NOW, not at deadline
+                    return
+                sink.extend(chunk)
+        except (OSError, ValueError):
             pass
 
     out, err = bytearray(), bytearray()
@@ -80,16 +263,47 @@ def run_capped(cmd, timeout, cwd=None):
     te = threading.Thread(target=drain, args=(p.stderr, err), daemon=True)
     to.start(); te.start()
     try:
-        p.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
         try:
-            os.killpg(p.pid, signal.SIGKILL)
+            p.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _killpg(p)
+            p.wait()
+            raise
+        except BaseException:
+            _killpg(p)
+            p.wait()
+            raise
+    finally:
+        # Leader is gone: kill any descendants still in the group (they hold
+        # the pipe ends), then release our ends so the drains cannot hang.
+        _killpg(p)
+        with _LIVE_LOCK:
+            _LIVE.discard(p)
+    to.join(5); te.join(5)
+    for f in (p.stdout, p.stderr):
+        try:
+            f.close()
         except OSError:
             pass
-        p.wait()
-        raise
-    to.join(5); te.join(5)
+    if overflow.is_set():
+        raise RuntimeError("output limit exceeded; the process group was terminated")
     return p.returncode, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+
+
+def spawn_detached(cmd):
+    """Fire-and-forget launch of a DESKTOP helper (editor, notification) that
+    must outlive the request: own session, no pipes, no inherited fds. The
+    only launches not routed through run_capped, by design."""
+    subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+
+
+def _shutdown(*_):
+    with _LIVE_LOCK:
+        live = list(_LIVE)
+    for p in live:
+        _killpg(p)
+    sys.exit(0)
 
 
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
@@ -117,11 +331,21 @@ def hypr(cmd):
     if not sig:
         return ""
     s = sk.socket(sk.AF_UNIX)
+    s.settimeout(5.0)
     s.connect(os.path.join(run, "hypr", sig, ".socket.sock"))
-    s.send(cmd.encode())
-    out = s.recv(8192).decode()
+    s.sendall(cmd.encode())
+    chunks, total = [], 0
+    try:
+        while total < 4_000_000:           # j/clients can exceed one recv
+            b = s.recv(65536)
+            if not b:
+                break
+            chunks.append(b)
+            total += len(b)
+    except OSError:
+        pass
     s.close()
-    return out
+    return b"".join(chunks).decode("utf-8", "replace")
 
 
 _rule = {"at": 0.0}
@@ -141,7 +365,7 @@ def ensure_window_rule():
     # there, so Archy moves to the bottom-LEFT and rises to clear the bar.
     x, y = "(monitor_w-346)", "(monitor_h-488)"
     try:
-        cfg = json.load(open(os.path.expanduser("~/.config/omarchy/shell.json")))
+        cfg = json.loads(bounded_read(os.path.expanduser("~/.config/omarchy/shell.json"), 1_000_000))
         if (cfg.get("bar") or {}).get("position") == "bottom":
             x, y = "4", "(monitor_h-518)"
     except Exception:
@@ -151,12 +375,20 @@ def ensure_window_rule():
          'move = { "' + x + '", "' + y + '" } })')
 
 
-def own_window_address():
-    data = json.loads(hypr("j/clients") or "[]")
+def own_window():
+    """(address, class) of the widget window, whichever browser hosts it."""
+    try:
+        data = json.loads(hypr("j/clients") or "[]")
+    except ValueError:
+        return None, None
     for c in data:
         if "127.0.0.1" in c.get("class", ""):
-            return c.get("address")
-    return None
+            return c.get("address"), c.get("class")
+    return None, None
+
+
+def own_window_address():
+    return own_window()[0]
 # ---------------------------------------------------------------- tier 1
 # Offline answers: a tiny full-text index over the bundled manual, the
 # knowledge file, and the machine's live keybindings. No LLM required.
@@ -196,9 +428,8 @@ def _sections():
             if tag == "notes" and name not in ("KNOWLEDGE.md", "LEARNED.md", "LOCAL.md"):  # noqa
                 continue
             try:
-                with open(os.path.join(base, name)) as f:
-                    text = f.read(524288)   # bound: manual pages are small
-            except OSError:
+                text = bounded_read(os.path.join(base, name), 524288).decode("utf-8", "replace")
+            except (OSError, ValueError):
                 continue
             fname_words = " ".join(name[:-3].split("-"))
             for part in _re.split(r"\n(?=#{1,3} )", text):
@@ -408,6 +639,8 @@ def tour_thread():
             if not chunk:
                 break
             buf += chunk
+            if len(buf) > 1_000_000:      # a line that never ends: drop it
+                buf = b""
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 ev, _, d = line.decode(errors="replace").partition(">>")
@@ -441,15 +674,12 @@ def load_learning():
     """Bounded, schema-checked read: a corrupt or oversized state file
     degrades to empty state instead of feeding the server garbage."""
     try:
-        fd = os.open(LEARNING, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd, "rb") as f:
-            raw = f.read(65536)
-        st = json.loads(raw)
+        st = json.loads(secure_read(DATA, "learning.json", 65536))
         if not isinstance(st, dict):
             return {}
-        for k in ("taught", "observed"):
+        for k in ("taught", "observed", "integrations"):
             v = st.get(k)
-            if not isinstance(v, dict) or len(v) > 200:
+            if v is not None and (not isinstance(v, dict) or len(v) > 200):
                 st.pop(k, None)
         return st
     except Exception:
@@ -457,14 +687,7 @@ def load_learning():
 
 
 def save_learning(st):
-    os.makedirs(DATA, exist_ok=True)
-    tmp = LEARNING + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(st, f)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, LEARNING)
+    secure_write(DATA, "learning.json", json.dumps(st))
 
 
 def learning_status():
@@ -483,8 +706,7 @@ def read_theme():
     try:
         import tomllib
         p = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
-        with open(p, "rb") as f:
-            return tomllib.load(f)
+        return tomllib.loads(bounded_read(p, 65536).decode("utf-8", "replace"))
     except Exception:
         return {}
 
@@ -503,6 +725,12 @@ def machine_facts():
             return run_capped(cmd, timeout=8)[1].strip()
         except Exception:
             return ""
+
+    def _small(path):
+        try:
+            return bounded_read(path, 4096).decode("utf-8", "replace").strip()
+        except (OSError, ValueError):
+            return ""
     mons = ""
     try:
         mons = "; ".join(
@@ -515,7 +743,7 @@ def machine_facts():
         "browser": run(["xdg-settings", "get", "default-web-browser"]),
         "agent": default_agent() or "none",
         "monitors": mons,
-        "omarchy": run(["cat", os.path.expanduser("~/.local/share/omarchy/version")]),
+        "omarchy": _small(os.path.expanduser("~/.local/share/omarchy/version")),
     }
     _facts["text"] = "; ".join(f"{k}: {v}" for k, v in facts.items() if v)
     _facts["at"] = time.time()
@@ -537,8 +765,9 @@ def default_agent():
     """Omarchy's chosen agent (~/.config/omarchy/defaults/agent), like the
     crash checker: the helper serves whichever agent the user picked."""
     try:
-        return open(os.path.expanduser("~/.config/omarchy/defaults/agent")).read().strip()
-    except OSError:
+        return bounded_read(os.path.expanduser("~/.config/omarchy/defaults/agent"),
+                            256).decode("utf-8", "replace").strip()
+    except (OSError, ValueError):
         return ""
 
 
@@ -547,7 +776,7 @@ HEADLESS_AGENTS = ("claude", "codex")  # agents we can call inline for the chat
 # DO-IT-FOR-ME mode: user-consented (button click), deliberately scoped —
 # file edits plus only the commands an Omarchy config change needs. No blanket
 # shell access; Codex additionally stays inside $HOME via workspace sandbox.
-TRUST_FILE = os.path.expanduser("~/.config/omarchy-help/trust")
+TRUST_FILE = "trust"   # in DATA (private state dir); legacy copy migrated once
 
 
 def trust_level():
@@ -555,23 +784,29 @@ def trust_level():
     fast model) or 'mechanic' (broad tools, strongest model). Set only via
     the widget's gear menu; per-click consent applies at every level."""
     try:
-        fd = os.open(TRUST_FILE, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd, "r") as f:
-            t = f.read(32).strip().lower()
+        t = secure_read(DATA, TRUST_FILE, 64).decode("utf-8", "replace").strip().lower()
         return t if t in ("fixer", "mechanic") else "fixer"
-    except OSError:
+    except (OSError, ValueError):
         return "fixer"
 
 
 def save_trust(t):
-    os.makedirs(os.path.dirname(TRUST_FILE), exist_ok=True)
-    tmp = TRUST_FILE + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(t + "\n")
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, TRUST_FILE)
+    secure_write(DATA, TRUST_FILE, t + "\n")
+
+
+def _migrate_legacy_trust():
+    """v0.9.4 kept trust in the config dir; move it into private state."""
+    try:
+        secure_read(DATA, TRUST_FILE, 64)
+        return
+    except (OSError, ValueError):
+        pass
+    try:
+        t = bounded_read(os.path.join(DIR, "trust"), 64).decode().strip().lower()
+        if t in ("fixer", "mechanic"):
+            save_trust(t)
+    except (OSError, ValueError):
+        pass
 
 
 ACT_ALLOWED = ",".join([
@@ -677,7 +912,85 @@ def ask_agent(q, resume):
     return ask_claude(q, resume)
 
 
+# ---- feature-specific consent for persistent integrations ----------------
+# The bar click installs only the core (widget, server, menu entry). Each
+# persistent extra is enabled from inside the widget, one explicit decision
+# per feature, applied by the installer (install.py) under supervision.
+SETUP_FEATURES = {
+    "watcher": ("Coaching watcher",
+                "A background service that watches which Omarchy features you "
+                "use and offers at most one tip a day. Nothing leaves the machine."),
+    "skill": ("Agent skill",
+              "Installs Archy\u2019s tutor method into ~/.claude/skills so your "
+              "agent answers the Archy way even outside this widget."),
+    "hooks": ("Boot & update hooks",
+              "A one-time first-boot welcome, a manual refresh after each "
+              "omarchy-update, and a weekly refresh timer."),
+}
+
+
+def _source_root():
+    """Where the plugin source lives (recorded by install.py at core
+    install); validated before anything is run from it."""
+    try:
+        p = secure_read(DATA, "source_root", 4096).decode("utf-8", "replace").strip()
+    except (OSError, ValueError):
+        return None
+    if not p.startswith("/"):
+        return None
+    try:
+        st = os.stat(p)
+    except OSError:
+        return None
+    if not stat.S_ISDIR(st.st_mode) or not _dir_trusted(st):
+        return None
+    if not os.path.isfile(os.path.join(p, "install.py")):
+        return None
+    return p
+
+
+def setup_status():
+    st = load_learning()
+    root = _source_root()
+    installed = {}
+    if root:
+        try:
+            _, out, _ = run_capped([sys.executable, os.path.join(root, "install.py"),
+                                    "--status"], timeout=30, cwd=root)
+            installed = json.loads(out)
+            if not isinstance(installed, dict):
+                installed = {}
+        except Exception:
+            installed = {}
+    return {"available": bool(root),
+            "dismissed": bool(st.get("setup_dismissed")),
+            "features": [{"id": k, "label": v[0], "desc": v[1],
+                          "installed": bool(installed.get(k))}
+                         for k, v in SETUP_FEATURES.items()]}
+
+
+def setup_apply(feature, enable):
+    root = _source_root()
+    if not root:
+        return False, "install source not available"
+    flag = ("--with-" if enable else "--without-") + feature
+    try:
+        rc, out, err = run_capped([sys.executable, os.path.join(root, "install.py"),
+                                   flag], timeout=180, cwd=root)
+    except Exception as e:
+        return False, str(e)[-300:]
+    if rc != 0:
+        return False, (err.strip() or out.strip())[-300:] or "installer failed"
+    st = load_learning()
+    st.setdefault("integrations", {})[feature] = bool(enable)
+    save_learning(st)
+    return True, out.strip()[-300:]
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
+    timeout = 30            # socket timeout: a stalled request can't pin a thread
+    protocol_version = "HTTP/1.0"
+
     def log_message(self, *a):
         pass
 
@@ -685,6 +998,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """Host/Origin allowlist against DNS rebinding; per-session token on
         every state-changing request. Returns True when the request may
         proceed (an error response has been sent otherwise)."""
+        if _peer_uid(self.client_address[1]) != _UID:
+            self._send(403, {"error": "not your session"})
+            return False
         host = (self.headers.get("Host") or "").strip().lower()
         if host not in _HOSTS:
             self._send(403, {"error": "bad host"})
@@ -721,10 +1037,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if not self._guard(need_token=(self.path == "/history")):
+        public = self.path in _PUBLIC_GET or self.path.startswith("/vendor/")
+        if not self._guard(need_token=not public):
             return
         if self.path in ("/", "/index.html"):
-            html = open(UI).read()
+            try:
+                html = bounded_read(UI, 1_000_000).decode("utf-8", "replace")
+            except (OSError, ValueError):
+                return self._send(500, {"error": "ui missing"})
             html = html.replace("__TOKEN__", TOKEN)
             t = read_theme()
             if t.get("background"):
@@ -765,8 +1085,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path.startswith("/vendor/"):
             name = os.path.basename(self.path)
             p = os.path.join(DIR, "vendor", name)
-            if name.endswith(".js") and os.path.isfile(p):
-                return self._send(200, open(p, "rb").read(), "application/javascript")
+            if name.endswith(".js"):
+                try:
+                    return self._send(200, bounded_read(p, 2_000_000), "application/javascript")
+                except (OSError, ValueError):
+                    pass
             return self._send(404, {"error": "not found"})
         elif self.path == "/health":
             self._send(200, {"ok": True})
@@ -777,8 +1100,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for p in (os.path.join(DIR, "faq.json"), os.path.join(DATA, "faq.json")):
                 if os.path.exists(p):
                     try:
-                        with open(p) as f:
-                            entries = json.loads(f.read(262144))
+                        entries = json.loads(bounded_read(p, 262144))
                         if not isinstance(entries, list):
                             entries = []
                         entries = entries[:40]
@@ -804,8 +1126,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              "total": len(items),
                              "toured": load_learning().get("toured", False)})
         elif self.path == "/status":
-            ensure_window_rule()   # widget is about to open/toggle
             self._send(200, {"window": bool(own_window_address())})
+        elif self.path == "/setup":
+            self._send(200, setup_status())
         elif self.path == "/trust":
             self._send(200, {"trust": trust_level()})
         elif self.path == "/theme":
@@ -816,6 +1139,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._guard(need_token=True):
             return
+        if self.path == "/prepare":
+            # The launcher is about to open the widget window: apply the
+            # float/pin placement rule (a compositor-state change, hence POST).
+            ensure_window_rule()
+            return self._send(200, {"ok": True})
+        if self.path == "/setup":
+            try:
+                body = self._read_json()
+                feat = str(body.get("feature", ""))
+                enable = bool(body.get("enable", True))
+            except Exception:
+                return self._send(400, {"error": "bad request"})
+            if feat not in SETUP_FEATURES:
+                return self._send(400, {"error": "unknown feature"})
+            with lock:
+                ok, msg = setup_apply(feat, enable)
+            return self._send(200 if ok else 500, {"ok": ok, "msg": msg,
+                                                   "status": setup_status()})
+        if self.path == "/setup/dismiss":
+            st = load_learning()
+            st["setup_dismissed"] = True
+            save_learning(st)
+            return self._send(200, {"ok": True})
         if self.path == "/tour/start":
             tour.update({"active": True, "step": 0, "finished": False, "note": "", "hits": 0})
             threading.Thread(target=tour_thread, daemon=True).start()
@@ -866,30 +1212,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             home = os.path.expanduser("~")
             roots = (home + "/", "/etc/", "/usr/", "/opt/", "/var/", "/srv/", "/tmp/")
             if p.startswith(roots) and os.path.isfile(p):
-                subprocess.Popen(["omarchy-launch-config-editor", p],
-                                 start_new_session=True)
+                spawn_detached(["omarchy-launch-config-editor", p])
                 return self._send(200, {"ok": True})
-            subprocess.Popen(["omarchy-notification-send", "Archy",
-                              "Can\u2019t open " + p +
-                              " \u2014 it doesn\u2019t exist (yet?)"],
-                             start_new_session=True)
+            spawn_detached(["omarchy-notification-send", "Archy",
+                            "Can\u2019t open " + p[:200] +
+                            " \u2014 it doesn\u2019t exist (yet?)"])
             return self._send(200, {"ok": False})
         if self.path == "/show":
             # Pinned widget is always visible when open; just focus it.
-            if own_window_address():
-                subprocess.run(["omarchy-launch-or-focus",
-                                "brave-127.0.0.1__-Default", "true"], timeout=10)
+            addr, cls = own_window()
+            if addr and cls:
+                try:
+                    run_capped(["omarchy-launch-or-focus", cls, "true"], timeout=10)
+                except Exception:
+                    pass
             return self._send(200, {"ok": True})
         if self.path == "/minimize":
             # Archy is a PINNED widget (visible on every workspace); hiding
             # means closing the window — the chat survives server-side and is
             # restored on reopen. Targeted close: focus it, close the active.
-            addr = own_window_address()
-            if addr:
-                subprocess.run(["omarchy-launch-or-focus",
-                                "brave-127.0.0.1__-Default", "true"], timeout=10)
+            addr, cls = own_window()
+            if addr and cls:
+                try:
+                    run_capped(["omarchy-launch-or-focus", cls, "true"], timeout=10)
+                except Exception:
+                    pass
                 time.sleep(0.3)
-                hypr("dispatch hl.dsp.window.close()")
+                if own_window_address() == addr:   # still there and focused
+                    hypr("dispatch hl.dsp.window.close()")
             return self._send(200, {"ok": bool(addr)})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
@@ -932,6 +1282,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not ephemeral:
                 history.append(("me", "\U0001f527 " + q))
                 history.append(("bot", answer))
+                del history[:-200]
             return self._send(200, {"a": answer, "src": "act"})
 
         # Ground every AI question locally first: with the matching manual
@@ -958,14 +1309,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not ephemeral:
             history.append(("me", q))
             history.append(("bot", answer))
+            del history[:-200]
         self._send(200, {"a": answer, "src": "ai"})
 
 
 if __name__ == "__main__":
+    _repair_private_modes()
     _write_token()
+    _migrate_legacy_trust()
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
     try:
         ensure_window_rule()
     except Exception:
         pass
     server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    server.serve_forever()
+    server.daemon_threads = True
+    try:
+        server.serve_forever()
+    finally:
+        _shutdown()

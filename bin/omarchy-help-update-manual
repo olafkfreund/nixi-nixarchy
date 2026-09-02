@@ -81,7 +81,12 @@ class ToMd(HTMLParser):
 
     def handle_data(self, d):
         if not self.skip:
-            self.out.append(d if self.pre else " ".join(d.split()) and " ".join(d.split()) + " " or "")
+            if self.pre:
+                self.out.append(d)
+            else:
+                t = " ".join(d.split())
+                if t:
+                    self.out.append(t + " ")
 
 
 def html_to_md(html):
@@ -141,6 +146,11 @@ shutil.rmtree(old, ignore_errors=True)
 if os.path.isdir(DEST):
     os.rename(DEST, old)
 os.rename(staged, DEST)
+dfd = os.open(os.path.dirname(DEST) or ".", os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(dfd)
+finally:
+    os.close(dfd)
 shutil.rmtree(old, ignore_errors=True)
 print(f"manual: {len(pages)} pages verified at commit {commit[:12]} -> {DEST}")
 PY

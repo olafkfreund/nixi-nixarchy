@@ -42,16 +42,25 @@ thing Archy teaches is how to connect one.
     omarchy plugin add https://github.com/respira-crece-lidera/archy-omarchy.git --enable
 
 The 👾 invader appears in your bar (place it with `omarchy bar put`).
-**First click** runs Archy's one-time setup (`install.sh --all`) — with that
-click you consent to: per-user config in `~/.config/omarchy-help/`, two user
-services (`omarchy-help`, `omarchy-help-watch`), an agent skill in
-`~/.claude/skills`, a Help entry merged (non-destructively, atomically, with
-a backup) into your Omarchy menu, a one-shot welcome hook, and a weekly
-manual-refresh timer. Nothing touches system files, nothing runs as root, no
+**First click** installs the **core** — and only the core: per-user config
+in `~/.config/omarchy-help/`, the widget server as a user service, and a
+Help entry merged (non-destructively, atomically, with a backup) into your
+Omarchy menu. Nothing touches system files, nothing runs as root, no
 existing configuration is overwritten, and symlinked (dotfile-managed) files
-are never written through. Installing manually? `./install.sh` with no flags
-installs only the core widget; the watcher, skill, and hooks are opt-in
-flags (`--with-watcher --with-skill --with-hooks`).
+are never written through — the installer refuses and rolls back instead.
+
+Every **persistent extra is a separate, explicit choice** made inside the
+widget (a card on first open; later in the ⚙ menu), each with its own
+description and its own Enable/On switch:
+
+- **Coaching watcher** — the usage-aware tip service (one tip a day, max)
+- **Agent skill** — Archy's tutor method in `~/.claude/skills`
+- **Boot & update hooks** — first-boot welcome, manual refresh after
+  `omarchy-update`, weekly refresh timer
+
+Manual installs: `./install.sh` (core) plus `--with-watcher`,
+`--with-skill`, `--with-hooks`, or `--all`; every `--with-` has a
+`--without-` twin. Updates only refresh what you already enabled.
 
 ## Remove
 
@@ -96,18 +105,37 @@ plugin's minus the `omarchy plugin remove` line.
 ## Security model
 
 The helper binds to 127.0.0.1 — and treats even that as hostile, because
-"localhost" includes every website your browser has open. Every
-state-changing request requires an unguessable per-session capability token
-(minted at server start, injected into the widget page, shared with local
-CLI callers via a 0600 file); Host and Origin headers are allowlisted
-(no DNS-rebinding), bodies are JSON-only with a hard size cap, and no CORS
-headers are ever sent. Agent subprocesses run in their own process groups
-with output caps and whole-group kill on timeout; Codex runs under its
-workspace sandbox always (never retried without it — Fixer's workspace is
-`~/.config`, matching its stated scope). The manual updater pins one
-upstream commit and verifies the git blob hash of every page before
-atomically replacing anything. Trust/learning state is read no-follow,
-size-capped, schema-checked, and written atomically.
+"localhost" includes every website your browser has open.
+
+- **Capability token.** Every request that reads or changes server state
+  requires an unguessable per-session token (minted at start, injected into
+  the widget page, handed to local CLI callers through a 0600 file). Only
+  the page itself, `/health`, and the vendored scripts are token-free.
+  Host and Origin are allowlisted (no DNS rebinding), bodies are JSON-only
+  with a hard cap, chunked encoding is refused, no CORS headers are sent.
+- **Descriptor-bound state.** Private state (token, trust level, learning
+  progress) lives in a directory that must be yours and not group/world
+  writable, opened once and retained; files are opened relative to it with
+  `O_NOFOLLOW|O_NONBLOCK`, validated by `fstat` (regular, yours, 0600,
+  bounded) before a byte is read, and written through an `O_EXCL` random
+  0600 temp with file + directory `fsync` and a rename that never replaces
+  a symlink. Served content is read bounded and regular-file-checked.
+- **Supervised subprocesses.** Every agent and helper command runs in its
+  own process group under a single supervisor: output is capped at the
+  producer (2 MB) and **overflow kills the whole group immediately**, as
+  do timeouts, errors, and server shutdown; nothing is silently truncated.
+  Desktop launches that must outlive a request (your editor, a
+  notification) are detached with no pipes and no inherited descriptors.
+- **Sandboxes are never weakened.** Codex always runs with
+  `--sandbox workspace-write` (Fixer's workspace is `~/.config`, matching its
+  stated scope; Mechanic's is `$HOME` by explicit choice). Claude's Fixer
+  allowlist is a fixed set of Omarchy config commands.
+- **Installer.** All placements are descriptor-bound, atomic, journaled and
+  rolled back on any failure; symlink targets are refused. Each persistent
+  integration is a separate consent.
+- **Manual updater.** Pins one upstream commit, downloads one tarball at
+  that immutable SHA, verifies every page's git blob hash against the pinned
+  tree, and swaps the complete verified set in atomically.
 
 ## Design notes
 
