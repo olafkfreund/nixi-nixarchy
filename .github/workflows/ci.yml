@@ -35,6 +35,36 @@ jobs:
       # behavioural self-check derivation.
       - run: nix flake check --print-build-logs
 
+      # The README promises `nix run` works with nothing installed. It only
+      # does if the wrapper carries its own PATH and assets, so run it for
+      # real against a HOME that has no ~/.config/nixi at all.
+      - name: nix run works with nothing installed
+        run: |
+          HOME=$(mktemp -d)      # separate assign: $(...) status must not be masked
+          export HOME
+          test ! -e "$HOME/.config/nixi"
+          # The launcher opens a browser window we have no compositor for, so
+          # drive the server it starts instead of the launcher's full path.
+          out=$(nix build .#nixi --no-link --print-out-paths)
+          "$out/bin/nixi" >/tmp/run.log 2>&1 &
+          ok=
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8642/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 0.5
+          done
+          test -n "$ok" || { echo "server never came up:"; cat /tmp/run.log; exit 1; }
+          curl -fsS http://127.0.0.1:8642/ > /tmp/run-ui.html
+          python3 - <<'PY'
+          h = open("/tmp/run-ui.html").read()
+          assert "__TOKEN__" not in h, "token not injected"
+          assert "Content-Security-Policy" in h, "CSP missing"
+          assert len(h) > 10000, "page suspiciously small: %d" % len(h)
+          print("nix run served the widget from the store:", len(h), "bytes")
+          PY
+          curl -fsS -o /dev/null -w 'vendor js -> %{http_code}\n' \
+            http://127.0.0.1:8642/vendor/purify.min.js
+          test "$(stat -c '%a' "$HOME/.local/share/nixi/.token")" = 600
+
       - name: Package builds and exposes the expected programs
         run: |
           out=$(nix build .#nixi --no-link --print-out-paths)

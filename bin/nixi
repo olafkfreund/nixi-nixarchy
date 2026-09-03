@@ -6,10 +6,18 @@
 set -euo pipefail
 DIR="${NIXI_DIR:-$HOME/.config/nixi}"
 PORT="${NIXI_PORT:-8642}"
-[[ -f "$DIR/CLAUDE.md" ]] || {
-  echo "nixi is not installed at $DIR." >&2
+# `nix run` has no ~/.config/nixi at all, so fall back to the assets inside
+# the package itself (NIXI_FALLBACK_DIR is set by the Nix wrapper). A real
+# install still wins, so local overrides keep working.
+if [[ ! -f "$DIR/ui.html" && -f "${NIXI_FALLBACK_DIR:-/nonexistent}/ui.html" ]]; then
+  DIR="$NIXI_FALLBACK_DIR"
+fi
+export NIXI_DIR="$DIR"   # the server we spawn must read the same directory
+[[ -f "$DIR/ui.html" ]] || {
+  echo "nixi has no widget files at $DIR." >&2
   echo "  NixOS/nixarchy: enable services.nixi in your Home Manager config," >&2
-  echo "                  then home-manager switch (or nixarchy apply)." >&2
+  echo "                  then home-manager switch (or nixarchy apply)," >&2
+  echo "                  or: omarchy plugin add https://github.com/olafkfreund/nixi-nixarchy.git --enable" >&2
   echo "  Anything else:  run ./install.sh from the checkout." >&2
   exit 1
 }
