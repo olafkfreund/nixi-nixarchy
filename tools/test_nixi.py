@@ -188,10 +188,157 @@ def test_faq_schema():
     print("  ok  faq schema + NixOS-correct install answer")
 
 
+def test_voice_stays_local():
+    """The browser SpeechRecognition API would ship the microphone to Google,
+    and is a silent no-op on any Chromium without Google API keys (nixpkgs'
+    has none). Reaching for it is the regression to catch."""
+    ui = open(os.path.join(ROOT, "share/ui.html")).read()
+    for api in ("webkitSpeechRecognition", "SpeechRecognition",
+                "speechSynthesis", "speech.googleapis.com"):
+        assert api not in ui, "ui.html reaches for %s; audio must stay local" % api
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    assert "whisper-cli" in srv, "no local transcriber"
+    # Capture belongs to the desktop, not the page: pw-record behaves the same
+    # in every browser and needs no per-origin microphone permission.
+    assert "pw-record" in srv, "no local recorder"
+    for api in ("MediaRecorder", "getUserMedia", "btoa("):
+        assert api not in ui, \
+            "ui.html records audio itself (%s); the desktop does that" % api
+    print("  ok  voice never leaves the machine")
+
+
+def test_transcript_is_never_auto_sent():
+    """A misheard word in Mechanic mode would act on the machine. The
+    transcript goes in the input box; only a human keypress submits it."""
+    ui = open(os.path.join(ROOT, "share/ui.html")).read()
+    m = re.search(r"mic\.addEventListener\('click',\s*async\s*\(\)\s*=>\s*\{(.*?)\n\}\);",
+                  ui, re.S)
+    assert m, "could not find the mic click handler"
+    # Comments in here talk *about* ask(); only real calls count.
+    body = re.sub(r"//[^\n]*", "", m.group(1))
+    assert "input.value" in body, "transcript never reaches the input box"
+    assert not re.search(r"\bask\s*\(", body), \
+        "voice path calls ask() directly -- speech must not auto-submit"
+    assert not re.search(r"form\.(submit|requestSubmit)\b", body), \
+        "voice path submits the form -- speech must not auto-submit"
+    print("  ok  speech lands in the box, never auto-sent")
+
+
+def test_whisper_flags_exist():
+    """Flags are version specific: -nt/-np/--prompt/-m/-l are whisper-cli 1.9's
+    names. A renamed flag makes every transcription fail at runtime only."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    m = re.search(r'\["whisper-cli",(.*?)\]', srv, re.S)
+    assert m, "whisper-cli invocation not found"
+    args = m.group(1)
+    for flag in ("-m", "-l", "-nt", "-np", "--prompt"):
+        assert '"%s"' % flag in args, "whisper-cli invocation lost %s" % flag
+    r = re.search(r'\["pw-record",(.*?)\]', srv, re.S)
+    assert r, "pw-record invocation not found"
+    # whisper wants 16k mono s16, and recording straight into it is what let
+    # ffmpeg go; losing any of these silently reintroduces a transcode step.
+    for a in ('"16000"', '"1"', '"s16"'):
+        assert a in r.group(1), "pw-record no longer records whisper's format: " + a
+    # The domain prompt is the difference between "nixarchy" and "Nixaki".
+    assert "nixarchy" in srv.split("VOICE_PROMPT")[1][:400], \
+        "the whisper prompt no longer biases towards nixarchy vocabulary"
+    print("  ok  whisper invoked with flags that exist")
+
+
+def test_both_install_paths_know_about_voice():
+    """There are two installers -- the Nix module and install.py's unit file --
+    and they have drifted before (the Arch-shaped PATH that made the service
+    exit 127). Whatever one can do, the other must at least be able to reach."""
+    unit = open(os.path.join(ROOT, "systemd", "nixi.service")).read()
+    module = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    if "NIXI_WHISPER_MODEL" in module:
+        assert "NIXI_WHISPER_MODEL" in unit, (
+            "the Nix module can do voice but the plain systemd unit cannot; "
+            "plugin installs would get a mic button that never appears")
+    print("  ok  both install paths can reach voice")
+
+
+def test_mic_button_describes_what_it_does():
+    """The button shipped saying "Hold to talk" while the handler was a click
+    toggle, and only the title was ever updated -- so a screen reader
+    announced the wrong interaction, permanently."""
+    ui = open(os.path.join(ROOT, "share/ui.html")).read()
+    tag = re.search(r'<button id="mic"[^>]*>', ui)
+    assert tag, "mic button not found"
+    assert "hold" not in tag.group(0).lower(), \
+        "mic button still advertises hold-to-talk: " + tag.group(0)
+    # aria-label has to move with the title, or it keeps the first state.
+    assert "mic.setAttribute('aria-label'" in ui, \
+        "aria-label is never updated as the button changes state"
+    # Exactly one assignment, and it is the helper's own: any other caller
+    # setting the title directly would leave aria-label behind again.
+    helper = ui.split("function micLabel(")[1].split("\n}")[0]
+    assert len(re.findall(r"mic\.title\s*=", ui)) == 1, \
+        "title is set outside micLabel(); aria-label will drift from it"
+    assert "mic.title" in helper, "micLabel does not set the title"
+    print("  ok  mic button label matches its behaviour")
+
+
+def test_silence_never_reaches_the_model():
+    """Whisper does not return nothing when it hears nothing -- it INVENTS.
+    Digital silence decoded as " You"; a quiet room produced "Or, if they
+    want to be successful." A fabricated question in the input box is
+    indistinguishable from one the user really asked."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    assert "SILENCE_RMS" in srv, "no silence gate"
+    body = srv.split("def transcribe(")[1].split("\ndef ")[0]
+    # Comments in here NAME the threshold; comparing raw indexes would compare
+    # prose order, not execution order, and pass however the code is arranged.
+    code = re.sub(r"#[^\n]*", "", body)
+    code = code.split('"""')[2] if code.count('"""') >= 2 else code
+    assert code.index("SILENCE_RMS") < code.index('"whisper-cli"'), \
+        "the silence gate must run BEFORE whisper, not after"
+    print("  ok  silence is refused before the model can invent")
+
+
+def test_recorder_is_always_released():
+    """The widget can be closed mid-recording. Without a watchdog and an exit
+    hook the microphone would stay open with nothing left to stop it."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    assert "threading.Timer(MAX_SECONDS" in srv, "no recording watchdog"
+    quit_fn = srv.split("def _shutdown(")[1].split("\ndef ")[0]
+    assert "_discard()" in quit_fn, "server exit leaves the recorder running"
+    stop = srv.split("def _stop_proc(")[1].split("\ndef ")[0]
+    # SIGKILL leaves a WAV whose RIFF length header was never rewritten.
+    assert "terminate()" in stop, "recorder must be SIGTERMed so the WAV closes"
+    print("  ok  recorder is always released")
+
+
+def test_voice_scratch_stays_under_home():
+    """Recordings are created through the descriptor-bound helper like every
+    other private file -- /tmp is refused by _dirfd and is world-readable --
+    and must not outlive the request that made them."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    make = srv.split("def _new_clip(")[1].split("\ndef ")[0]
+    # The docstring discusses /tmp; only executable lines count.
+    make = make.split('"""')[2] if make.count('"""') >= 2 else make
+    make = re.sub(r"#[^\n]*", "", make)
+    assert "_dirfd(" in make, "recordings bypass the descriptor-bound helper"
+    assert "O_EXCL" in make and "O_NOFOLLOW" in make, "clip created unsafely"
+    assert "/tmp" not in make and "tempfile" not in make, \
+        "recordings are written outside $HOME"
+    # Both the normal path and the watchdog have to delete the clip.
+    for fn in ("stop_recording", "_discard"):
+        body = srv.split("def %s(" % fn)[1].split("\ndef ")[0]
+        assert "os.unlink" in body, "%s leaves the recording on disk" % fn
+    print("  ok  recordings stay under $HOME and are deleted")
+
+
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_learned_broker,
                test_no_runtime_rename, test_port_is_configurable,
                test_units_have_a_nixos_path, test_window_rule_is_valid_lua,
-               test_faq_schema):
+               test_faq_schema, test_voice_stays_local,
+               test_transcript_is_never_auto_sent, test_whisper_flags_exist,
+               test_both_install_paths_know_about_voice,
+               test_mic_button_describes_what_it_does,
+               test_silence_never_reaches_the_model,
+               test_recorder_is_always_released,
+               test_voice_scratch_stays_under_home):
         fn()
     print("\nall checks passed")

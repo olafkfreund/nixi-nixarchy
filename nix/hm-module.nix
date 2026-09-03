@@ -131,6 +131,79 @@ in
       };
     };
 
+    voice = {
+      enable = lib.mkEnableOption ''
+        push-to-talk voice input. The desktop records through PipeWire and
+        whisper.cpp transcribes locally, so it behaves the same whichever
+        browser opens the widget. The text only ever lands in the input box
+        for you to check -- nothing is auto-sent, no audio leaves the machine
+      '';
+
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.whisper-cpp;
+        defaultText = lib.literalExpression "pkgs.whisper-cpp";
+        description = "Speech-to-text engine providing `whisper-cli`.";
+      };
+
+      model = lib.mkOption {
+        type = lib.types.path;
+        default = pkgs.fetchurl {
+          url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
+          hash = "sha256-oDd5yG3zMjB19eeWyyzlAp8A7Ihp7uP9+4l6/jbG0AI=";
+        };
+        defaultText = lib.literalExpression "fetchurl { ... ggml-base.en.bin }";
+        description = ''
+          ggml speech model. The default is `base.en` (148 MB, English) --
+          a good accuracy/latency trade for short spoken questions. Swap in
+          `ggml-small.en.bin` for better accuracy at roughly 3x the time, or
+          `ggml-tiny.en.bin` on a slow machine. Models are not in nixpkgs, so
+          this is a pinned `fetchurl`; set `language` too if you replace it
+          with a multilingual model.
+        '';
+      };
+
+      language = lib.mkOption {
+        type = lib.types.str;
+        default = "en";
+        example = "auto";
+        description = ''
+          Spoken language passed to whisper, or "auto" to detect. Only
+          meaningful with a multilingual model -- the default `.en` model
+          understands English alone.
+        '';
+      };
+
+      silenceThreshold = lib.mkOption {
+        type = lib.types.ints.between 0 32767;
+        default = 1100;
+        description = ''
+          RMS level below which a recording is treated as silence and never
+          sent to the model. This is not a nicety: whisper does not return
+          nothing when it hears nothing, it invents plausible sentences, and
+          a fabricated question in the input box looks exactly like one you
+          asked. Measured here, a quiet room through a real microphone is
+          ~530 and speech is ~3500, out of a 32767 full scale.
+
+          Raise it if a silent room still produces text; lower it if quiet
+          speech is being dropped. Microphone gain is hardware, so the
+          default cannot be right for every desk.
+        '';
+      };
+
+      prompt = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        example = "Words used here: nixarchy, kubectl, Grafana, my-project.";
+        description = ''
+          Initial prompt biasing the decoder's vocabulary. Empty keeps Nixi's
+          built-in nixarchy word list, which matters more than it sounds:
+          without it `base.en` transcribes "nixarchy" as "Nixaki". Set this to
+          add jargon or names of your own.
+        '';
+      };
+    };
+
     omarchyHooks.enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -170,6 +243,21 @@ in
           run chmod 700 "$HOME/.local/share/nixi"
         '';
     }
+
+    (lib.mkIf cfg.voice.enable {
+      # whisper-cli and pw-record go on the SERVICE's PATH rather than into
+      # home.packages: recording and transcription are the server's job, and
+      # nobody asked for these on their interactive PATH. The unit PATH is
+      # prefixed (not replaced) so the agent binary still resolves.
+      systemd.user.services.nixi.Service.Environment = lib.mkForce ([
+        "PATH=${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]}:${unitPath}"
+        "NIXI_PORT=${toString cfg.port}"
+        "NIXI_WHISPER_MODEL=${cfg.voice.model}"
+        "NIXI_WHISPER_LANG=${cfg.voice.language}"
+        "NIXI_VOICE_SILENCE_RMS=${toString cfg.voice.silenceThreshold}"
+      ] ++ lib.optional (cfg.voice.prompt != "")
+        "NIXI_WHISPER_PROMPT=${cfg.voice.prompt}");
+    })
 
     (lib.mkIf cfg.barWidget.enable {
       xdg.configFile = {

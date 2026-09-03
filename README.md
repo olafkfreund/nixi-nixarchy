@@ -125,6 +125,7 @@ installer both detect it and stand down rather than writing over the store.
 | **Live tour** | 🚀 in the widget. Eleven steps, and it *watches Hyprland events* — it knows when you actually pressed the key, so it moves at your pace |
 | **Learning path** | 🎓 walks 16 topics and skips the ones the watcher has seen you use |
 | **Ask anything** | Type. Paths in answers are clickable and open in your editor |
+| **Speak instead of typing** | 🎤 next to the input, if you enabled voice. Click, talk, click. Recorded by the desktop, transcribed locally, and the text lands **in the box** for you to check — Nixi never sends it on its own |
 | **Terminal instead** | `nixi --tui` |
 
 ### What it knows about NixOS
@@ -139,6 +140,57 @@ collision, then backfills the rest from Omarchy. So it gives you
 It leads with the things NixOS gives you that Arch cannot: generations and
 rollback when an update goes wrong, and `nixarchy dev init` for per-project
 toolchains.
+
+### Talking to it
+
+Voice input is off by default. Turn it on and a 🎤 appears beside the input:
+
+```nix
+services.nixi.voice.enable = true;
+```
+
+Click it, talk, click again. That is the whole setup — the speech model is a
+pinned `fetchurl`, so it arrives with your rebuild rather than downloading on
+first use.
+
+**The desktop records, not the browser.** PipeWire captures through whatever
+input device your system is already set to, and `whisper.cpp` transcribes it
+locally. That means voice works identically whichever browser opens the
+widget, needs no microphone permission inside a small pinned window, and no
+audio ever passes through the page.
+
+Nixi deliberately does *not* use the browser's `SpeechRecognition` API: it
+streams your microphone to Google's servers, and it is a silent no-op on any
+Chromium built without Google API keys — including the one in nixpkgs, where
+it fails with a bare `network` error and no visible symptom.
+
+**The transcript is never auto-sent.** It goes into the input box and waits for
+you to press Enter. In Mechanic mode a single misheard word would otherwise act
+on your system.
+
+**Silence is refused before the model sees it.** This one matters more than it
+looks: whisper does not return nothing when it hears nothing — it *invents*.
+Digital silence decodes as `" You"`, and four seconds of an ordinary quiet room
+produced *"Or, if they want to be successful."* A fabricated question in your
+input box is indistinguishable from one you actually asked, so anything below
+`voice.silenceThreshold` never reaches the model.
+
+Tuning, all optional:
+
+| Option | Default | |
+|---|---|---|
+| `voice.model` | `ggml-base.en.bin` (148 MB) | `small.en` is more accurate and ~3x slower; `tiny.en` for a weak CPU |
+| `voice.language` | `en` | `"auto"` with a multilingual model |
+| `voice.prompt` | Nixi's nixarchy word list | Add your own jargon. This matters more than it sounds: without it `base.en` hears *"nixarchy"* as *"Nixaki"* |
+| `voice.silenceThreshold` | `1100` | RMS out of 32767. Measured here: quiet room ~530, speech ~3500. Raise it if a silent room still produces text; lower it if quiet speech is dropped — microphone gain is hardware |
+
+Wrong input device? `SUPER+SPACE → Audio`, or `omarchy-audio-input-set-default`.
+Nixi uses the system default, so fixing it once fixes it everywhere.
+
+Installing via the plugin manager instead of the flake? Put `whisper-cpp` and
+`pipewire` on your PATH and fetch a model into
+`~/.local/share/nixi/models/ggml-base.en.bin`. If anything is missing the
+widget hides the mic button and `/voice` tells you exactly which piece.
 
 ---
 
@@ -172,6 +224,11 @@ Set it with ⚙ in the widget.
 - **The network is one code path.** Only `nixi-update-manual` talks to the
   internet, only to two pinned GitHub repositories, and every page is verified
   against its git blob hash at a pinned commit before it is used.
+- **Voice is local too.** PipeWire records and `whisper.cpp` transcribes, both
+  on your machine. Recordings are created through the same descriptor-bound
+  path as every other private file, are `0600`, and are deleted as soon as they
+  are transcribed — including when the widget is closed mid-recording, which a
+  watchdog and the server's exit hook both cover. No speech API is ever called.
 - **Python standard library only.** The only vendored code is `marked` and
   `DOMPurify` for rendering Markdown safely in the widget.
 

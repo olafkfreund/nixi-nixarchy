@@ -4,8 +4,10 @@
 """Nixi micro-server: serves the chat widget UI and relays each
 message to a headless Claude Code call (with read-only grounding tools).
 Local only (127.0.0.1), stdlib only, no telemetry."""
+import array
 import http.server
 import json
+import math
 import os
 import secrets
 import signal
@@ -14,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import wave
 
 PORT = int(os.environ.get("NIXI_PORT", "8642"))
 DIR = os.path.expanduser(os.environ.get("NIXI_DIR", "~/.config/nixi"))
@@ -360,6 +363,12 @@ def _shutdown(*_):
                 os.killpg(p.pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+    # A recorder outliving the server would hold the microphone open with
+    # nothing left to stop it.
+    try:
+        _discard()
+    except Exception:
+        pass
     sys.exit(0)
 
 
@@ -1010,6 +1019,188 @@ def ask_agent(q, resume):
     return ask_claude(q, resume)
 
 
+# ---- voice input ----------------------------------------------------------
+# Push-to-talk, captured by the DESKTOP rather than by the browser.
+#
+# Two things ruled out the browser. The SpeechRecognition API streams raw
+# microphone audio to Google and is a silent no-op on any Chromium built
+# without Google API keys (nixpkgs' has none), so it would have worked only
+# for users who happen to run Google Chrome. Recording in the page with
+# MediaRecorder fixed that, but still made voice depend on which browser
+# opened the widget, on a permission prompt inside a 342x480 pinned window,
+# and on transcoding whatever container that browser chose.
+#
+# pw-record needs nothing but XDG_RUNTIME_DIR, uses the input device the
+# desktop is already configured to use, and writes 16 kHz mono s16 -- which
+# is exactly what whisper wants, so there is no transcode step at all.
+VOICE_MODEL = os.path.expanduser(os.environ.get(
+    "NIXI_WHISPER_MODEL", os.path.join(DATA, "models", "ggml-base.en.bin")))
+VOICE_LANG = os.environ.get("NIXI_WHISPER_LANG", "en")
+# Every one of these is a word a user of this widget says constantly and a
+# general speech model has never seen: base.en hears "nixarchy" as "Nixaki".
+# An initial prompt biases the decoder towards the vocabulary of the domain.
+VOICE_PROMPT = os.environ.get("NIXI_WHISPER_PROMPT", (
+    "Words used here: nixarchy, Omarchy, NixOS, Nixi, Hyprland, Waybar, "
+    "flake, nix, nixpkgs, home-manager, systemd, keybinding, TUI, sudo, "
+    "rebuild, generation, rollback, derivation, dotfiles, workspace."))
+MAX_SECONDS = 60
+# Whisper does not return nothing when it hears nothing -- it INVENTS. Digital
+# silence decodes as " You"; four seconds of an ordinary quiet room produced
+# "Or, if they want to be successful." A fabricated question landing in the
+# input box looks exactly like something the user really said, which is worse
+# than an error, so a recording too quiet to contain speech is refused before
+# the model ever runs.
+#
+# Measured on this hardware (16-bit full scale 32767): a quiet room through a
+# real microphone is RMS ~530, speech is RMS ~3500. RMS, not peak -- one
+# keyboard clack or a door closing pushes peak past any sane threshold while
+# the recording still holds no speech at all. Silero VAD was tried instead and
+# rejected: it clears digital silence but still calls room noise speech, for
+# an extra 885 KB model. Tunable because microphone gain is hardware, and
+# hardware never matches the numbers measured on someone else's desk.
+SILENCE_RMS = int(os.environ.get("NIXI_VOICE_SILENCE_RMS", "1100"))
+voice_lock = threading.Lock()
+_rec = {"proc": None, "path": None, "timer": None}
+
+
+def voice_ready():
+    """(ok, reason). Every missing piece is named: a mic button that does
+    nothing, with nothing logged, is the failure mode this project keeps
+    hitting (the Lua window rule, the unfetched manual)."""
+    missing = [b for b in ("whisper-cli", "pw-record") if not _shutil.which(b)]
+    if missing:
+        return False, ("Voice needs " + " and ".join(missing) + " on PATH. On "
+                       "nixarchy/NixOS set services.nixi.voice.enable = true; "
+                       "elsewhere install whisper-cpp and pipewire.")
+    if not os.path.isfile(VOICE_MODEL):
+        return False, ("No speech model at " + VOICE_MODEL + " \u2014 fetch one with: "
+                       "whisper-cpp-download-ggml-model base.en "
+                       + os.path.dirname(VOICE_MODEL))
+    return True, ""
+
+
+def _new_clip():
+    """An O_EXCL 0600 file under $DATA, created through a validated directory
+    descriptor like every other private file here, then handed to pw-record
+    by path (it opens the file itself). /tmp is not an option: _dirfd refuses
+    anything outside $HOME, and a world-readable recording is not private."""
+    vdir = os.path.join(DATA, "voice")
+    dfd = _dirfd(vdir, create=True)
+    try:
+        name = "clip." + secrets.token_hex(8) + ".wav"
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                     | os.O_CLOEXEC, 0o600, dir_fd=dfd)
+        os.close(fd)
+        return os.path.join(vdir, name)
+    finally:
+        os.close(dfd)
+
+
+def _stop_proc():
+    """SIGTERM, not SIGKILL: pw-record rewrites the RIFF length header as it
+    exits, and a killed recorder leaves a WAV nothing can read."""
+    proc = _rec["proc"]
+    if proc is None:
+        return
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+    _rec["proc"] = None
+    if _rec["timer"] is not None:
+        _rec["timer"].cancel()
+        _rec["timer"] = None
+
+
+def _discard():
+    """Watchdog: the widget can be closed, crash, or lose its connection
+    mid-recording. Without this the microphone would stay open forever."""
+    with voice_lock:
+        _stop_proc()
+        path = _rec["path"]
+        _rec["path"] = None
+    if path:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def start_recording():
+    with voice_lock:
+        if _rec["proc"] is not None and _rec["proc"].poll() is None:
+            raise ValueError("already recording")
+        path = _new_clip()
+        proc = subprocess.Popen(
+            ["pw-record", "--rate", "16000", "--channels", "1",
+             "--format", "s16", path],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+        timer = threading.Timer(MAX_SECONDS, _discard)
+        timer.daemon = True
+        timer.start()
+        _rec.update(proc=proc, path=path, timer=timer)
+
+
+def stop_recording():
+    with voice_lock:
+        if _rec["proc"] is None:
+            raise ValueError("not recording")
+        _stop_proc()
+        path = _rec["path"]
+        _rec["path"] = None
+    try:
+        return transcribe(path)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _rms(path):
+    """Root-mean-square level, 0-32767. array rather than audioop, which was
+    removed from the standard library in Python 3.13."""
+    with wave.open(path, "rb") as w:
+        if w.getsampwidth() != 2:
+            return None
+        frames = w.readframes(min(w.getnframes(), 16000 * MAX_SECONDS))
+    samples = array.array("h")
+    samples.frombytes(frames[:len(frames) - (len(frames) % 2)])
+    if not samples:
+        return 0
+    return math.sqrt(sum(x * x for x in samples) / len(samples))
+
+
+def transcribe(path):
+    try:
+        level = _rms(path)
+    except (wave.Error, EOFError):
+        raise ValueError("that recording was not readable audio") from None
+    if level is not None and level < SILENCE_RMS:
+        # Refused BEFORE the model runs: see SILENCE_RMS above.
+        return ""
+    try:
+        out = subprocess.run(
+            ["whisper-cli", "-m", VOICE_MODEL, "-l", VOICE_LANG, "-nt", "-np",
+             "--prompt", VOICE_PROMPT,
+             "-t", str(min(8, os.cpu_count() or 4)), path],
+            check=True, timeout=120, capture_output=True, text=True).stdout
+    except subprocess.CalledProcessError:
+        # Raising the CalledProcessError would put the whole argv, and the
+        # user's home path, in a chat bubble. Say the useful thing instead.
+        raise ValueError("the speech model failed on that clip") from None
+    # -nt still emits whole-line markers for silence ("[BLANK_AUDIO]") and
+    # pads every segment; a line that is nothing but brackets is never speech.
+    lines = [ln.strip() for ln in out.splitlines()]
+    keep = [ln for ln in lines
+            if ln and not (ln.startswith("[") and ln.endswith("]"))]
+    return " ".join(keep).strip()[:2000]
+
+
 # ---- feature-specific consent for persistent integrations ----------------
 # The bar click installs only the core (widget, server, menu entry). Each
 # persistent extra is enabled from inside the widget, one explicit decision
@@ -1229,6 +1420,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, setup_status())
         elif self.path == "/trust":
             self._send(200, {"trust": trust_level()})
+        elif self.path == "/voice":
+            ok, why = voice_ready()
+            self._send(200, {"ok": ok, "reason": why})
         elif self.path == "/theme":
             self._send(200, read_theme())
         else:
@@ -1339,6 +1533,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if own_window_address() == addr:   # still there and focused
                     hypr("dispatch hl.dsp.window.close()")
             return self._send(200, {"ok": bool(addr)})
+        if self.path in ("/listen/start", "/listen/stop"):
+            ok, why = voice_ready()
+            if not ok:
+                return self._send(200, {"error": why})
+            if self.path == "/listen/start":
+                try:
+                    start_recording()
+                except ValueError as e:
+                    return self._send(200, {"error": str(e)})
+                except Exception as e:
+                    return self._send(200, {"error": "could not open the microphone: "
+                                            + str(e)[-200:]})
+                return self._send(200, {"recording": True})
+            try:
+                text = stop_recording()
+            except ValueError as e:
+                return self._send(200, {"error": str(e)})
+            except subprocess.TimeoutExpired:
+                return self._send(200, {"error": "transcription timed out"})
+            except Exception as e:
+                return self._send(200, {"error": "could not transcribe: " + str(e)[-200:]})
+            return self._send(200, {"text": text})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
         try:
