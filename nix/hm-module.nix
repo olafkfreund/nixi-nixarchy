@@ -133,9 +133,10 @@ in
 
     voice = {
       enable = lib.mkEnableOption ''
-        push-to-talk voice input. Speech is transcribed locally by
-        whisper.cpp and only ever placed in the input box for you to check --
-        nothing is auto-sent, and no audio leaves the machine
+        push-to-talk voice input. The desktop records through PipeWire and
+        whisper.cpp transcribes locally, so it behaves the same whichever
+        browser opens the widget. The text only ever lands in the input box
+        for you to check -- nothing is auto-sent, no audio leaves the machine
       '';
 
       package = lib.mkOption {
@@ -170,6 +171,23 @@ in
           Spoken language passed to whisper, or "auto" to detect. Only
           meaningful with a multilingual model -- the default `.en` model
           understands English alone.
+        '';
+      };
+
+      silenceThreshold = lib.mkOption {
+        type = lib.types.ints.between 0 32767;
+        default = 1100;
+        description = ''
+          RMS level below which a recording is treated as silence and never
+          sent to the model. This is not a nicety: whisper does not return
+          nothing when it hears nothing, it invents plausible sentences, and
+          a fabricated question in the input box looks exactly like one you
+          asked. Measured here, a quiet room through a real microphone is
+          ~530 and speech is ~3500, out of a 32767 full scale.
+
+          Raise it if a silent room still produces text; lower it if quiet
+          speech is being dropped. Microphone gain is hardware, so the
+          default cannot be right for every desk.
         '';
       };
 
@@ -227,15 +245,16 @@ in
     }
 
     (lib.mkIf cfg.voice.enable {
-      # whisper-cli and ffmpeg go on the SERVICE's PATH rather than into
-      # home.packages: transcription is the server's job, and nobody asked for
-      # these on their interactive PATH. The unit PATH is prefixed (not
-      # replaced) so the agent binary still resolves.
+      # whisper-cli and pw-record go on the SERVICE's PATH rather than into
+      # home.packages: recording and transcription are the server's job, and
+      # nobody asked for these on their interactive PATH. The unit PATH is
+      # prefixed (not replaced) so the agent binary still resolves.
       systemd.user.services.nixi.Service.Environment = lib.mkForce ([
-        "PATH=${lib.makeBinPath [ cfg.voice.package pkgs.ffmpeg ]}:${unitPath}"
+        "PATH=${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]}:${unitPath}"
         "NIXI_PORT=${toString cfg.port}"
         "NIXI_WHISPER_MODEL=${cfg.voice.model}"
         "NIXI_WHISPER_LANG=${cfg.voice.language}"
+        "NIXI_VOICE_SILENCE_RMS=${toString cfg.voice.silenceThreshold}"
       ] ++ lib.optional (cfg.voice.prompt != "")
         "NIXI_WHISPER_PROMPT=${cfg.voice.prompt}");
     })

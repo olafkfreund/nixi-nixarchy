@@ -431,73 +431,53 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- voice input ----------------------------------------------------------
-// Record here, transcribe on the local server, drop the text in the box. The
-// button only appears once /voice says the model and tools are actually
-// present, so there is no mic that silently does nothing. Click to start,
-// click to stop -- a toggle behaves the same for mouse, touch and keyboard,
-// where hold-to-talk loses the clip the moment the pointer slips off.
+// The DESKTOP records, not this page: the server drives pw-record, which uses
+// whichever input device the system is already set to. That keeps voice
+// working the same in every browser, needs no microphone permission inside
+// this little window, and means no audio ever passes through the page.
+// The button only appears once /voice confirms the pieces are really there.
 const mic = document.getElementById('mic');
-let recorder = null, chunks = [], micTimer = null;
+let listening = false;
 
 fetch('/voice').then(r => r.json()).then(j => {
-  if (j.ok && navigator.mediaDevices && window.MediaRecorder) mic.classList.add('on');
+  if (j.ok) mic.classList.add('on');
 }).catch(() => {});
 
 function micIdle() {
+  listening = false;
   mic.setAttribute('aria-pressed', 'false');
   mic.disabled = false;
   mic.textContent = '\u{1F3A4}';
   mic.title = 'Click to talk';
 }
 
-async function startRec() {
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (e) {
-    add('bot', 'I could not open the microphone (' + (e.name || e) +
-               '). Allow it for this page, or check SUPER+SPACE → Audio.');
+mic.addEventListener('click', async () => {
+  if (!listening) {
+    mic.disabled = true;
+    try {
+      const j = await (await fetch('/listen/start', { method: 'POST' })).json();
+      if (j.error) { add('bot', j.error); micIdle(); return; }
+    } catch (e) {
+      add('bot', 'Could not start recording: ' + e.message); micIdle(); return;
+    }
+    listening = true;
+    mic.disabled = false;
+    mic.setAttribute('aria-pressed', 'true');
+    mic.textContent = '⏹'; mic.title = 'Stop and transcribe';
     return;
   }
-  chunks = [];
-  recorder = new MediaRecorder(stream);
-  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  recorder.onstop = async () => {
-    stream.getTracks().forEach(t => t.stop());   // drops the browser's mic indicator
-    clearTimeout(micTimer);
-    const blob = new Blob(chunks, { type: recorder.mimeType });
-    recorder = null;
-    mic.disabled = true; mic.textContent = '…'; mic.title = 'Transcribing…';
-    try {
-      const buf = new Uint8Array(await blob.arrayBuffer());
-      // Chunked: String.fromCharCode(...buf) overflows the stack on a long clip.
-      let s = '';
-      for (let i = 0; i < buf.length; i += 8192) s += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
-      const j = await (await fetch('/transcribe', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: btoa(s) }) })).json();
-      if (j.error) add('bot', j.error);
-      else if (!j.text) add('bot', "I didn't catch any speech in that — try again a bit closer to the mic.");
-      // Into the input box, never straight to ask(): in Mechanic mode a single
-      // misheard word would act on the machine. The human reads it, then Enter.
-      else input.value = input.value ? input.value + ' ' + j.text : j.text;
-    } catch (e) {
-      add('bot', 'Voice failed: ' + e.message);
-    }
-    micIdle(); input.focus();
-  };
-  recorder.start();
-  mic.setAttribute('aria-pressed', 'true');
-  mic.textContent = '⏹'; mic.title = 'Stop and transcribe';
-  // Hard cap, matching the server's clip limit, so a forgotten open mic stops.
-  micTimer = setTimeout(() => {
-    if (recorder && recorder.state === 'recording') recorder.stop();
-  }, 60000);
-}
-
-mic.addEventListener('click', () => {
-  if (recorder && recorder.state === 'recording') recorder.stop();
-  else startRec();
+  mic.disabled = true; mic.textContent = '…'; mic.title = 'Transcribing…';
+  try {
+    const j = await (await fetch('/listen/stop', { method: 'POST' })).json();
+    if (j.error) add('bot', j.error);
+    else if (!j.text) add('bot', "I didn't hear anything — check your input device with SUPER+SPACE → Audio, or speak a little closer.");
+    // Into the input box, never straight to ask(): in Mechanic mode a single
+    // misheard word would act on the machine. The human reads it, then Enter.
+    else input.value = input.value ? input.value + ' ' + j.text : j.text;
+  } catch (e) {
+    add('bot', 'Voice failed: ' + e.message);
+  }
+  micIdle(); input.focus();
 });
 
 form.addEventListener('submit', (e) => {

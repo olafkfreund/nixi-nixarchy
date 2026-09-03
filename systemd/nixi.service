@@ -8,8 +8,8 @@ Environment=PATH=%h/.nix-profile/bin:/etc/profiles/per-user/%u/bin:/run/current-
 Type=exec
 # Voice input (optional). The Nix module passes the model as a store path; a
 # plugin install has no Nix to do that, so point at the conventional spot and
-# let the server say what is missing -- whisper-cli and ffmpeg just have to be
-# on the PATH above. Fetch a model with:
+# let the server say what is missing -- whisper-cli and pw-record just have to
+# be on the PATH above. Fetch a model with:
 #   mkdir -p ~/.local/share/nixi/models && \
 #     whisper-cpp-download-ggml-model base.en ~/.local/share/nixi/models
 Environment=NIXI_WHISPER_MODEL=%h/.local/share/nixi/models/ggml-base.en.bin

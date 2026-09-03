@@ -198,6 +198,12 @@ def test_voice_stays_local():
         assert api not in ui, "ui.html reaches for %s; audio must stay local" % api
     srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
     assert "whisper-cli" in srv, "no local transcriber"
+    # Capture belongs to the desktop, not the page: pw-record behaves the same
+    # in every browser and needs no per-origin microphone permission.
+    assert "pw-record" in srv, "no local recorder"
+    for api in ("MediaRecorder", "getUserMedia", "btoa("):
+        assert api not in ui, \
+            "ui.html records audio itself (%s); the desktop does that" % api
     print("  ok  voice never leaves the machine")
 
 
@@ -205,9 +211,9 @@ def test_transcript_is_never_auto_sent():
     """A misheard word in Mechanic mode would act on the machine. The
     transcript goes in the input box; only a human keypress submits it."""
     ui = open(os.path.join(ROOT, "share/ui.html")).read()
-    m = re.search(r"recorder\.onstop\s*=\s*async\s*\(\)\s*=>\s*\{(.*?)\n  \};",
+    m = re.search(r"mic\.addEventListener\('click',\s*async\s*\(\)\s*=>\s*\{(.*?)\n\}\);",
                   ui, re.S)
-    assert m, "could not find the recorder.onstop handler"
+    assert m, "could not find the mic click handler"
     # Comments in here talk *about* ask(); only real calls count.
     body = re.sub(r"//[^\n]*", "", m.group(1))
     assert "input.value" in body, "transcript never reaches the input box"
@@ -227,6 +233,12 @@ def test_whisper_flags_exist():
     args = m.group(1)
     for flag in ("-m", "-l", "-nt", "-np", "--prompt"):
         assert '"%s"' % flag in args, "whisper-cli invocation lost %s" % flag
+    r = re.search(r'\["pw-record",(.*?)\]', srv, re.S)
+    assert r, "pw-record invocation not found"
+    # whisper wants 16k mono s16, and recording straight into it is what let
+    # ffmpeg go; losing any of these silently reintroduces a transcode step.
+    for a in ('"16000"', '"1"', '"s16"'):
+        assert a in r.group(1), "pw-record no longer records whisper's format: " + a
     # The domain prompt is the difference between "nixarchy" and "Nixaki".
     assert "nixarchy" in srv.split("VOICE_PROMPT")[1][:400], \
         "the whisper prompt no longer biases towards nixarchy vocabulary"
@@ -246,18 +258,53 @@ def test_both_install_paths_know_about_voice():
     print("  ok  both install paths can reach voice")
 
 
-def test_voice_scratch_stays_under_home():
-    """Audio scratch files must go through _dirfd like every other private
-    file -- /tmp is both refused by _dirfd and world-readable."""
+def test_silence_never_reaches_the_model():
+    """Whisper does not return nothing when it hears nothing -- it INVENTS.
+    Digital silence decoded as " You"; a quiet room produced "Or, if they
+    want to be successful." A fabricated question in the input box is
+    indistinguishable from one the user really asked."""
     srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    assert "SILENCE_RMS" in srv, "no silence gate"
     body = srv.split("def transcribe(")[1].split("\ndef ")[0]
-    # The docstring and comments discuss /tmp; only executable lines count.
-    body = body.split('"""')[2] if body.count('"""') >= 2 else body
-    body = re.sub(r"#[^\n]*", "", body)
-    assert "_dirfd(" in body, "transcribe bypasses the descriptor-bound helper"
-    assert "/tmp" not in body and "tempfile" not in body, \
-        "transcribe writes audio outside $HOME"
-    assert "os.unlink" in body, "transcribe leaves recordings on disk"
+    # Comments in here NAME the threshold; comparing raw indexes would compare
+    # prose order, not execution order, and pass however the code is arranged.
+    code = re.sub(r"#[^\n]*", "", body)
+    code = code.split('"""')[2] if code.count('"""') >= 2 else code
+    assert code.index("SILENCE_RMS") < code.index('"whisper-cli"'), \
+        "the silence gate must run BEFORE whisper, not after"
+    print("  ok  silence is refused before the model can invent")
+
+
+def test_recorder_is_always_released():
+    """The widget can be closed mid-recording. Without a watchdog and an exit
+    hook the microphone would stay open with nothing left to stop it."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    assert "threading.Timer(MAX_SECONDS" in srv, "no recording watchdog"
+    quit_fn = srv.split("def _shutdown(")[1].split("\ndef ")[0]
+    assert "_discard()" in quit_fn, "server exit leaves the recorder running"
+    stop = srv.split("def _stop_proc(")[1].split("\ndef ")[0]
+    # SIGKILL leaves a WAV whose RIFF length header was never rewritten.
+    assert "terminate()" in stop, "recorder must be SIGTERMed so the WAV closes"
+    print("  ok  recorder is always released")
+
+
+def test_voice_scratch_stays_under_home():
+    """Recordings are created through the descriptor-bound helper like every
+    other private file -- /tmp is refused by _dirfd and is world-readable --
+    and must not outlive the request that made them."""
+    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
+    make = srv.split("def _new_clip(")[1].split("\ndef ")[0]
+    # The docstring discusses /tmp; only executable lines count.
+    make = make.split('"""')[2] if make.count('"""') >= 2 else make
+    make = re.sub(r"#[^\n]*", "", make)
+    assert "_dirfd(" in make, "recordings bypass the descriptor-bound helper"
+    assert "O_EXCL" in make and "O_NOFOLLOW" in make, "clip created unsafely"
+    assert "/tmp" not in make and "tempfile" not in make, \
+        "recordings are written outside $HOME"
+    # Both the normal path and the watchdog have to delete the clip.
+    for fn in ("stop_recording", "_discard"):
+        body = srv.split("def %s(" % fn)[1].split("\ndef ")[0]
+        assert "os.unlink" in body, "%s leaves the recording on disk" % fn
     print("  ok  recordings stay under $HOME and are deleted")
 
 
@@ -268,6 +315,8 @@ if __name__ == "__main__":
                test_faq_schema, test_voice_stays_local,
                test_transcript_is_never_auto_sent, test_whisper_flags_exist,
                test_both_install_paths_know_about_voice,
+               test_silence_never_reaches_the_model,
+               test_recorder_is_always_released,
                test_voice_scratch_stays_under_home):
         fn()
     print("\nall checks passed")
