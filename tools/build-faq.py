@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 
-DATA = os.path.expanduser(os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help"))
+DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
 MANUAL = os.path.join(DATA, "manual")
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(DATA, "faq.json")
 
@@ -35,7 +35,7 @@ def batches(files, size=9):
 def main():
     files = sorted(glob.glob(os.path.join(MANUAL, "*.md")))
     if not files:
-        sys.exit(f"no manual pages in {MANUAL} — run omarchy-help-update-manual")
+        sys.exit(f"no manual pages in {MANUAL} — run nixi-update-manual")
     faq = []
     for group in batches(files):
         material = "\n\n".join(

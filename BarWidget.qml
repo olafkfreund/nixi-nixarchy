@@ -3,19 +3,19 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 
-// Archy's doorway: a retro arcade pixel-bot in the bar (drawn as real pixels,
+// Nixi's doorway: a pixel snowflake in the bar (drawn as real pixels,
 // matching the screensaver's blocky ASCII aesthetic — no font glyphs, so it
 // can never tofu and it recolors with the theme). Click = summon the guide.
 BarWidget {
   id: root
-  moduleName: "io.github.respira-crece-lidera.archy"
+  moduleName: "io.github.olafkfreund.nixi"
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   function launch() {
     if (root.bar)
-      root.bar.run("bash \"$HOME/.config/omarchy/plugins/io.github.respira-crece-lidera.archy/archy-launch\"")
+      root.bar.run("bash \"$HOME/.config/omarchy/plugins/io.github.olafkfreund.nixi/nixi-launch\"")
   }
 
   BarIconButton {
@@ -24,7 +24,7 @@ BarWidget {
     bar: root.bar
     text: ""
     slotSize: Style.bar.statusSlot
-    tooltipText: "Archy — your Omarchy guide"
+    tooltipText: "Nixi — your nixarchy guide"
     onPressed: root.launch()
 
     iconComponent: Component {
@@ -34,18 +34,22 @@ BarWidget {
         property color px: button.foreground
         onPxChanged: bot.requestPaint()
         onPaint: {
-          // The classic 11x8 arcade invader (crab).
+          // An 11x11 pixel snowflake: vertical and horizontal spines plus
+          // both diagonals. Same grid as the favicon.
           var rows = [
-            "..X.....X..",
-            "...X...X...",
-            "..XXXXXXX..",
-            ".XX.XXX.XX.",
+            ".....X.....",
+            "X....X....X",
+            ".X...X...X.",
+            "..X..X..X..",
+            "...X.X.X...",
             "XXXXXXXXXXX",
-            "X.XXXXXXX.X",
-            "X.X.....X.X",
-            "...XX.XX..."
+            "...X.X.X...",
+            "..X..X..X..",
+            ".X...X...X.",
+            "X....X....X",
+            ".....X....."
           ];
-          var W = 11, H = 8;
+          var W = 11, H = 11;
           var ctx = getContext("2d");
           ctx.clearRect(0, 0, width, height);
           var cell = Math.floor(Math.min(width / W, height / H));

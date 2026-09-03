@@ -1,10 +1,10 @@
 [Unit]
-Description=Omarchy Helper tip watcher (suggests workflow improvements, max one per day)
+Description=Nixi tip watcher (suggests workflow improvements, max one per day)
 
 [Service]
 Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
 Type=exec
-ExecStart=%h/.local/bin/omarchy-help-watch
+ExecStart=%h/.local/bin/nixi-watch
 Restart=on-failure
 RestartSec=5
 

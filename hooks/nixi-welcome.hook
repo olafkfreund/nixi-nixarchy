@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# omarchy:summary=One-time first-boot welcome: offer Nixi's guided setup tour
+# Runs from ~/.config/omarchy/hooks/post-boot.d/. Fires once, ever: the offer
+# only appears while Nixi has no learning history at all.
+DATA="$HOME/.local/share/nixi"
+[[ -e "$DATA/learning.json" ]] && exit 0
+mkdir -p "$DATA" && chmod 700 "$DATA"   # -m alone would skip an existing dir
+# noclobber => O_EXCL create: never follows a pre-planted symlink
+( umask 077; set -o noclobber; printf '{}' > "$DATA/learning.json" ) 2>/dev/null || exit 0
+omarchy-notification-wait 2>/dev/null || true
+omarchy-notification-send --glyph $'\U0001f44b' \
+  "New to nixarchy? I can walk you through it" \
+  "I'm Nixi, your guide. Click for a 3-minute hands-on tour — AI setup, the keys, the moves." \
+  --exec nixi --tour

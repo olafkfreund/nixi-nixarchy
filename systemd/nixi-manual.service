@@ -1,0 +1,6 @@
+[Unit]
+Description=Refresh Nixi's local nixarchy + Omarchy manual copy
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/nixi-update-manual

@@ -6,8 +6,8 @@
 Reads Hyprland's event socket, counts a few teachable patterns locally
 (nothing leaves the machine), and when one crosses its threshold sends ONE
 notification. Guardrails: at most one tip per day, each tip at most once per
-14 days, and `systemctl --user disable --now omarchy-help-watch` turns it off
-for good. State: ~/.local/share/omarchy-help/tips.json
+14 days, and `systemctl --user disable --now nixi-watch` turns it off
+for good. State: ~/.local/share/nixi/tips.json
 """
 import json
 import os
@@ -16,7 +16,9 @@ import subprocess
 import sys
 import time
 
-DATA = os.path.expanduser(os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help"))
+DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
+# Must track the server: services.nixi.port (and NIXI_PORT) may move it.
+PORT = int(os.environ.get("NIXI_PORT", "8642"))
 STATE = os.path.join(DATA, "tips.json")
 
 # Thresholds (env-overridable so tests can force them low).
@@ -211,7 +213,7 @@ def fire(tip_id, **fmt):
     try:
         run_quiet(["omarchy-notification-wait"], timeout=30)
         run_quiet(["omarchy-notification-send", "--glyph", "\U0001f4a1",
-                   title, body, "--exec", "omarchy-help", "--ask", question],
+                   title, body, "--exec", "nixi", "--ask", question],
                   timeout=15)
     except FileNotFoundError:
         print(f"TIP[{tip_id}]: {title} — {body}")  # test mode / no notifier
@@ -256,7 +258,7 @@ class Day:
                 self.used_special = True
         elif ev == "openwindow":
             # A pinned widget floats above everything — including the
-            # screensaver. When the screensaver starts, Archy bows out
+            # screensaver. When the screensaver starts, Nixi bows out
             # (the chat survives server-side; the helper key recalls it).
             if "org.omarchy.screensaver" in data:
                 try:
@@ -267,8 +269,8 @@ class Day:
                     except (OSError, ValueError):
                         pass
                     urllib.request.urlopen(urllib.request.Request(
-                        "http://127.0.0.1:8642/minimize", method="POST",
-                        headers={"X-Archy-Token": tok}), timeout=5)
+                        "http://127.0.0.1:%d/minimize" % PORT, method="POST",
+                        headers={"X-Nixi-Token": tok}), timeout=5)
                 except Exception:
                     pass
                 return

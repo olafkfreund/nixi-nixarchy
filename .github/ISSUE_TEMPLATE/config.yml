@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: nixarchy itself (the desktop, menus, themes, rebuilds)
+    url: https://github.com/olafkfreund/nixarchy/issues
+    about: If the problem is the desktop rather than the Nixi widget, report it there.
+  - name: Omarchy upstream
+    url: https://github.com/basecamp/omarchy/issues
+    about: nixarchy runs Omarchy's own scripts. A bug in one is usually a bug upstream.

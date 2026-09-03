@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Archy installer — every mutation descriptor-bound, atomic, rollback-safe.
+"""Nixi installer — every mutation descriptor-bound, atomic, rollback-safe.
 
     install.py                 core only: widget files, server service, menu entry
     install.py --with-watcher  | --without-watcher   coaching watcher service
@@ -16,23 +16,22 @@ written to an O_EXCL random temp in that directory, fsync'd, renamed over a
 target that must be a regular file or absent (never through a symlink —
 dotfile-managed installs are left alone with a message), then the directory
 is fsync'd. Every replaced file's previous bytes are kept so a failure
-restores everything placed so far. Primitives mirror omarchy-help-server.
+restores everything placed so far. Primitives mirror nixi-server.
 """
 import json
 import os
 import secrets
-import shutil
 import stat
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
-DIR = os.path.join(HOME, ".config", "omarchy-help")
-DATA = os.path.join(HOME, ".local", "share", "omarchy-help")
+DIR = os.path.join(HOME, ".config", "nixi")
+DATA = os.path.join(HOME, ".local", "share", "nixi")
 BIN = os.path.join(HOME, ".local", "bin")
 UNITS = os.path.join(HOME, ".config", "systemd", "user")
-SKILLS = os.path.join(HOME, ".claude", "skills", "omarchy-help")
+SKILLS = os.path.join(HOME, ".claude", "skills", "nixi")
 HOOKS_BOOT = os.path.join(HOME, ".config", "omarchy", "hooks", "post-boot.d")
 HOOKS_UPD = os.path.join(HOME, ".config", "omarchy", "hooks", "post-update.d")
 EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
@@ -296,20 +295,19 @@ def install_core(j, svc):
     for f in sorted(os.listdir(src("share", "vendor"))):
         if f.endswith(".js"):
             j.place(vendor, f, read_src(src("share", "vendor", f)))
-    for b in ("omarchy-help", "omarchy-help-server", "omarchy-help-update-manual"):
+    for b in ("nixi", "nixi-server", "nixi-update-manual"):
         j.place(BIN, b, read_src(src("bin", b)), mode=0o755)
-    j.place(UNITS, "omarchy-help.service", read_src(src("systemd", "omarchy-help.service")))
+    j.place(UNITS, "nixi.service", read_src(src("systemd", "nixi.service")))
     version = json.loads(read_src(src("manifest.json")))["version"]
     j.place(DATA, "source_root", (ROOT + "\n").encode(), mode=0o600, dir_mode=0o700)
     j.place(DATA, ".installed-version", (version + "\n").encode(), mode=0o600, dir_mode=0o700)
     merge_menu(j)
-    svc.enable_now("omarchy-help.service")
+    svc.enable_now("nixi.service")
 
 
 def merge_menu(j):
     """Add the Help entry to the user's menu extensions, non-destructively:
     parsed loosely, backed up first, written atomically."""
-    p = os.path.join(EXT_DIR, "omarchy-menu.jsonc")
     dfd = _dirfd(EXT_DIR, create=True)
     try:
         try:
@@ -324,10 +322,10 @@ def merge_menu(j):
         return
     import re
     row = ('"help": {"icon": "\U000f0625", "label": "Help", '
-           '"description": "Ask anything about Omarchy", "action": "omarchy-help", '
-           '"aliases": ["how", "ayuda"]}')
+           '"description": "Ask anything about nixarchy", "action": "nixi", '
+           '"aliases": ["how", "nixi", "ayuda"]}')
     if s.strip():
-        j.place(EXT_DIR, "omarchy-menu.jsonc.bak-archy", s.encode())
+        j.place(EXT_DIR, "omarchy-menu.jsonc.bak-nixi", s.encode())
     if not re.sub(r"//.*", "", s).strip().strip("{}").strip():
         out = "{\n  " + row + "\n}\n"
     else:
@@ -336,28 +334,28 @@ def merge_menu(j):
         sep = "," if body.endswith(("}", '"', "]")) and not body.endswith("{") else ""
         out = body + sep + "\n  " + row + "\n}\n"
     j.place(EXT_DIR, "omarchy-menu.jsonc", out.encode())
-    log("menu: Help entry added (backup: omarchy-menu.jsonc.bak-archy)")
+    log("menu: Help entry added (backup: omarchy-menu.jsonc.bak-nixi)")
 
 
 def enable_watcher(j, svc):
-    j.place(BIN, "omarchy-help-watch", read_src(src("bin", "omarchy-help-watch")), mode=0o755)
-    j.place(UNITS, "omarchy-help-watch.service",
-            read_src(src("systemd", "omarchy-help-watch.service")))
-    svc.enable_now("omarchy-help-watch.service")
+    j.place(BIN, "nixi-watch", read_src(src("bin", "nixi-watch")), mode=0o755)
+    j.place(UNITS, "nixi-watch.service",
+            read_src(src("systemd", "nixi-watch.service")))
+    svc.enable_now("nixi-watch.service")
 
 
 def disable_watcher(j, svc):
-    svc.disable_now("omarchy-help-watch.service")
-    j.remove(UNITS, "omarchy-help-watch.service")
-    j.remove(BIN, "omarchy-help-watch")
+    svc.disable_now("nixi-watch.service")
+    j.remove(UNITS, "nixi-watch.service")
+    j.remove(BIN, "nixi-watch")
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
 def enable_skill(j, svc):
-    for f in sorted(os.listdir(src("skills", "omarchy-help"))):
+    for f in sorted(os.listdir(src("skills", "nixi"))):
         if f.endswith(".md"):
-            j.place(SKILLS, f, read_src(src("skills", "omarchy-help", f)))
-    j.place(DIR, "SKILL.md", read_src(src("skills", "omarchy-help", "SKILL.md")), dir_mode=0o700)
+            j.place(SKILLS, f, read_src(src("skills", "nixi", f)))
+    j.place(DIR, "SKILL.md", read_src(src("skills", "nixi", "SKILL.md")), dir_mode=0o700)
 
 
 def disable_skill(j, svc):
@@ -371,29 +369,29 @@ def disable_skill(j, svc):
 
 
 def enable_hooks(j, svc):
-    j.place(HOOKS_BOOT, "archy-welcome.hook", read_src(src("hooks", "archy-welcome.hook")), mode=0o755)
-    j.place(HOOKS_UPD, "archy-manual-refresh.hook",
-            read_src(src("hooks", "archy-manual-refresh.hook")), mode=0o755)
-    for u in ("omarchy-help-manual.service", "omarchy-help-manual.timer"):
+    j.place(HOOKS_BOOT, "nixi-welcome.hook", read_src(src("hooks", "nixi-welcome.hook")), mode=0o755)
+    j.place(HOOKS_UPD, "nixi-manual-refresh.hook",
+            read_src(src("hooks", "nixi-manual-refresh.hook")), mode=0o755)
+    for u in ("nixi-manual.service", "nixi-manual.timer"):
         j.place(UNITS, u, read_src(src("systemd", u)))
-    svc.enable_now("omarchy-help-manual.timer")
+    svc.enable_now("nixi-manual.timer")
 
 
 def disable_hooks(j, svc):
-    svc.disable_now("omarchy-help-manual.timer")
-    j.remove(HOOKS_BOOT, "archy-welcome.hook")
-    j.remove(HOOKS_UPD, "archy-manual-refresh.hook")
-    for u in ("omarchy-help-manual.service", "omarchy-help-manual.timer"):
+    svc.disable_now("nixi-manual.timer")
+    j.remove(HOOKS_BOOT, "nixi-welcome.hook")
+    j.remove(HOOKS_UPD, "nixi-manual-refresh.hook")
+    for u in ("nixi-manual.service", "nixi-manual.timer"):
         j.remove(UNITS, u)
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
 def status():
     return {
-        "watcher": os.path.exists(os.path.join(UNITS, "omarchy-help-watch.service"))
-                   and is_enabled("omarchy-help-watch.service"),
+        "watcher": os.path.exists(os.path.join(UNITS, "nixi-watch.service"))
+                   and is_enabled("nixi-watch.service"),
         "skill": os.path.exists(os.path.join(SKILLS, "SKILL.md")),
-        "hooks": os.path.exists(os.path.join(HOOKS_UPD, "archy-manual-refresh.hook")),
+        "hooks": os.path.exists(os.path.join(HOOKS_UPD, "nixi-manual-refresh.hook")),
     }
 
 
@@ -436,16 +434,19 @@ def main(argv):
         j.rollback()
         write_log()
         return 1
-    if core:
+    # The first manual fetch is a convenience, not part of the install: it is
+    # already best-effort, and CI (and air-gapped installs) want it skipped
+    # rather than waited on.
+    if core and os.environ.get("NIXI_SKIP_MANUAL") not in ("1", "true", "yes"):
         try:
-            subprocess.run([os.path.join(BIN, "omarchy-help-update-manual")],
+            subprocess.run([os.path.join(BIN, "nixi-update-manual")],
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=300, start_new_session=True)
         except Exception:
             pass
-        log("Installed. Run omarchy-help for the chat widget; find Help in the Omarchy "
-            "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Archy (Omarchy help)\", "
-            "\"omarchy-help\") in ~/.config/hypr/bindings.lua")
+        log("Installed. Run nixi for the chat widget; find Help in the Omarchy "
+            "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Nixi (nixarchy help)\", "
+            "\"nixi\") in ~/.config/hypr/bindings.lua")
     for f in want_on:
         log("enabled: " + f)
     for f in want_off:

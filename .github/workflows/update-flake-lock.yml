@@ -1,0 +1,29 @@
+name: Update flake.lock
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'   # Mondays, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Bump nixpkgs and open a PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@526118121621777ccd86f79b04685a9319637641 # v31.3.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # The PR still has to pass CI before anyone merges it, which is the
+      # point: a nixpkgs bump that breaks the build fails loudly and early.
+      - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28
+        with:
+          pr-title: "chore: update flake.lock"
+          pr-labels: dependencies

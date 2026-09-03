@@ -1,34 +1,41 @@
 #!/usr/bin/env bash
-# Archy's bar-button entry: bootstrap on first use, then toggle the widget.
+# Nixi's bar-button entry: bootstrap on first use, then toggle the widget.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Re-run setup when the plugin was updated (version marker mismatch), not
 # just on first install — otherwise `omarchy plugin update` never reaches
 # the installed services.
-DATA="$HOME/.local/share/omarchy-help"
+DATA="$HOME/.local/share/nixi"
 MARKER="$DATA/.installed-version"
 WANT=$(python3 -c "import json;print(json.load(open('$HERE/manifest.json'))['version'])" 2>/dev/null || echo dev)
 HAVE=$(cat "$MARKER" 2>/dev/null || echo none)
 # A symlinked server binary means a dotfile manager owns this install —
 # never overwrite it with plugin copies (install.py refuses symlink targets
 # too; this check just skips the run entirely).
-if [[ -L "$HOME/.local/bin/omarchy-help-server" ]]; then
+UI="$HOME/.config/nixi/ui.html"
+# Nix owns this install when the UI resolves into the store: the module placed
+# it, the store is read-only, and install.py has nothing to do. Straight to the
+# widget. (A symlinked server binary means some other dotfile manager owns it —
+# same conclusion, different owner.)
+if [[ -e "$UI" && "$(readlink -f "$UI")" == /nix/store/* ]]; then
   :
-elif ! command -v omarchy-help >/dev/null 2>&1 || [[ ! -f "$HOME/.config/omarchy-help/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
+elif [[ -L "$HOME/.local/bin/nixi-server" ]]; then
+  :
+elif ! command -v nixi >/dev/null 2>&1 || [[ ! -f "$HOME/.config/nixi/ui.html" ]] || [[ "$WANT" != "$HAVE" ]]; then
   # First click = consent for the CORE only (widget, server service, menu
   # entry). Persistent extras (watcher, agent skill, hooks) are each enabled
   # by an explicit choice inside the widget. Updates refresh only what is
   # already installed (--refresh never adds integrations).
-  mkdir -p -m 700 "$DATA"
+  mkdir -p "$DATA" && chmod 700 "$DATA"   # -m alone would skip an existing dir
   MODE=""; [[ "$HAVE" != "none" ]] && MODE="--refresh"
   python3 "$HERE/install.py" $MODE >"$DATA/setup.log" 2>&1 || {
-    omarchy-notification-send --urgency critical "Archy setup failed" \
-      "See ~/.local/share/omarchy-help/setup.log" 2>/dev/null || true
+    omarchy-notification-send --urgency critical "Nixi setup failed" \
+      "See ~/.local/share/nixi/setup.log" 2>/dev/null || true
     exit 1
   }
-  systemctl --user try-restart omarchy-help.service omarchy-help-watch.service 2>/dev/null || true
-  [[ "$HAVE" == "none" ]] && omarchy-notification-send "Archy is ready" \
+  systemctl --user try-restart nixi.service nixi-watch.service 2>/dev/null || true
+  [[ "$HAVE" == "none" ]] && omarchy-notification-send "Nixi is ready" \
     "Click the robot again any time — or press your helper key." 2>/dev/null || true
 fi
 export PATH="$HOME/.local/bin:$PATH"
-exec omarchy-help
+exec nixi

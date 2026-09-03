@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.respira-crece-lidera.archy",
-  "name": "Archy",
+  "id": "io.github.olafkfreund.nixi",
+  "name": "Nixi",
   "version": "0.9.7",
-  "author": "Luke Warren Wills (@lukemallorca on Instagram)",
+  "author": "Olaf K. Freund (fork) — original Archy by Luke Warren Wills",
   "license": "MIT",
-  "description": "Archy, your Omarchy guide \u2014 a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the bar icon to summon.",
+  "description": "Nixi, your nixarchy guide — a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the snowflake to summon.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Archy",
-    "description": "Your Omarchy guide \u2014 tour, lessons, and answers",
+    "displayName": "Nixi",
+    "description": "Your nixarchy guide — tour, lessons, and answers",
     "category": "System",
     "allowMultiple": false
   }
