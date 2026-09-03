@@ -240,6 +240,20 @@ jobs:
             | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "features" in d, d; print("/setup ok")'
           curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/learn \
             | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total"] > 0; print("/learn ok:", d["total"], "stops")'
+          # Voice is NOT configured on a runner, and that path has to be the
+          # honest one: the widget hides the button and every voice route
+          # explains the missing piece instead of raising a 500. This is the
+          # only part of voice CI can reach -- there is no microphone here.
+          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/voice \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is False, d; assert "whisper-cli" in d["reason"], d; print("/voice names what is missing")'
+          for route in /listen/start /listen/stop; do
+            curl -fsS -X POST -H "X-Nixi-Token: $tok" "http://127.0.0.1:8642$route" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("error"), d; print("'"$route"' degrades cleanly")'
+          done
+          # ...and they are still behind the token like every other POST.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8642/listen/start)
+          test "$code" = 403 || { echo "unauthenticated /listen/start returned $code"; exit 1; }
+
           curl -fsS http://127.0.0.1:8642/ > /tmp/ui.html
           python3 - <<'PY'
           h = open("/tmp/ui.html").read()
