@@ -207,12 +207,20 @@ window.fetch = async (url, opts) => {
   opts = opts || {};
   opts.headers = Object.assign({ 'X-Nixi-Token': TOKEN }, opts.headers || {});
   const r = await _nativeFetch(url, opts);
-  if (r.status === 403 && !_reloadedForToken) {
-    _reloadedForToken = true;
-    try { sessionStorage.setItem('nixi-retoken', '1'); } catch (e) {}
-    location.reload();
-  } else if (r.ok && _reloadedForToken) {
-    _reloadedForToken = false;              // recovered; allow a future retry
+  if (r.status === 403) {
+    // Throw rather than return: a 403 body is valid JSON, so a caller that
+    // does r.json() would happily render "missing capability token" at the
+    // user instead of taking its error path.
+    if (!_reloadedForToken) {
+      _reloadedForToken = true;
+      try { sessionStorage.setItem('nixi-retoken', '1'); } catch (e) {}
+      location.reload();
+      throw new Error('nixi: stale session token, reloading');
+    }
+    throw new Error('nixi: forbidden');   // survived a reload: a real refusal
+  }
+  if (r.ok && _reloadedForToken) {
+    _reloadedForToken = false;            // recovered; allow a future retry
     try { sessionStorage.removeItem('nixi-retoken'); } catch (e) {}
   }
   return r;
