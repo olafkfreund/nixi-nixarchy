@@ -42,7 +42,8 @@ Then in your **Home Manager** configuration:
 appears in your top bar, the server starts with your session, and the manual
 is fetched in the background.
 
-Try it without installing anything:
+Try it without installing anything — this runs the widget straight from the
+store, using the copy of the assets inside the package:
 
 ```
 nix run github:olafkfreund/nixi-nixarchy
@@ -74,6 +75,28 @@ services.nixi.menuEntry = {
   extraEntries.notes = { icon = "N"; label = "Notes"; action = "obsidian"; };
 };
 ```
+
+### The Omarchy plugin manager
+
+This works on nixarchy too, and needs no rebuild — plugins live in
+`~/.config/omarchy/plugins/`, which is ordinary mutable config:
+
+```
+omarchy plugin add https://github.com/olafkfreund/nixi-nixarchy.git --enable
+```
+
+The snowflake appears in your bar; the first click installs the core (widget,
+server service, menu entry) and nothing else. The optional extras are then
+each enabled by a separate decision inside the widget.
+
+It is the quickest way in and the right one if you already manage your other
+bar widgets this way. The trade is that it is imperative: it writes into
+`~/.local/bin` and `~/.config`, so it is not captured by your flake and will
+not reproduce on another machine. Use the Home Manager module above if you
+want that.
+
+`omarchy plugin update` / `omarchy plugin remove io.github.olafkfreund.nixi`
+manage it afterwards.
 
 ### Anywhere else — the imperative installer
 

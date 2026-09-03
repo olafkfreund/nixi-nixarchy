@@ -195,10 +195,27 @@ document.addEventListener('click', (e) => {
 // no other origin or process without the token can drive privileged routes.
 const TOKEN = '__TOKEN__';
 const _nativeFetch = window.fetch.bind(window);
-window.fetch = (url, opts) => {
+// The server mints a fresh session token every time it starts, so any restart
+// (a rebuild, a re-login, systemd's Restart=on-failure) leaves an already-open
+// widget holding a dead one and every request 403s. That is recoverable
+// without bothering the user: GET / is public and stamps in the current token,
+// so reload once. Only once -- a 403 that survives a reload is a real refusal
+// (a different user's session), and looping on it would be worse than saying so.
+let _reloadedForToken = false;
+try { _reloadedForToken = sessionStorage.getItem('nixi-retoken') === '1'; } catch (e) {}
+window.fetch = async (url, opts) => {
   opts = opts || {};
   opts.headers = Object.assign({ 'X-Nixi-Token': TOKEN }, opts.headers || {});
-  return _nativeFetch(url, opts);
+  const r = await _nativeFetch(url, opts);
+  if (r.status === 403 && !_reloadedForToken) {
+    _reloadedForToken = true;
+    try { sessionStorage.setItem('nixi-retoken', '1'); } catch (e) {}
+    location.reload();
+  } else if (r.ok && _reloadedForToken) {
+    _reloadedForToken = false;              // recovered; allow a future retry
+    try { sessionStorage.removeItem('nixi-retoken'); } catch (e) {}
+  }
+  return r;
 };
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
       input = document.getElementById('q');
@@ -302,7 +319,11 @@ async function ask(q, act, plan) {
       });
       t.lastChild.appendChild(fix);
     }
-  } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
+  } catch (err) {
+    t.lastChild.textContent = _reloadedForToken
+      ? 'This widget belongs to another session — close it and open a fresh one.'
+      : 'Lost the helper server — close and reopen me.';
+  }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 }
 // --- Nixi's mission controls: live tour + learning path -------------

@@ -17,6 +17,11 @@ import time
 
 PORT = int(os.environ.get("NIXI_PORT", "8642"))
 DIR = os.path.expanduser(os.environ.get("NIXI_DIR", "~/.config/nixi"))
+# Served content may also live inside the package (a `nix run`, where nothing
+# was ever placed in ~/.config). A real install takes precedence.
+_FALLBACK = os.environ.get("NIXI_FALLBACK_DIR")
+if _FALLBACK and not os.path.isfile(os.path.join(DIR, "ui.html")):
+    DIR = _FALLBACK
 # Mutable state (fetched manual, learned facts) lives OUTSIDE the config dir
 # so dotfile-manager redeploys can never wipe it.
 DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))

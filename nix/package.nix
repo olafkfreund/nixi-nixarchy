@@ -37,11 +37,21 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       substituteInPlace $out/bin/$p \
         --replace-fail '#!/usr/bin/env python3' '#!${python3}/bin/python3'
     done
+    # nixi-server is also started directly (the systemd unit, a bare `nix run`
+    # of it), so it must find the bundled assets on its own rather than only
+    # when the launcher exported them.
+    wrapProgram $out/bin/nixi-server \
+      --set-default NIXI_FALLBACK_DIR $out/share/nixi
+
     install -Dm755 bin/nixi $out/bin/nixi
     substituteInPlace $out/bin/nixi \
       --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
+    # $out/bin must be on PATH so `nix run` can reach nixi-server, and the
+    # bundled assets must be findable when nothing was installed into
+    # ~/.config/nixi. --set-default keeps a real install in charge.
     wrapProgram $out/bin/nixi \
-      --prefix PATH : ${lib.makeBinPath [ curl coreutils python3 ]}
+      --prefix PATH : ${lib.makeBinPath [ curl coreutils python3 ]}:$out/bin \
+      --set-default NIXI_FALLBACK_DIR $out/share/nixi
 
     # Static assets the server reads at runtime (the HM module links these
     # into ~/.config/nixi; bounded_read follows symlinks by design).
@@ -78,12 +88,20 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # Every Python program must at least import-compile with the pinned
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
-      $out/bin/nixi-server $out/bin/nixi-watch $out/bin/nixi-update-manual
+      $out/bin/.nixi-server-wrapped $out/bin/nixi-watch $out/bin/nixi-update-manual
     # py_compile drops __pycache__ beside the source; it must not ship.
     rm -rf $out/bin/__pycache__
     ${bash}/bin/bash -n $out/bin/.nixi-wrapped
+    grep -q "NIXI_FALLBACK_DIR" $out/bin/nixi-server \
+      || { echo "nixi-server cannot find its assets when started directly"; exit 1; }
     test -s $out/share/nixi/ui.html
     test -s $out/share/nixi/vendor/purify.min.js
+    # `nix run` works only if the wrapper can find its own server and its own
+    # assets -- neither is on PATH or in ~/.config for a bare run.
+    grep -q "$out/bin" $out/bin/nixi \
+      || { echo "\$out/bin is not on the wrapped PATH; nix run cannot find nixi-server"; exit 1; }
+    grep -q "NIXI_FALLBACK_DIR" $out/bin/nixi \
+      || { echo "wrapper does not point at the bundled assets"; exit 1; }
   '';
 
   meta = {
