@@ -279,6 +279,27 @@ def test_mic_button_describes_what_it_does():
     print("  ok  mic button label matches its behaviour")
 
 
+def test_voice_deps_reach_every_entry_point():
+    """`nixi` starts its own server whenever the health check fails, and that
+    copy inherits the user's interactive PATH. Putting whisper only on the
+    systemd unit gives voice that works from the service and silently does
+    not work from the launcher -- the same two-paths drift that made the
+    service exit 127."""
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    assert "makeWrapper" in mod and "nixi-server" in mod, \
+        "voice dependencies are not wrapped onto the programs"
+    wrapper = mod.split("nixiPkg =")[1].split("\n  # Units run")[0]
+    for need in ("voice.package", "pipewire"):
+        assert need in wrapper, "wrapper does not provide " + need
+    # Both binaries, or the launcher-spawned server is left without them.
+    assert "for p in nixi nixi-server" in wrapper, \
+        "only one binary is wrapped; the other entry point loses voice"
+    # The wrapped package, not the bare one, must be what gets installed.
+    assert "home.packages = [ nixiPkg ]" in mod, \
+        "the unwrapped package is installed, so nothing carries the deps"
+    print("  ok  voice deps reach both the service and the launcher")
+
+
 def test_silence_never_reaches_the_model():
     """Whisper does not return nothing when it hears nothing -- it INVENTS.
     Digital silence decoded as " You"; a quiet room produced "Or, if they
@@ -337,6 +358,7 @@ if __name__ == "__main__":
                test_transcript_is_never_auto_sent, test_whisper_flags_exist,
                test_both_install_paths_know_about_voice,
                test_mic_button_describes_what_it_does,
+               test_voice_deps_reach_every_entry_point,
                test_silence_never_reaches_the_model,
                test_recorder_is_always_released,
                test_voice_scratch_stays_under_home):

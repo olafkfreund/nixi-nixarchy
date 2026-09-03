@@ -141,6 +141,37 @@ It leads with the things NixOS gives you that Arch cannot: generations and
 rollback when an update goes wrong, and `nixarchy dev init` for per-project
 toolchains.
 
+### What voice needs
+
+Nothing, if you use the flake. `voice.enable = true` pulls in every piece and
+wraps the programs so they carry it:
+
+| | Where it comes from |
+|---|---|
+| `whisper-cli` | `pkgs.whisper-cpp`, added to your closure |
+| `pw-record` | `pkgs.pipewire` |
+| the speech model | pinned `fetchurl` (148 MB), arrives with the rebuild |
+
+Nothing is installed onto your interactive `PATH` and nothing is downloaded on
+first use. The binaries are wrapped, so voice behaves the same whether systemd
+started the server or `nixi` did.
+
+**Installing with the plugin manager instead?** Then Nix is not managing this,
+and you have to provide the same three things yourself:
+
+```nix
+# in your NixOS or Home Manager config
+environment.systemPackages = [ pkgs.whisper-cpp ];   # pipewire is already there
+```
+```bash
+mkdir -p ~/.local/share/nixi/models
+whisper-cpp-download-ggml-model base.en ~/.local/share/nixi/models
+```
+
+Either way, if something is missing the mic button does not appear and
+`curl -H "X-Nixi-Token: $(cat ~/.local/share/nixi/.token)" \
+localhost:8642/voice` names exactly which piece.
+
 ### Talking to it
 
 Voice input is off by default. Turn it on and a 🎤 appears beside the input:

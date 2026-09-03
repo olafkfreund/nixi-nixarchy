@@ -14,6 +14,37 @@ let
   pluginId = "io.github.olafkfreund.nixi";
   share = "${cfg.package}/share/nixi";
 
+  # Voice dependencies belong to the PROGRAMS, not to one systemd unit.
+  # `nixi` starts its own server whenever the health check fails, and that
+  # copy inherits the user's interactive PATH -- so putting whisper only on
+  # the unit gives voice that works from the service and silently does not
+  # work from the launcher. Wrapping both binaries makes every entry point
+  # carry what it needs, and pulls the packages into the user's closure so
+  # enabling the option is genuinely all that is required.
+  #
+  # --set-default, not --set: NIXI_* from the environment still wins, so the
+  # options stay overridable for testing without rebuilding.
+  nixiPkg =
+    if !cfg.voice.enable then cfg.package
+    else
+      pkgs.symlinkJoin {
+        name = "${cfg.package.name}-voice";
+        paths = [ cfg.package ];
+        nativeBuildInputs = [ pkgs.makeWrapper ];
+        postBuild = ''
+          for p in nixi nixi-server; do
+            rm -f "$out/bin/$p"
+            makeWrapper ${cfg.package}/bin/"$p" "$out/bin/$p" \
+              --prefix PATH : ${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]} \
+              --set-default NIXI_WHISPER_MODEL ${cfg.voice.model} \
+              --set-default NIXI_WHISPER_LANG ${cfg.voice.language} \
+              --set-default NIXI_VOICE_SILENCE_RMS ${toString cfg.voice.silenceThreshold} \
+              ${lib.optionalString (cfg.voice.prompt != "")
+                "--set-default NIXI_WHISPER_PROMPT ${lib.escapeShellArg cfg.voice.prompt}"}
+          done
+        '';
+      };
+
   # Units run with a bare PATH; give them the user profile and the system
   # profile so `omarchy`, `nixarchy` and the chosen agent binary resolve.
   unitPath = lib.concatStringsSep ":" [
@@ -216,7 +247,7 @@ in
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
     {
-      home.packages = [ cfg.package ];
+      home.packages = [ nixiPkg ];
 
       # Static assets, linked read-only out of the store. The server reads
       # these with bounded_read, which follows symlinks on purpose.
@@ -232,7 +263,7 @@ in
 
       systemd.user.services.nixi = mkService {
         description = "Nixi widget server (offline manual answers + agent relay)";
-        exec = "${cfg.package}/bin/nixi-server";
+        exec = "${nixiPkg}/bin/nixi-server";
       };
 
       # The mutable state directory is created up front with the private mode
@@ -245,18 +276,14 @@ in
     }
 
     (lib.mkIf cfg.voice.enable {
-      # whisper-cli and pw-record go on the SERVICE's PATH rather than into
-      # home.packages: recording and transcription are the server's job, and
-      # nobody asked for these on their interactive PATH. The unit PATH is
-      # prefixed (not replaced) so the agent binary still resolves.
-      systemd.user.services.nixi.Service.Environment = lib.mkForce ([
+      # Only PATH is set here, and only so the unit can still find the user's
+      # agent binary; every voice-specific value lives in the wrapper above,
+      # in ONE place. Duplicating it across the module and the unit file is
+      # exactly how these two install paths drifted apart before.
+      systemd.user.services.nixi.Service.Environment = lib.mkForce [
         "PATH=${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]}:${unitPath}"
         "NIXI_PORT=${toString cfg.port}"
-        "NIXI_WHISPER_MODEL=${cfg.voice.model}"
-        "NIXI_WHISPER_LANG=${cfg.voice.language}"
-        "NIXI_VOICE_SILENCE_RMS=${toString cfg.voice.silenceThreshold}"
-      ] ++ lib.optional (cfg.voice.prompt != "")
-        "NIXI_WHISPER_PROMPT=${cfg.voice.prompt}");
+      ];
     })
 
     (lib.mkIf cfg.barWidget.enable {
@@ -290,7 +317,7 @@ in
     (lib.mkIf cfg.watcher.enable {
       systemd.user.services.nixi-watch = mkService {
         description = "Nixi tip watcher (at most one suggestion per day)";
-        exec = "${cfg.package}/bin/nixi-watch";
+        exec = "${nixiPkg}/bin/nixi-watch";
       };
     })
 
@@ -300,7 +327,7 @@ in
         Service = {
           Type = "oneshot";
           Environment = [ "PATH=${unitPath}" ];
-          ExecStart = "${cfg.package}/bin/nixi-update-manual";
+          ExecStart = "${nixiPkg}/bin/nixi-update-manual";
         };
       };
       systemd.user.timers.nixi-manual = {
