@@ -131,6 +131,21 @@ def test_no_runtime_rename():
     print("  ok  omarchy runtime integration intact, old branding gone")
 
 
+def test_port_is_configurable():
+    """services.nixi.port moves the server, so every program that talks to it
+    must read NIXI_PORT. The watcher used to hard-code 8642, which made the
+    option silently wrong."""
+    import re
+    for prog in ("bin/nixi-server", "bin/nixi-watch", "bin/nixi"):
+        text = open(os.path.join(ROOT, prog)).read()
+        assert "NIXI_PORT" in text, prog + " ignores NIXI_PORT"
+        # 8642 may appear only as the default beside NIXI_PORT, never bare.
+        for line in text.splitlines():
+            if "8642" in line:
+                assert "NIXI_PORT" in line, "%s hard-codes 8642: %s" % (prog, line.strip())
+    print("  ok  every program honours NIXI_PORT")
+
+
 def test_faq_schema():
     """ui.html renders e.cat / e.q / e.a as strings."""
     faq = json.load(open(os.path.join(ROOT, "share/faq.json")))
@@ -145,6 +160,6 @@ def test_faq_schema():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_learned_broker,
-               test_no_runtime_rename, test_faq_schema):
+               test_no_runtime_rename, test_port_is_configurable, test_faq_schema):
         fn()
     print("\nall checks passed")

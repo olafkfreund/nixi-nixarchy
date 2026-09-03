@@ -173,21 +173,40 @@ def write_rel(dfd, name, data, mode=0o644):
         os.close(fd)
 
 
+def _tree(api, sha, recursive=False):
+    """One tree listing, refusing a truncated one. GitHub truncates large
+    trees and says so; a silently short list would look like a manual that
+    lost pages, so treat it as fatal rather than publishing a partial set."""
+    t = json.loads(get(api + "/git/trees/" + sha + ("?recursive=1" if recursive else "")))
+    if t.get("truncated"):
+        raise SystemExit("tree listing truncated by the API — not updated")
+    return t["tree"]
+
+
 def _tree_at(api, path):
     """Resolve the default branch to an immutable commit, then list the blobs
-    under `path` at exactly that commit. Returns (commit, {relpath: blob_sha})."""
+    under `path` at exactly that commit.
+
+    The subdirectory is walked one component at a time and only that subtree
+    is listed recursively -- listing the whole repository instead would drag
+    in every unrelated blob (and the response is capped, so a big repo would
+    fail or truncate). Returns (commit, {repo_relative_path: blob_sha})."""
     branch = json.loads(get(api))["default_branch"]
     head = json.loads(get(api + "/commits/" + branch))
     commit = head["sha"]
-    tree = json.loads(get(api + "/git/trees/" + head["commit"]["tree"]["sha"]
-                          + "?recursive=1"))["tree"]
+
+    sha = head["commit"]["tree"]["sha"]
+    for comp in path.split("/"):
+        entry = next((e for e in _tree(api, sha)
+                      if e["path"] == comp and e["type"] == "tree"), None)
+        if entry is None:
+            raise SystemExit("no %s directory at pinned commit %s" % (path, commit[:12]))
+        sha = entry["sha"]
+
     want = {}
-    for e in tree:
-        if e["type"] != "blob" or e.get("size", 0) >= 2_000_000:
-            continue
-        rel = e["path"]
-        if rel.startswith(path + "/"):
-            want[rel] = e["sha"]
+    for e in _tree(api, sha, recursive=True):
+        if e["type"] == "blob" and e.get("size", 0) < 2_000_000:
+            want[path + "/" + e["path"]] = e["sha"]
     return commit, want
 
 

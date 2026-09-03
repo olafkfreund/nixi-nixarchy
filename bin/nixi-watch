@@ -17,6 +17,8 @@ import sys
 import time
 
 DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
+# Must track the server: services.nixi.port (and NIXI_PORT) may move it.
+PORT = int(os.environ.get("NIXI_PORT", "8642"))
 STATE = os.path.join(DATA, "tips.json")
 
 # Thresholds (env-overridable so tests can force them low).
@@ -267,7 +269,7 @@ class Day:
                     except (OSError, ValueError):
                         pass
                     urllib.request.urlopen(urllib.request.Request(
-                        "http://127.0.0.1:8642/minimize", method="POST",
+                        "http://127.0.0.1:%d/minimize" % PORT, method="POST",
                         headers={"X-Nixi-Token": tok}), timeout=5)
                 except Exception:
                     pass
