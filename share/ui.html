@@ -1,9 +1,16 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Archy — Omarchy Helper</title>
+<!-- Defence in depth on the one surface that renders model output as HTML.
+     DOMPurify already sanitises it and the fallback renderer escapes first;
+     this makes sure that even a sanitiser bypass cannot reach the network:
+     no external origin may be contacted, framed, or loaded from. Inline
+     script/style are allowed because the page is a single self-contained
+     file served from the loopback server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<title>Nixi — your nixarchy guide</title>
 <base target="_blank">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-1.5 -3 14 14'><g fill='%23ffb454'><rect x='2' y='0' width='1' height='1'/><rect x='8' y='0' width='1' height='1'/><rect x='3' y='1' width='1' height='1'/><rect x='7' y='1' width='1' height='1'/><rect x='2' y='2' width='1' height='1'/><rect x='3' y='2' width='1' height='1'/><rect x='4' y='2' width='1' height='1'/><rect x='5' y='2' width='1' height='1'/><rect x='6' y='2' width='1' height='1'/><rect x='7' y='2' width='1' height='1'/><rect x='8' y='2' width='1' height='1'/><rect x='1' y='3' width='1' height='1'/><rect x='2' y='3' width='1' height='1'/><rect x='4' y='3' width='1' height='1'/><rect x='5' y='3' width='1' height='1'/><rect x='6' y='3' width='1' height='1'/><rect x='8' y='3' width='1' height='1'/><rect x='9' y='3' width='1' height='1'/><rect x='0' y='4' width='1' height='1'/><rect x='1' y='4' width='1' height='1'/><rect x='2' y='4' width='1' height='1'/><rect x='3' y='4' width='1' height='1'/><rect x='4' y='4' width='1' height='1'/><rect x='5' y='4' width='1' height='1'/><rect x='6' y='4' width='1' height='1'/><rect x='7' y='4' width='1' height='1'/><rect x='8' y='4' width='1' height='1'/><rect x='9' y='4' width='1' height='1'/><rect x='10' y='4' width='1' height='1'/><rect x='0' y='5' width='1' height='1'/><rect x='2' y='5' width='1' height='1'/><rect x='3' y='5' width='1' height='1'/><rect x='4' y='5' width='1' height='1'/><rect x='5' y='5' width='1' height='1'/><rect x='6' y='5' width='1' height='1'/><rect x='7' y='5' width='1' height='1'/><rect x='8' y='5' width='1' height='1'/><rect x='10' y='5' width='1' height='1'/><rect x='0' y='6' width='1' height='1'/><rect x='2' y='6' width='1' height='1'/><rect x='8' y='6' width='1' height='1'/><rect x='10' y='6' width='1' height='1'/><rect x='3' y='7' width='1' height='1'/><rect x='4' y='7' width='1' height='1'/><rect x='6' y='7' width='1' height='1'/><rect x='7' y='7' width='1' height='1'/></g></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 13 13'><g fill='%23ffb454'><rect x='5' y='0' width='1' height='1'/><rect x='0' y='1' width='1' height='1'/><rect x='5' y='1' width='1' height='1'/><rect x='10' y='1' width='1' height='1'/><rect x='1' y='2' width='1' height='1'/><rect x='5' y='2' width='1' height='1'/><rect x='9' y='2' width='1' height='1'/><rect x='2' y='3' width='1' height='1'/><rect x='5' y='3' width='1' height='1'/><rect x='8' y='3' width='1' height='1'/><rect x='3' y='4' width='1' height='1'/><rect x='5' y='4' width='1' height='1'/><rect x='7' y='4' width='1' height='1'/><rect x='0' y='5' width='1' height='1'/><rect x='1' y='5' width='1' height='1'/><rect x='2' y='5' width='1' height='1'/><rect x='3' y='5' width='1' height='1'/><rect x='4' y='5' width='1' height='1'/><rect x='5' y='5' width='1' height='1'/><rect x='6' y='5' width='1' height='1'/><rect x='7' y='5' width='1' height='1'/><rect x='8' y='5' width='1' height='1'/><rect x='9' y='5' width='1' height='1'/><rect x='10' y='5' width='1' height='1'/><rect x='3' y='6' width='1' height='1'/><rect x='5' y='6' width='1' height='1'/><rect x='7' y='6' width='1' height='1'/><rect x='2' y='7' width='1' height='1'/><rect x='5' y='7' width='1' height='1'/><rect x='8' y='7' width='1' height='1'/><rect x='1' y='8' width='1' height='1'/><rect x='5' y='8' width='1' height='1'/><rect x='9' y='8' width='1' height='1'/><rect x='0' y='9' width='1' height='1'/><rect x='5' y='9' width='1' height='1'/><rect x='10' y='9' width='1' height='1'/><rect x='5' y='10' width='1' height='1'/></g></svg>">
 <style>
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
   * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
@@ -83,16 +90,19 @@
 </style></head>
 <body>
 <svg style="display:none"><symbol id="bot" viewBox="0 0 48 48">
-  <rect x="10" y="14" width="28" height="22" rx="7" style="fill:var(--bot);stroke:var(--ember)" stroke-width="2.2"/>
-  <circle cx="19" cy="25" r="3.2" style="fill:var(--ember)"/><circle cx="29" cy="25" r="3.2" style="fill:var(--ember)"/>
-  <path d="M18 31.5c2 1.8 10 1.8 12 0" style="stroke:var(--ember)" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <line x1="24" y1="14" x2="24" y2="8" style="stroke:var(--ember)" stroke-width="2.2"/><circle cx="24" cy="6.5" r="2.4" style="fill:var(--ember)"/>
-  <line x1="10" y1="24" x2="5" y2="24" style="stroke:var(--ember)" stroke-width="2.2" stroke-linecap="round"/>
-  <line x1="38" y1="24" x2="43" y2="24" style="stroke:var(--ember)" stroke-width="2.2" stroke-linecap="round"/>
+  <g style="stroke:var(--ember)" stroke-width="2" stroke-linecap="round" fill="none">
+    <line x1="24.0" y1="24.0" x2="41.0" y2="24.0"/><line x1="31.6" y1="24.0" x2="35.0" y2="19.7"/><line x1="31.6" y1="24.0" x2="35.0" y2="28.3"/><line x1="36.8" y1="24.0" x2="39.2" y2="20.8"/><line x1="36.8" y1="24.0" x2="39.2" y2="27.2"/>
+    <line x1="24.0" y1="24.0" x2="32.5" y2="38.7"/><line x1="27.8" y1="30.6" x2="33.3" y2="31.4"/><line x1="27.8" y1="30.6" x2="25.8" y2="35.7"/><line x1="30.4" y1="35.0" x2="34.3" y2="35.6"/><line x1="30.4" y1="35.0" x2="28.9" y2="38.8"/>
+    <line x1="24.0" y1="24.0" x2="15.5" y2="38.7"/><line x1="20.2" y1="30.6" x2="22.2" y2="35.7"/><line x1="20.2" y1="30.6" x2="14.7" y2="31.4"/><line x1="17.6" y1="35.0" x2="19.1" y2="38.8"/><line x1="17.6" y1="35.0" x2="13.7" y2="35.6"/>
+    <line x1="24.0" y1="24.0" x2="7.0" y2="24.0"/><line x1="16.4" y1="24.0" x2="13.0" y2="28.3"/><line x1="16.4" y1="24.0" x2="13.0" y2="19.7"/><line x1="11.2" y1="24.0" x2="8.8" y2="27.2"/><line x1="11.2" y1="24.0" x2="8.8" y2="20.8"/>
+    <line x1="24.0" y1="24.0" x2="15.5" y2="9.3"/><line x1="20.2" y1="17.4" x2="14.7" y2="16.6"/><line x1="20.2" y1="17.4" x2="22.2" y2="12.3"/><line x1="17.6" y1="13.0" x2="13.7" y2="12.4"/><line x1="17.6" y1="13.0" x2="19.1" y2="9.2"/>
+    <line x1="24.0" y1="24.0" x2="32.5" y2="9.3"/><line x1="27.8" y1="17.4" x2="25.8" y2="12.3"/><line x1="27.8" y1="17.4" x2="33.3" y2="16.6"/><line x1="30.4" y1="13.0" x2="28.9" y2="9.2"/><line x1="30.4" y1="13.0" x2="34.3" y2="12.4"/>
+  </g>
+  <circle cx="24" cy="24" r="2.6" style="fill:var(--ember)"/>
 </symbol></svg>
 <header>
   <svg class="avatar"><use href="#bot"/></svg>
-  <div style="flex:1"><h1>Archy</h1><p>guide &#183; tutor &#183; mechanic</p></div>
+  <div style="flex:1"><h1>Nixi</h1><p>guide &#183; tutor &#183; mechanic</p></div>
   <button id="gear" title="Trust level — what the 🔧 may do" aria-label="Trust level">&#9881;</button>
   <button id="mini" title="Minimize (bring back with your helper key)" aria-label="Minimize">&#8212;</button>
 </header>
@@ -153,7 +163,7 @@ function renderSetup() {
 }
 function renderIntegrations() {
   const box = document.getElementById('integrations'); box.innerHTML = '';
-  if (!SETUP || !SETUP.available) { box.innerHTML = '<small style="color:var(--muted)">not available in this install</small>'; return; }
+  if (!SETUP || !SETUP.available) { box.innerHTML = '<small style="color:var(--muted)">managed by Nix &mdash; set these in <code>services.nixi</code> in your Home Manager config</small>'; return; }
   SETUP.features.forEach(f => box.appendChild(featRow(f, true)));
 }
 function loadSetup() {
@@ -187,7 +197,7 @@ const TOKEN = '__TOKEN__';
 const _nativeFetch = window.fetch.bind(window);
 window.fetch = (url, opts) => {
   opts = opts || {};
-  opts.headers = Object.assign({ 'X-Archy-Token': TOKEN }, opts.headers || {});
+  opts.headers = Object.assign({ 'X-Nixi-Token': TOKEN }, opts.headers || {});
   return _nativeFetch(url, opts);
 };
 const chat = document.getElementById('chat'), form = document.getElementById('f'),
@@ -204,7 +214,7 @@ function md(text) {
 }
 const PATHRE = /(?:~|\$HOME|\/(?:etc|usr|opt|var|srv|tmp|home))\/[A-Za-z0-9._+@\/-]*[A-Za-z0-9_+-]/g;
 function linkifyPaths(root) {
-  // File paths in Archy's answers become click-to-open links (POST /open).
+  // File paths in Nixi's answers become click-to-open links (POST /open).
   const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const hits = [];
   while (w.nextNode()) {
@@ -276,10 +286,10 @@ async function ask(q, act, plan) {
     t.lastChild.innerHTML = md(j.a || j.error || 'Hmm, something went wrong.'), linkifyPaths(t.lastChild);
     const badge = document.createElement('span'); badge.className = 'src';
     if (j.src === 'act') {
-      badge.textContent = '🔧 done by Archy';
+      badge.textContent = '🔧 done by Nixi';
       t.lastChild.appendChild(badge);
     } else if (j.src === 'ai') {
-      badge.textContent = '🤖 AI';
+      badge.textContent = '❄ AI';
       t.lastChild.appendChild(badge);
       // Offer to apply it: consent = this click, scoped to user-level config.
       const fix = document.createElement('button');
@@ -295,7 +305,7 @@ async function ask(q, act, plan) {
   } catch (err) { t.lastChild.textContent = 'Lost the helper server — close and reopen me.'; }
   input.disabled = false; input.focus(); chat.scrollTop = chat.scrollHeight;
 }
-// --- Archy's mission controls: live tour + learning path -------------
+// --- Nixi's mission controls: live tour + learning path -------------
 const actions = document.createElement('div'); actions.className = 'actions';
 const tourBtn = document.createElement('button'); tourBtn.className = 'act primary'; tourBtn.textContent = '🚀 Live tour';
 const learnBtn = document.createElement('button'); learnBtn.className = 'act'; learnBtn.textContent = '🎓 Teach me something new';
@@ -329,7 +339,7 @@ fetch('/tour/state').then(r => r.json()).then(t => {
   if (t.active && !tourTimer) {
     TOUR_STEPS = t.steps || [];
     tourStep = t.step;
-    add('bot', "Let me show you what's great about Omarchy — hands-on. I can see what you press, so I'll know when each step is done. " + (TOUR_STEPS[tourStep] || ''));
+    add('bot', "Let me show you what's great about nixarchy — hands-on. I can see what you press, so I'll know when each step is done. " + (TOUR_STEPS[tourStep] || ''));
     tourTimer = setInterval(pollTour, 700);
   }
 }).catch(() => {});
@@ -339,7 +349,7 @@ tourBtn.addEventListener('click', async () => {
     const j = await (await fetch('/tour/start', { method: 'POST' })).json();
     TOUR_STEPS = j.steps || [];
     tourStep = 0;
-    add('bot', "Let me show you what's great about Omarchy — hands-on. I can see what you press, so I'll know when each step is done. " + TOUR_STEPS[0]);
+    add('bot', "Let me show you what's great about nixarchy — hands-on. I can see what you press, so I'll know when each step is done. " + TOUR_STEPS[0]);
     tourTimer = setInterval(pollTour, 700);
   } catch (e) { add('bot', 'Could not start the tour — is the helper service running?'); }
 });

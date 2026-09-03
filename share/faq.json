@@ -2,7 +2,7 @@
  {
   "cat": "Start here",
   "q": "Set up your AI agent",
-  "a": "Omarchy is AI-first: pick your coding agent once and everything AI (this helper's chat, crash diagnosis, SUPER+A) uses it. Open the menu with SUPER+SPACE, go to Setup → Default agent, and choose (Claude Code, Codex, Gemini…). Or in a terminal: omarchy default agent claude. Then sign in to the agent once and you're set."
+  "a": "Nixarchy is AI-first: pick your coding agent once and everything AI (this helper's chat, crash diagnosis, SUPER+A) uses it. Open the menu with SUPER+SPACE, go to Setup → Default agent, and choose (Claude Code, Codex, Gemini…). Or in a terminal: omarchy default agent claude. Then sign in to the agent once and you're set."
  },
  {
   "cat": "Start here",
@@ -27,12 +27,27 @@
  {
   "cat": "Apps",
   "q": "Install an app",
-  "a": "SUPER+SPACE → Install → Package for official software, or Install → AUR for community packages (huge selection, unvetted — like npm). Type the name, it fuzzy-finds. Remove later via SUPER+SPACE → Remove → Package, which also cleans config and dependencies."
+  "a": "This is the one thing NixOS really does differently. SUPER+SPACE → Install picks the app, but it does NOT install it — it writes your choice into ~/.config/nixarchy/apps.nix and stops. Nothing changes until you run: nixarchy apply. That one command rebuilds the system and makes every queued choice real at once. From a terminal you can skip the menu: nixarchy search to browse everything, or nixarchy pkg add <name>, then nixarchy apply."
+ },
+ {
+  "cat": "Apps",
+  "q": "Why did my install not happen?",
+  "a": "Because nothing on NixOS is installed until you rebuild. The Install menu queues your choice in ~/.config/nixarchy/apps.nix; nixarchy apply is what applies it. That is the trade: you can see your whole machine in one file, copy it to another laptop, and undo any change. Note that installing with pacman, yay or a downloaded binary will not work here — the package has to go in the file."
+ },
+ {
+  "cat": "Apps",
+  "q": "Remove an app",
+  "a": "SUPER+SPACE → Remove → Package deselects it, or from a terminal: nixarchy app disable <id> (nixarchy app remove picks interactively). As with installing, it only edits the file — run nixarchy apply to make it real. Nothing is left behind afterwards: the old packages are garbage-collected, not orphaned."
  },
  {
   "cat": "Apps",
   "q": "Turn a website into an app",
-  "a": "SUPER+SPACE → Install → Web App. Give it a name, the URL, and an icon — Omarchy wraps the site as a real app with its own window and launcher entry. Great for Gmail, WhatsApp Web, YouTube, dashboards. This is how several of the preinstalled 'apps' work."
+  "a": "SUPER+SPACE → Install → Web App. Give it a name, the URL, and an icon — it wraps the site as a real app with its own window and launcher entry. Great for Gmail, WhatsApp Web, YouTube, dashboards. This is how several of the preinstalled 'apps' work, and it needs no rebuild."
+ },
+ {
+  "cat": "Apps",
+  "q": "A toolchain just for one project",
+  "a": "Don't install compilers system-wide — give each project its own. In the project folder run: nixarchy dev init <preset> (run it with no argument to list presets: node, python, go, rust…). It writes a devenv.nix, and from then on the toolchain appears when you cd into that folder and disappears when you leave. Two projects can use two different versions of the same language without clashing."
  },
  {
   "cat": "Windows & workspaces",
@@ -57,17 +72,17 @@
  {
   "cat": "Look & feel",
   "q": "Change the theme",
-  "a": "SUPER+SPACE → Style → Theme. One choice restyles everything at once — colors, bar, terminal, lock screen, wallpaper. Omarchy ships many themes and you can install more from git URLs (Style → Theme → Install). Backgrounds cycle with SUPER+CTRL+SPACE."
+  "a": "SUPER+SPACE → Style → Theme. One choice restyles everything at once — colors, bar, terminal, lock screen, wallpaper. Many themes ship with the system and you can install more from git URLs (Style → Theme → Install). Backgrounds cycle with SUPER+CTRL+SPACE. Themes are the same as on Omarchy and need no rebuild."
  },
  {
   "cat": "Look & feel",
   "q": "Adjust display and brightness",
-  "a": "Brightness usually lives on your keyboard's function keys. Display settings (resolution, scaling, arrangement) are in SUPER+SPACE → Setup → Monitors — it edits the config for you. Night-light and idle/lock timing are under Setup too."
+  "a": "Brightness usually lives on your keyboard's function keys. Display settings (resolution, scaling, arrangement) are in SUPER+SPACE → Setup → Monitors — it edits ~/.config/hypr/monitors.lua for you, which is yours to keep and survives every rebuild. Night-light and idle/lock timing are under Setup too."
  },
  {
   "cat": "System",
   "q": "Connect Wi-Fi or Bluetooth",
-  "a": "SUPER+SPACE → Setup → Wi-Fi opens the network picker; Setup → Bluetooth pairs devices. Both also sit as icons in the top bar — click them for the same panels."
+  "a": "SUPER+SPACE → Setup → Wi-Fi opens the network picker; Setup → Bluetooth pairs devices. Both also sit as icons in the top bar — click them for the same panels. Neither needs a rebuild."
  },
  {
   "cat": "System",
@@ -77,7 +92,12 @@
  {
   "cat": "System",
   "q": "Update the system",
-  "a": "SUPER+SPACE → Update. It updates Omarchy itself plus all packages in one go. Omarchy versions arrive as regular package updates — no reinstalls. If something looks odd after an update, the same menu has Update → Config restore options."
+  "a": "SUPER+SPACE → Update, or run: omarchy update (nixarchy update is the same command). On NixOS this updates your flake inputs and rebuilds the whole system as one atomic step — it either fully succeeds or changes nothing. The desktop session you're sitting in isn't disturbed; a new kernel or driver only takes effect after a reboot."
+ },
+ {
+  "cat": "System",
+  "q": "Undo a bad update",
+  "a": "You can always go back — this is NixOS's best feature. Every rebuild keeps the previous system as a 'generation', and the boot menu lists them: reboot and pick the one before the problem. To step back without rebooting: sudo nixos-rebuild switch --rollback. Nothing is lost, because the old system was never deleted in the first place."
  },
  {
   "cat": "System",
@@ -87,6 +107,6 @@
  {
   "cat": "System",
   "q": "Something crashed — now what?",
-  "a": "If a program crashes, Omarchy notices and shows a notification offering an AI diagnosis — click it and your default agent investigates the crash for you. Nothing set up? It only appears once you've chosen your default agent (see 'Set up your AI agent')."
+  "a": "If a program crashes, you get a notification offering an AI diagnosis — click it and your default agent investigates the crash for you. Nothing set up? It only appears once you've chosen your default agent (see 'Set up your AI agent')."
  }
 ]

@@ -1,5 +1,5 @@
 [Unit]
-Description=Weekly refresh of Archy's Omarchy manual copy
+Description=Weekly refresh of Nixi's nixarchy + Omarchy manual copy
 
 [Timer]
 OnCalendar=weekly

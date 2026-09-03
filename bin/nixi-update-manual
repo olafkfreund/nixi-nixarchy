@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-# omarchy:summary=Refresh the Omarchy Helper's local copy of the official manual
-"""Fetch the official Omarchy manual into the helper's private state dir so
-answers can cite the real manual offline.
+# omarchy:summary=Refresh Nixi's local copy of the nixarchy + Omarchy manuals
+"""Fetch the manual into Nixi's private state dir so answers can cite the real
+manual offline.
+
+Two sources, because that is how the nixarchy manual is written: of Omarchy's
+51 pages, 38 are word-for-word true on NixOS and 13 are rewritten. So the
+nixarchy manual is fetched FIRST and wins every filename collision; the Omarchy
+site then fills only the gaps it leaves. A page never gets overwritten (the
+O_EXCL create is the guarantee) -- the second source simply skips what the
+first already published.
 
 Integrity: everything is fetched at ONE pinned commit — the default branch
 head SHA is resolved first, the manual tree is listed at that exact commit,
@@ -20,18 +27,21 @@ import re
 import secrets
 import shutil
 import stat
-import sys
 import tarfile
-import tempfile
 import urllib.request
 from html.parser import HTMLParser
 
 DATA = os.path.abspath(os.path.expanduser(
-    os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help")))
-# The official manual moved from basecamp/omarchy to the site repo
-# (observed 2026-09-02); the branch is resolved, never assumed.
-REPO = "omacom/omarchy-site"
-API = "https://api.github.com/repos/" + REPO
+    os.environ.get("NIXI_DATA", "~/.local/share/nixi")))
+UA = "nixi-manual-updater"
+# Ordered: the first source to publish a slug owns it. nixarchy is
+# authoritative on NixOS, so it comes first and Omarchy backfills the rest.
+#   kind "md"   -> <subdir>/<slug>.md, already Markdown
+#   kind "html" -> <subdir>/<slug>/index.html, converted here
+SOURCES = (
+    {"repo": "olafkfreund/nixarchy", "subdir": "docs/manual", "kind": "md"},
+    {"repo": "omacom/omarchy-site", "subdir": "manual", "kind": "html"},
+)
 
 _UID = os.getuid()
 _HOME = os.path.abspath(os.path.expanduser("~"))
@@ -98,7 +108,7 @@ def _dirfd(path, create=False, mode=0o700):
 def get(url, cap=20_000_000):
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
-        "User-Agent": "archy-omarchy-manual-updater"})
+        "User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         return r.read(cap)
 
@@ -163,74 +173,124 @@ def write_rel(dfd, name, data, mode=0o644):
         os.close(fd)
 
 
-def main():
-    # 1. Pin the commit of the resolved default branch; 2. list the manual
-    # tree at that exact commit.
-    branch = json.loads(get(API))["default_branch"]
-    head = json.loads(get(API + "/commits/" + branch))
+def _tree_at(api, path):
+    """Resolve the default branch to an immutable commit, then list the blobs
+    under `path` at exactly that commit. Returns (commit, {relpath: blob_sha})."""
+    branch = json.loads(get(api))["default_branch"]
+    head = json.loads(get(api + "/commits/" + branch))
     commit = head["sha"]
-    tree = json.loads(get(API + "/git/trees/" + head["commit"]["tree"]["sha"]))
-    manual = next(e for e in tree["tree"] if e["path"] == "manual" and e["type"] == "tree")
-    entries = json.loads(get(API + "/git/trees/" + manual["sha"] + "?recursive=1"))["tree"]
-    pages = [e for e in entries if e["type"] == "blob" and e["path"].endswith("/index.html")
-             and e["path"].count("/") == 1 and e.get("size", 0) < 2_000_000][:200]
-    if not pages:
-        raise SystemExit("no manual pages found at pinned commit — not updated")
-    want = {"manual/" + e["path"]: e["sha"] for e in pages}
+    tree = json.loads(get(api + "/git/trees/" + head["commit"]["tree"]["sha"]
+                          + "?recursive=1"))["tree"]
+    want = {}
+    for e in tree:
+        if e["type"] != "blob" or e.get("size", 0) >= 2_000_000:
+            continue
+        rel = e["path"]
+        if rel.startswith(path + "/"):
+            want[rel] = e["sha"]
+    return commit, want
 
-    # 3. Publish descriptor-relative inside the validated private state dir.
+
+def _slug_of(rel, subdir, kind):
+    """The published page name, or None if this blob is not a manual page."""
+    tail = rel[len(subdir) + 1:]
+    if kind == "md":
+        if not tail.endswith(".md") or "/" in tail:
+            return None
+        slug = tail[:-3]
+    else:
+        if not tail.endswith("/index.html") or tail.count("/") != 1:
+            return None
+        slug = tail.split("/")[0]
+    return slug if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,80}", slug) else None
+
+
+def fetch_source(sfd, src, taken):
+    """Publish one source's pages into the staging dir, skipping any slug an
+    earlier (higher-priority) source already owns. Returns (commit, written)."""
+    api = "https://api.github.com/repos/" + src["repo"]
+    commit, blobs = _tree_at(api, src["subdir"])
+    want = {}
+    for rel, sha in blobs.items():
+        slug = _slug_of(rel, src["subdir"], src["kind"])
+        if slug and slug not in taken:
+            want[rel] = (sha, slug)
+    if not want:
+        raise SystemExit("no manual pages found in %s at pinned commit" % src["repo"])
+
+    tmpname = ".tarball-" + secrets.token_hex(8)
+    req = urllib.request.Request(
+        "https://codeload.github.com/%s/tar.gz/%s" % (src["repo"], commit),
+        headers={"User-Agent": UA})
+    tfd = os.open(tmpname, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                  0o600, dir_fd=sfd)
+    tb = os.fdopen(tfd, "w+b")
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            got = 0
+            while True:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                got += len(chunk)
+                if got > 300_000_000:
+                    raise SystemExit("tarball unreasonably large — aborting")
+                tb.write(chunk)
+        tb.flush()
+        tb.seek(0)
+        seen = 0
+        with tarfile.open(fileobj=tb, mode="r:gz") as tf:
+            for m in tf:
+                rel = m.name.split("/", 1)[1] if "/" in m.name else ""
+                if rel not in want or not m.isfile() or m.size > 2_000_000:
+                    continue
+                sha, slug = want[rel]
+                data = tf.extractfile(m).read()
+                digest = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+                if digest != sha:
+                    raise SystemExit("hash mismatch for %s — aborting, nothing replaced" % rel)
+                text = data.decode("utf-8", "replace")
+                body = text if src["kind"] == "md" else html_to_md(text)
+                if src["kind"] == "md":
+                    # strip the Jekyll front matter; keep a real H1 either way
+                    body = re.sub(r"\A---\n.*?\n---\n", "", body, count=1, flags=re.S)
+                head = "" if body.lstrip().startswith("# ") else \
+                       "# " + slug.replace("-", " ") + "\n"
+                write_rel(sfd, slug + ".md", (head + body).encode())
+                taken.add(slug)
+                seen += 1
+    finally:
+        tb.close()
+        try:
+            os.unlink(tmpname, dir_fd=sfd)
+        except OSError:
+            pass
+    if seen != len(want):
+        raise SystemExit("tarball missing pages (%d/%d) — aborting" % (seen, len(want)))
+    return commit, seen
+
+
+def main():
     dfd = _dirfd(DATA, create=True)
+    staged = None
     try:
         staged = ".manual-" + secrets.token_hex(8)
         os.mkdir(staged, 0o700, dir_fd=dfd)
-        sfd = os.open(staged, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dfd)
+        sfd = os.open(staged, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                      dir_fd=dfd)
         try:
-            # ONE download at the immutable commit, streamed to a temp inside staging.
-            req = urllib.request.Request(
-                "https://codeload.github.com/%s/tar.gz/%s" % (REPO, commit),
-                headers={"User-Agent": "archy-omarchy-manual-updater"})
-            tfd = os.open(".tarball", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                          0o600, dir_fd=sfd)
-            tb = os.fdopen(tfd, "w+b")
-            with urllib.request.urlopen(req, timeout=120) as r:
-                got = 0
-                while True:
-                    chunk = r.read(1 << 20)
-                    if not chunk:
-                        break
-                    got += len(chunk)
-                    if got > 300_000_000:
-                        raise SystemExit("tarball unreasonably large — aborting")
-                    tb.write(chunk)
-            tb.flush()
-            tb.seek(0)
-            seen = 0
-            with tarfile.open(fileobj=tb, mode="r:gz") as tf:
-                for m in tf:
-                    rel = m.name.split("/", 1)[1] if "/" in m.name else ""
-                    if rel not in want or not m.isfile() or m.size > 2_000_000:
-                        continue
-                    data = tf.extractfile(m).read()
-                    digest = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-                    if digest != want[rel]:
-                        raise SystemExit("hash mismatch for %s — aborting, nothing replaced" % rel)
-                    slug = rel.split("/")[1]
-                    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,80}", slug):
-                        continue
-                    md = html_to_md(data.decode("utf-8", "replace"))
-                    write_rel(sfd, slug + ".md", ("# " + slug.replace("-", " ") + "\n" + md).encode())
-                    seen += 1
-            tb.close()
-            os.unlink(".tarball", dir_fd=sfd)
-            if seen != len(want):
-                raise SystemExit("tarball missing pages (%d/%d) — aborting" % (seen, len(want)))
-            write_rel(sfd, ".fetched", (commit + "\n").encode())
+            taken, stamp, total = set(), [], 0
+            for src in SOURCES:
+                commit, n = fetch_source(sfd, src, taken)
+                stamp.append("%s %s" % (src["repo"], commit))
+                total += n
+            write_rel(sfd, ".fetched", ("\n".join(stamp) + "\n").encode())
             os.fsync(sfd)
         finally:
             os.close(sfd)
 
-        # 4. Swap by descriptor: manual -> random old name, staged -> manual,
-        #    remove old by descriptor, fsync the parent.
+        # Swap by descriptor: manual -> random old name, staged -> manual,
+        # remove old by descriptor, fsync the parent.
         old = None
         try:
             st = os.stat("manual", dir_fd=dfd, follow_symlinks=False)
@@ -241,16 +301,19 @@ def main():
         except FileNotFoundError:
             pass
         os.rename(staged, "manual", src_dir_fd=dfd, dst_dir_fd=dfd)
+        staged = None
         os.fsync(dfd)
         if old:
             shutil.rmtree(old, ignore_errors=True, dir_fd=dfd)
             os.fsync(dfd)
-        print("manual: %d pages verified at commit %s -> %s/manual" % (seen, commit[:12], DATA))
+        print("manual: %d pages verified from %d sources -> %s/manual"
+              % (total, len(SOURCES), DATA))
     except BaseException:
-        try:
-            shutil.rmtree(staged, ignore_errors=True, dir_fd=dfd)
-        except Exception:
-            pass
+        if staged:
+            try:
+                shutil.rmtree(staged, ignore_errors=True, dir_fd=dfd)
+            except Exception:
+                pass
         raise
     finally:
         os.close(dfd)

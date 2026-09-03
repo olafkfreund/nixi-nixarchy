@@ -1,6 +1,0 @@
-[Unit]
-Description=Refresh Archy's local Omarchy manual copy
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/omarchy-help-update-manual

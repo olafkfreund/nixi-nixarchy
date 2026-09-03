@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# omarchy:summary=Serve the Omarchy Helper chat widget (offline manual answers + agent relay)
+# omarchy:summary=Serve the Nixi chat widget (offline manual answers + agent relay)
 # omarchy:hidden=true
-"""Omarchy Helper micro-server: serves the chat widget UI and relays each
+"""Nixi micro-server: serves the chat widget UI and relays each
 message to a headless Claude Code call (with read-only grounding tools).
 Local only (127.0.0.1), stdlib only, no telemetry."""
 import http.server
@@ -15,11 +15,11 @@ import sys
 import threading
 import time
 
-PORT = int(os.environ.get("OMARCHY_HELP_PORT", "8642"))
-DIR = os.path.expanduser(os.environ.get("OMARCHY_HELP_DIR", "~/.config/omarchy-help"))
+PORT = int(os.environ.get("NIXI_PORT", "8642"))
+DIR = os.path.expanduser(os.environ.get("NIXI_DIR", "~/.config/nixi"))
 # Mutable state (fetched manual, learned facts) lives OUTSIDE the config dir
 # so dotfile-manager redeploys can never wipe it.
-DATA = os.path.expanduser(os.environ.get("OMARCHY_HELP_DATA", "~/.local/share/omarchy-help"))
+DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
 UI = os.path.join(DIR, "ui.html")
 ALLOWED = ",".join([
     "Read", "Grep", "Glob",
@@ -275,7 +275,7 @@ def run_capped(cmd, timeout, cwd=None):
     timeout, any error and server shutdown kill the whole scope (or, in the
     fallback, the live group) and reap it. Overflow is an error, never a
     silent truncation."""
-    unit = "archy-" + secrets.token_hex(6)
+    unit = "nixi-" + secrets.token_hex(6)
     full = (["systemd-run", "--user", "--scope", "--quiet", "--collect",
              "--unit=" + unit, "--"] + list(cmd)) if _HAVE_SCOPE else list(cmd)
     p = subprocess.Popen(full, cwd=cwd, stdin=subprocess.DEVNULL,
@@ -361,10 +361,14 @@ def _shutdown(*_):
 STYLE = ("\n\n(Answer for a chat bubble. Structure it: one short lead line, "
          "then real Markdown: '-' bullets or numbered steps, short paragraphs "
          "separated by blank lines, **bold** key names like **SUPER+K**. No big "
-         "headings, max ~90 words unless asked for more. OMARCHY-FIRST, always: copy/paste "
+         "headings, max ~90 words unless asked for more. NIXARCHY-FIRST, always: copy/paste "
          "is **SUPER+C/V/X** (never Ctrl+C/V here, even in the terminal), "
-         "prefer omarchy menu flows and omarchy commands over generic Linux "
-         "answers. NEVER ask the user about their setup \u2014 the machine "
+         "prefer omarchy menu flows and omarchy/nixarchy commands over generic "
+         "Linux answers. This machine is NIXARCHY (Omarchy on NixOS): packages "
+         "are declarative \u2014 the Install menu queues into "
+         "~/.config/nixarchy/apps.nix and `nixarchy apply` is what applies it; "
+         "there is no AUR and pacman/yay refuse. Never give Arch install "
+         "instructions. NEVER ask the user about their setup \u2014 the machine "
          "facts below answer that. When you mention a config or file, "
          "write its FULL path like ~/.config/hypr/bindings.lua \u2014 paths in "
          "your answers are clickable and open in the editor. You have NO "
@@ -417,7 +421,7 @@ def ensure_window_rule():
     # Pixel-matched to the shell's popout panels (346 visual width, 2px
     # inset). Hyprland draws a 2px border OUTSIDE the window box, so the
     # window itself is 342 wide. Bar at the bottom: popouts open bottom-right
-    # there, so Archy moves to the bottom-LEFT and rises to clear the bar.
+    # there, so Nixi moves to the bottom-LEFT and rises to clear the bar.
     x, y = "(monitor_w-346)", "(monitor_h-488)"
     try:
         cfg = json.loads(bounded_read(os.path.expanduser("~/.config/omarchy/shell.json"), 1_000_000))
@@ -541,7 +545,6 @@ def local_answer(q):
         ht, bt = _tokens(head), _tokens(body)
         if not bt:
             continue
-        bset = set(bt)
         hmatch = len(qset & set(ht))
         s = 3.0 * hmatch                            # title/filename hits: undamped
         if hmatch and ht:
@@ -581,18 +584,20 @@ CURRICULUM = [
     ("movewindows", "Moving windows", "How do I move and swap windows with the keyboard?", None),
     ("scratchpad", "The scratchpad", "What is the scratchpad and how do I use it?", "scratchpad"),
     ("webapps", "Websites as apps", "How do I turn a website into an app with its own window and icon?", "webapps"),
-    ("install", "Installing software", "How do I install and remove apps, including from the AUR?", None),
+    ("install", "Installing software", "How do I install and remove apps on nixarchy, and why does the Install menu not install straight away?", None),
     ("floating", "Floating windows", "How do I make a window float, move and resize it?", "floating"),
     ("fullscreen", "Full screen modes", "What are the fullscreen and maximize keys and when do I use each?", "fullscreen"),
     ("themes", "Themes", "How do I change the theme and background, and install new themes?", None),
     ("capture", "Screenshots and OCR", "How do I take screenshots and grab text from the screen?", None),
-    ("update", "Staying updated", "How do I keep Omarchy updated and what happens during an update?", None),
-    ("agents", "Your AI agent", "What can my default AI agent do across Omarchy, like diagnosing crashes?", None),
-    ("config", "Customizing safely", "How do I customize Omarchy safely so updates never break my changes?", None),
+    ("update", "Staying updated", "How do I keep nixarchy updated, and what actually happens during a rebuild?", None),
+    ("agents", "Your AI agent", "What can my default AI agent do across nixarchy, like diagnosing crashes?", None),
+    ("config", "Customizing safely", "How do I customize nixarchy safely so updates never break my changes?", None),
+    ("rollback", "Undoing a bad update", "What are generations, and how do I roll back if an update breaks something?", None),
+    ("devenv", "Per-project toolchains", "How do I give one project its own toolchain with nixarchy dev init?", None),
 ]
 
 
-# ---- the LIVE tour: Archy instructs, the event socket confirms ----------
+# ---- the LIVE tour: Nixi instructs, the event socket confirms ----------
 # Steps chosen so every action is verifiable from socket2 AND safe while the
 # widget overlay is visible (no other special workspace involved).
 TOUR = [
@@ -750,7 +755,7 @@ def learning_status():
     taught = st.get("taught", {})
     observed = st.get("observed", {})
     items = []
-    for fid, label, q, obs in CURRICULUM:
+    for fid, label, _q, obs in CURRICULUM:
         done = fid in taught or (obs and obs in observed)
         items.append({"id": fid, "label": label, "done": bool(done)})
     return st, items
@@ -771,7 +776,7 @@ _facts = {"at": 0.0, "text": ""}
 
 
 def machine_facts():
-    """Live facts injected into every prompt so Archy never asks what it can
+    """Live facts injected into every prompt so Nixi never asks what it can
     know, and answers match THIS machine."""
     if time.time() - _facts["at"] < 600 and _facts["text"]:
         return _facts["text"]
@@ -780,6 +785,22 @@ def machine_facts():
             return run_capped(cmd, timeout=8)[1].strip()
         except Exception:
             return ""
+
+    def _omarchy_version():
+        """Omarchy's version file. On Arch it sits under ~/.local/share or
+        /usr/share; on NixOS the tree is a store path, so it is resolved
+        from whichever `omarchy` is actually on PATH."""
+        cands = [os.path.expanduser("~/.local/share/omarchy/version"),
+                 "/usr/share/omarchy/version"]
+        exe = _shutil.which("omarchy")
+        if exe:
+            cands.insert(0, os.path.join(
+                os.path.dirname(os.path.dirname(os.path.realpath(exe))), "version"))
+        for c in cands:
+            v = _small(c)
+            if v:
+                return v
+        return ""
 
     def _small(path):
         try:
@@ -794,11 +815,13 @@ def machine_facts():
     except Exception:
         pass
     facts = {
+        "os": "nixarchy (Omarchy on NixOS)",
+        "nixos": run(["nixos-version"]),
         "terminal": run(["xdg-terminal-exec", "--print-id"]) or "foot",
         "browser": run(["xdg-settings", "get", "default-web-browser"]),
         "agent": default_agent() or "none",
         "monitors": mons,
-        "omarchy": _small(os.path.expanduser("~/.local/share/omarchy/version")),
+        "omarchy": _omarchy_version(),
     }
     _facts["text"] = "; ".join(f"{k}: {v}" for k, v in facts.items() if v)
     _facts["at"] = time.time()
@@ -881,7 +904,7 @@ MECH_BRIEF = (
     "consent to you making this change on their machine now, with your "
     "normal powers. Rules: prefer user-level config and sanctioned "
     "omarchy/hyprctl flows; back up EVERY file you edit first "
-    "(cp X X.bak-archy); never escalate privileges or run anything as root, "
+    "(cp X X.bak-nixi); never escalate privileges or run anything as root, "
     "never delete user data, never touch credentials or secrets. VERIFY the "
     "change took effect. Then report chat-style: what changed, how you "
     "verified it, and the one-line undo. If part of the request is dangerous "
@@ -984,11 +1007,11 @@ def ask_agent(q, resume):
 # per feature, applied by the installer (install.py) under supervision.
 SETUP_FEATURES = {
     "watcher": ("Coaching watcher",
-                "A background service that watches which Omarchy features you "
+                "A background service that watches which nixarchy features you "
                 "use and offers at most one tip a day. Nothing leaves the machine."),
     "skill": ("Agent skill",
-              "Installs Archy\u2019s tutor method into ~/.claude/skills so your "
-              "agent answers the Archy way even outside this widget."),
+              "Installs Nixi\u2019s tutor method into ~/.claude/skills so your "
+              "agent answers the Nixi way even outside this widget."),
     "hooks": ("Boot & update hooks",
               "A one-time first-boot welcome, a manual refresh after each "
               "omarchy-update, and a weekly refresh timer."),
@@ -1008,7 +1031,7 @@ def _source_root():
         st = os.stat(p)
     except OSError:
         return None
-    if not stat.S_ISDIR(st.st_mode) or not _dir_trusted(st):
+    if not _dir_ok(st):
         return None
     if not os.path.isfile(os.path.join(p, "install.py")):
         return None
@@ -1076,7 +1099,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(403, {"error": "bad origin"})
             return False
         if need_token and not secrets.compare_digest(
-                self.headers.get("X-Archy-Token", ""), TOKEN):
+                self.headers.get("X-Nixi-Token", ""), TOKEN):
             self._send(403, {"error": "missing capability token"})
             return False
         return True
@@ -1131,9 +1154,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 html = html.replace("/*__THEME__*/", css)
             if agent_ready():
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archy \U0001F916 your Omarchy helper. Ask me "
+                    "Hey, I\u2019m Nixi \u2744 your nixarchy helper. Ask me "
                     "anything \u2014 I know this machine inside out. New to "
-                    "Omarchy? Hit \U0001f680 and I\u2019ll walk you through it "
+                    "nixarchy? Hit \U0001f680 and I\u2019ll walk you through it "
                     "live. And when something needs changing, I don\u2019t just "
                     "explain the fix \u2014 I can make it for you.")
                 html = html.replace("__HINT__",
@@ -1141,7 +1164,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "what I may change")
             else:
                 html = html.replace("__GREETING__",
-                    "Hey, I\u2019m Archy \U0001F916 your Omarchy guide. No AI agent is "
+                    "Hey, I\u2019m Nixi \u2744 your nixarchy guide. No AI agent is "
                     "connected yet \u2014 tap a quick answer below to get going "
                     "(\u201cSet up your AI agent\u201d unlocks the full chat, and "
                     "then I can fix things for you, not just explain them).")
@@ -1267,7 +1290,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             save_trust(t)
             return self._send(200, {"trust": t})
         if self.path == "/open":
-            # Click-to-open: file paths in Archy's answers are links. Only
+            # Click-to-open: file paths in Nixi's answers are links. Only
             # launches the sanctioned editor flow on an existing file under
             # known roots -- never executes anything from the path itself.
             try:
@@ -1280,7 +1303,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if p.startswith(roots) and os.path.isfile(p):
                 spawn_detached(["omarchy-launch-config-editor", p])
                 return self._send(200, {"ok": True})
-            spawn_detached(["omarchy-notification-send", "Archy",
+            spawn_detached(["omarchy-notification-send", "Nixi",
                             "Can\u2019t open " + p[:200] +
                             " \u2014 it doesn\u2019t exist (yet?)"])
             return self._send(200, {"ok": False})
@@ -1294,7 +1317,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     pass
             return self._send(200, {"ok": True})
         if self.path == "/minimize":
-            # Archy is a PINNED widget (visible on every workspace); hiding
+            # Nixi is a PINNED widget (visible on every workspace); hiding
             # means closing the window — the chat survives server-side and is
             # restored on reopen. Targeted close: focus it, close the active.
             addr, cls = own_window()
@@ -1322,7 +1345,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         agent = default_agent()
         have_ai = agent_ready()
         if not have_ai:
-            hint = ("No AI agent is connected yet. Omarchy is AI-first: pick "
+            hint = ("No AI agent is connected yet. nixarchy is AI-first: pick "
                     "your coding agent once with SUPER+SPACE \u2192 Setup \u2192 "
                     "Default agent (or: omarchy default agent claude), sign in "
                     "to it, and I\u2019ll answer anything. The Getting-started "

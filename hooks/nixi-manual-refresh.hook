@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# omarchy:summary=Refresh Nixi's local copy of the Omarchy manual after each omarchy-update
+# Runs from ~/.config/omarchy/hooks/post-update.d/ — a new Omarchy release
+# means new docs, so Nixi re-syncs in the same breath. Best-effort: an
+# offline update day just means the weekly timer catches it later.
+command -v nixi-update-manual >/dev/null 2>&1 && nixi-update-manual || true
