@@ -439,11 +439,21 @@ def main(argv):
     # rather than waited on.
     if core and os.environ.get("NIXI_SKIP_MANUAL") not in ("1", "true", "yes"):
         try:
-            subprocess.run([os.path.join(BIN, "nixi-update-manual")],
-                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=300, start_new_session=True)
-        except Exception:
-            pass
+            r = subprocess.run([os.path.join(BIN, "nixi-update-manual")],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=300,
+                               start_new_session=True)
+            if r.returncode != 0:
+                # Usually the unauthenticated GitHub API rate limit (60/hour
+                # per IP). Not fatal -- the weekly timer retries, and answers
+                # still work from the bundled knowledge -- but silence here
+                # left users with no manual and no idea why.
+                log("manual: not fetched (%s). Offline answers still work; "
+                    "retry later with nixi-update-manual."
+                    % (r.stderr.decode("utf-8", "replace").strip()[-200:]
+                       or "exit %d" % r.returncode))
+        except Exception as e:
+            log("manual: not fetched (%s); retry with nixi-update-manual" % e)
         log("Installed. Run nixi for the chat widget; find Help in the Omarchy "
             "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Nixi (nixarchy help)\", "
             "\"nixi\") in ~/.config/hypr/bindings.lua")

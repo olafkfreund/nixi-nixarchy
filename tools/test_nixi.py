@@ -12,6 +12,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -145,6 +146,36 @@ def test_port_is_configurable():
     print("  ok  every program honours NIXI_PORT")
 
 
+def test_units_have_a_nixos_path():
+    """systemd user units start with a bare PATH. NixOS keeps essentially
+    nothing in /usr/bin, so an Arch-shaped PATH makes the /usr/bin/env
+    shebang fail with status 127 and the service never starts."""
+    import glob
+    for unit in glob.glob(os.path.join(ROOT, "systemd", "*.service")):
+        text = open(unit).read()
+        line = next((l for l in text.splitlines()
+                     if l.startswith("Environment=PATH=")), None)
+        assert line, os.path.basename(unit) + " sets no PATH"
+        assert "/run/current-system/sw/bin" in line or "/etc/profiles" in line, \
+            "%s has no NixOS path: %s" % (os.path.basename(unit), line)
+    print("  ok  systemd units carry a NixOS-usable PATH")
+
+
+def test_window_rule_is_valid_lua():
+    """The class pattern is injected into Lua. Inside a QUOTED Lua string a
+    backslash-dot is an invalid escape and Hyprland rejects the entire rule,
+    which silently leaves the widget tiled instead of a pinned panel."""
+    text = open(os.path.join(ROOT, "bin", "nixi-server")).read()
+    call = next((l for l in text.splitlines() if "hl.window_rule" in l), None)
+    assert call, "window rule call not found"
+    assert "[[" in call, "class pattern must use a Lua long string: " + call.strip()
+    # a regex escape must never sit inside a double-quoted Lua string
+    quoted = re.findall(r'class\s*=\s*"([^"]*)"', call)
+    assert not any("\\." in q for q in quoted), \
+        "backslash escape inside a quoted Lua string: " + call.strip()
+    print("  ok  window rule survives Lua parsing")
+
+
 def test_faq_schema():
     """ui.html renders e.cat / e.q / e.a as strings."""
     faq = json.load(open(os.path.join(ROOT, "share/faq.json")))
@@ -159,6 +190,8 @@ def test_faq_schema():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_learned_broker,
-               test_no_runtime_rename, test_port_is_configurable, test_faq_schema):
+               test_no_runtime_rename, test_port_is_configurable,
+               test_units_have_a_nixos_path, test_window_rule_is_valid_lua,
+               test_faq_schema):
         fn()
     print("\nall checks passed")

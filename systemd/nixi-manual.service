@@ -2,5 +2,8 @@
 Description=Refresh Nixi's local nixarchy + Omarchy manual copy
 
 [Service]
+# NixOS keeps almost nothing in /usr/bin (env, and little else), so an
+# Arch-shaped PATH makes the /usr/bin/env shebang fail with status 127.
+Environment=PATH=%h/.nix-profile/bin:/etc/profiles/per-user/%u/bin:/run/current-system/sw/bin:%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
 Type=oneshot
 ExecStart=%h/.local/bin/nixi-update-manual

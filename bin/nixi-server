@@ -434,7 +434,11 @@ def ensure_window_rule():
             x, y = "4", "(monitor_h-518)"
     except Exception:
         pass
-    hypr('eval hl.window_rule({ match = { class = "^.*-127\\.0\\.0\\.1__.*$" }, '
+    # The class pattern goes into Lua as a LONG string ([[...]]): inside a
+    # quoted Lua string `\.` is an invalid escape and Hyprland rejects the
+    # whole rule ("invalid escape sequence"), which silently left the widget
+    # tiled instead of a pinned corner panel.
+    hypr('eval hl.window_rule({ match = { class = [[^.*-127\\.0\\.0\\.1__.*$]] }, '
          'float = true, pin = true, size = { 342, 480 }, '
          'move = { "' + x + '", "' + y + '" } })')
 
