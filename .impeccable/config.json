@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "share/ui.html"
+        ],
+        "createdAt": "2026-09-03T20:25:45.783Z",
+        "reason": "Model verified: detector logs 'Falling back to regex matching. Custom properties are NOT evaluated' and reports Sizes: 13.6/14.4/15.2px, none of which are in the file. Those are the three em values (0.85/0.9/0.95em) for code spans and Markdown headings inside rendered answers, multiplied by 16 as if absolute; they are relative modifiers, not scale steps. The real scale is var(--fs-micro/body/title) = 11.2/14/22.4px, ratio 2.0:1, which satisfies the rule (detect-html.mjs:67-72 requires largest/smallest >= 2.0). Not a user decision."
+      }
+    ]
+  }
+}

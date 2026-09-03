@@ -15,13 +15,16 @@
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
   * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
   *::-webkit-scrollbar { display:none; }
-  /* Type scale. Three steps at a 1.25 ratio, on a 14px base: anything
-     smaller than one full step apart reads as drift, not hierarchy. The
-     widget previously had eight sizes between 0.68 and 1rem, four of them
-     less than half a pixel apart. 1.09375 rather than 1.09 because the step
-     must be exactly 1.25x, not almost. `em` sizes in rendered Markdown are
-     deliberately NOT part of this -- they scale with their parent. */
-  :root { --fs-micro: 0.7rem; --fs-body: 0.875rem; --fs-title: 1.09375rem; }
+  /* Type scale: 11.2 / 14 / 22.4px on a 14px base. The widget previously had
+     eight sizes between 0.68 and 1rem, four of them less than half a pixel
+     apart -- drift, not hierarchy.
+
+     The title is a full 2x the smallest step on purpose. At 17.5px "Nixi"
+     barely outranked a chat message, which is a poor showing for the app's
+     own name; the header's avatar is 34px, so the taller line still fits
+     beside it. `em` sizes in rendered Markdown are deliberately NOT part of
+     this scale -- they scale with whatever parent they land in. */
+  :root { --fs-micro: 0.7rem; --fs-body: 0.875rem; --fs-title: 1.4rem; }
   html, body { overflow:hidden; }
   body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,sans-serif; }
   header { display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
