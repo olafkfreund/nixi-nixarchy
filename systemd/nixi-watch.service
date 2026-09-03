@@ -2,7 +2,9 @@
 Description=Nixi tip watcher (suggests workflow improvements, max one per day)
 
 [Service]
-Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
+# NixOS keeps almost nothing in /usr/bin (env, and little else), so an
+# Arch-shaped PATH makes the /usr/bin/env shebang fail with status 127.
+Environment=PATH=%h/.nix-profile/bin:/etc/profiles/per-user/%u/bin:/run/current-system/sw/bin:%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
 Type=exec
 ExecStart=%h/.local/bin/nixi-watch
 Restart=on-failure
