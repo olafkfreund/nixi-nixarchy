@@ -15,12 +15,18 @@
   :root { --bg:#16130d; --panel:#211c13; --line:#3a3223; --ink:#ece7d8; --muted:#9a917d; --ember:#ffb454; --bot:#2a2417; --me:#3d3116; }
   * { box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; }
   *::-webkit-scrollbar { display:none; }
+  /* Type scale. Three steps at a 1.25 ratio, on a 14px base: anything
+     smaller than one full step apart reads as drift, not hierarchy. The
+     widget previously had eight sizes between 0.68 and 1rem, four of them
+     less than half a pixel apart. `em` sizes inside rendered Markdown are
+     deliberately NOT part of this -- they scale with their parent. */
+  :root { --fs-micro: 0.7rem; --fs-body: 0.875rem; --fs-title: 1.09rem; }
   html, body { overflow:hidden; }
   body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,sans-serif; }
   header { display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--panel); border-bottom:1px solid var(--line); }
   header .avatar { width:34px; height:34px; }
-  header h1 { font-size:0.95rem; margin:0; }
-  header p { font-size:0.72rem; margin:0; color:var(--muted); }
+  header h1 { font-size:var(--fs-title); margin:0; }
+  header p { font-size:var(--fs-micro); margin:0; color:var(--muted); }
   #chat { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
   /* scrolling without the visible bar */
   #chat { scrollbar-width:none; -ms-overflow-style:none; }
@@ -42,7 +48,7 @@
   input { flex:1; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--ink); font:inherit; outline:none; }
   input:focus { border-color:var(--ember); }
   input:disabled { opacity:.5; }
-  #mic { display:none; flex:0 0 auto; width:38px; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:1rem; cursor:pointer; padding:0; }
+  #mic { display:none; flex:0 0 auto; width:38px; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:var(--fs-title); cursor:pointer; padding:0; }
   #mic.on { display:block; }
   #mic:hover { color:var(--ember); border-color:var(--ember); }
   #mic[aria-pressed="true"] { color:#fff; background:#c0392b; border-color:#c0392b; animation:rec 1.2s ease-in-out infinite; }
@@ -54,19 +60,19 @@
   #gear:hover { color:var(--ember); border-color:var(--ember); }
   #trustmenu { position:absolute; top:54px; right:12px; z-index:9; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; width:240px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
   #trustmenu .lvl { display:block; width:100%; text-align:left; background:none; border:1px solid transparent; border-radius:8px; padding:6px 8px; color:var(--ink); cursor:pointer; font:inherit; }
-  #trustmenu .lvl small { display:block; color:var(--muted); font-size:0.72rem; }
+  #trustmenu .lvl small { display:block; color:var(--muted); font-size:var(--fs-micro); }
   #trustmenu .lvl.on { border-color:var(--ember); }
   #trustmenu .lvl.on b { color:var(--ember); }
-  .hint { align-self:center; color:var(--muted); font-size:0.72rem; }
+  .hint { align-self:center; color:var(--muted); font-size:var(--fs-micro); }
   .setup { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); }
   .setup h3 { margin:0 0 6px; font-size:0.9em; color:var(--ember); }
   .feat { display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--line); }
   .feat:first-of-type { border-top:none; }
-  .feat .txt { flex:1; min-width:0; } .feat small { display:block; color:var(--muted); font-size:0.72rem; }
-  .feat button { flex:none; background:none; border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:0.76rem; cursor:pointer; }
+  .feat .txt { flex:1; min-width:0; } .feat small { display:block; color:var(--muted); font-size:var(--fs-micro); }
+  .feat button { flex:none; background:none; border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:var(--fs-body); cursor:pointer; }
   .feat button.on { border-color:var(--ember); color:var(--ember); }
-  .setup .later { margin-top:6px; font-size:0.74rem; color:var(--muted); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
-  .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+  .setup .later { margin-top:6px; font-size:var(--fs-micro); color:var(--muted); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+  .deeper { display:inline-block; margin-top:6px; margin-left:10px; font-size:var(--fs-micro); color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
   .bot p { margin: 0 0 8px; } .bot p:last-child { margin-bottom: 0; }
   .bot ul, .bot ol { margin: 4px 0 8px; padding-left: 1.35em; }
   .bot li { margin: 3px 0; }
@@ -82,16 +88,16 @@
   .msg code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; font-size: 0.85em; }
   .msg b { color: var(--ember); font-weight: 600; }
   .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0 2px 4px; }
-  .act { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:0.8rem; cursor:pointer; }
+  .act { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:var(--fs-body); cursor:pointer; }
   .act:hover { border-color:var(--ember); color:var(--ember); }
   .act.primary { border-color:var(--ember); color:var(--ember); font-weight:600; }
-  .progress { font-size:0.72rem; color:var(--muted); margin-left:auto; }
-  .src { display:block; margin-top:5px; font-size:0.68rem; color:var(--muted); }
+  .progress { font-size:var(--fs-micro); color:var(--muted); margin-left:auto; }
+  .src { display:block; margin-top:5px; font-size:var(--fs-micro); color:var(--muted); }
   .chips { display:flex; flex-wrap:wrap; gap:6px; padding:2px 2px 6px; }
-  .chip { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:5px 11px; font-size:0.78rem; cursor:pointer; text-align:left; }
+  .chip { background:var(--bot); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:5px 11px; font-size:var(--fs-body); cursor:pointer; text-align:left; }
   .chip:hover { border-color:var(--ember); color:var(--ember); }
-  .cat { width:100%; margin:4px 2px 0; font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); }
-  .deeper { display:inline-block; margin-top:6px; font-size:0.74rem; color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+  .cat { width:100%; margin:4px 2px 0; font-size:var(--fs-micro); letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); }
+  .deeper { display:inline-block; margin-top:6px; font-size:var(--fs-micro); color:var(--ember); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
 /*__THEME__*/
 </style></head>
 <body>
@@ -124,7 +130,7 @@
 </div>
 <form id="f">
   <input id="q" autocomplete="off" placeholder="Type a question and press Enter…" autofocus>
-  <button id="mic" type="button" aria-pressed="false" title="Hold to talk" aria-label="Hold to talk">&#127908;</button>
+  <button id="mic" type="button" aria-pressed="false" title="Click to talk" aria-label="Click to talk">&#127908;</button>
 </form>
 <script src="/vendor/marked.min.js"></script>
 <script src="/vendor/purify.min.js"></script>
@@ -443,12 +449,23 @@ fetch('/voice').then(r => r.json()).then(j => {
   if (j.ok) mic.classList.add('on');
 }).catch(() => {});
 
+// A thrown value is not always an Error: without this a rejected fetch can
+// render "Voice failed: undefined", which tells the user nothing at all.
+const why = (e) => (e && e.message) || String(e);
+
+// title and aria-label must move together. Updating only the title leaves a
+// screen reader announcing the button's first state forever.
+function micLabel(text) {
+  mic.title = text;
+  mic.setAttribute('aria-label', text);
+}
+
 function micIdle() {
   listening = false;
   mic.setAttribute('aria-pressed', 'false');
   mic.disabled = false;
   mic.textContent = '\u{1F3A4}';
-  mic.title = 'Click to talk';
+  micLabel('Click to talk');
 }
 
 mic.addEventListener('click', async () => {
@@ -458,15 +475,15 @@ mic.addEventListener('click', async () => {
       const j = await (await fetch('/listen/start', { method: 'POST' })).json();
       if (j.error) { add('bot', j.error); micIdle(); return; }
     } catch (e) {
-      add('bot', 'Could not start recording: ' + e.message); micIdle(); return;
+      add('bot', 'Could not start recording: ' + why(e)); micIdle(); return;
     }
     listening = true;
     mic.disabled = false;
     mic.setAttribute('aria-pressed', 'true');
-    mic.textContent = '⏹'; mic.title = 'Stop and transcribe';
+    mic.textContent = '⏹'; micLabel('Stop and transcribe');
     return;
   }
-  mic.disabled = true; mic.textContent = '…'; mic.title = 'Transcribing…';
+  mic.disabled = true; mic.textContent = '…'; micLabel('Transcribing…');
   try {
     const j = await (await fetch('/listen/stop', { method: 'POST' })).json();
     if (j.error) add('bot', j.error);
@@ -475,7 +492,7 @@ mic.addEventListener('click', async () => {
     // misheard word would act on the machine. The human reads it, then Enter.
     else input.value = input.value ? input.value + ' ' + j.text : j.text;
   } catch (e) {
-    add('bot', 'Voice failed: ' + e.message);
+    add('bot', 'Voice failed: ' + why(e));
   }
   micIdle(); input.focus();
 });

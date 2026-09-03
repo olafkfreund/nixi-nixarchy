@@ -258,6 +258,27 @@ def test_both_install_paths_know_about_voice():
     print("  ok  both install paths can reach voice")
 
 
+def test_mic_button_describes_what_it_does():
+    """The button shipped saying "Hold to talk" while the handler was a click
+    toggle, and only the title was ever updated -- so a screen reader
+    announced the wrong interaction, permanently."""
+    ui = open(os.path.join(ROOT, "share/ui.html")).read()
+    tag = re.search(r'<button id="mic"[^>]*>', ui)
+    assert tag, "mic button not found"
+    assert "hold" not in tag.group(0).lower(), \
+        "mic button still advertises hold-to-talk: " + tag.group(0)
+    # aria-label has to move with the title, or it keeps the first state.
+    assert "mic.setAttribute('aria-label'" in ui, \
+        "aria-label is never updated as the button changes state"
+    # Exactly one assignment, and it is the helper's own: any other caller
+    # setting the title directly would leave aria-label behind again.
+    helper = ui.split("function micLabel(")[1].split("\n}")[0]
+    assert len(re.findall(r"mic\.title\s*=", ui)) == 1, \
+        "title is set outside micLabel(); aria-label will drift from it"
+    assert "mic.title" in helper, "micLabel does not set the title"
+    print("  ok  mic button label matches its behaviour")
+
+
 def test_silence_never_reaches_the_model():
     """Whisper does not return nothing when it hears nothing -- it INVENTS.
     Digital silence decoded as " You"; a quiet room produced "Or, if they
@@ -315,6 +336,7 @@ if __name__ == "__main__":
                test_faq_schema, test_voice_stays_local,
                test_transcript_is_never_auto_sent, test_whisper_flags_exist,
                test_both_install_paths_know_about_voice,
+               test_mic_button_describes_what_it_does,
                test_silence_never_reaches_the_model,
                test_recorder_is_always_released,
                test_voice_scratch_stays_under_home):
