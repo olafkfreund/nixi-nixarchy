@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in Nixi behaves wrongly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Nixi runs entirely on your machine, so the details below are usually
+        enough to reproduce it without any logs leaving your control.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations: { required: true }
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is Nixi installed?
+      options:
+        - Nix flake / Home Manager module (services.nixi)
+        - Imperative (./install.sh)
+        - Not sure
+    validations: { required: true }
+
+  - type: textarea
+    id: facts
+    attributes:
+      label: Machine facts
+      description: |
+        Run this and paste the output. It is the same information Nixi feeds
+        its own prompt, and contains no secrets.
+      value: |
+        nixos-version
+        omarchy --version 2>/dev/null || echo "omarchy: (version file only)"
+        cat ~/.config/omarchy/defaults/agent 2>/dev/null || echo "agent: none"
+      render: shell
+    validations: { required: true }
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log (optional)
+      description: "`journalctl --user -u nixi -n 50 --no-pager`"
+      render: shell

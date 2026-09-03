@@ -1,0 +1,261 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege by default; jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix:
+    name: nix flake check (build + self-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: cachix/install-nix-action@526118121621777ccd86f79b04685a9319637641 # v31.3.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
+        continue-on-error: true
+
+      # Builds the package (which runs its installCheckPhase) and the
+      # behavioural self-check derivation.
+      - run: nix flake check --print-build-logs
+
+      - name: Package builds and exposes the expected programs
+        run: |
+          out=$(nix build .#nixi --no-link --print-out-paths)
+          for p in nixi nixi-server nixi-watch nixi-update-manual; do
+            test -x "$out/bin/$p" || { echo "missing $p"; exit 1; }
+          done
+          test -s "$out/share/nixi/ui.html"
+          # The build must never ship bytecode caches.
+          ! find "$out" -name '__pycache__' -o -name '*.pyc' | grep -q . \
+            || { echo "bytecode leaked into the store output"; exit 1; }
+          echo "package OK: $out"
+
+  home-manager:
+    name: Home Manager module evaluates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: cachix/install-nix-action@526118121621777ccd86f79b04685a9319637641 # v31.3.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
+        continue-on-error: true
+
+      # The module is the documented install path, so a broken option or a
+      # bad unit must fail the build, not the user's `home-manager switch`.
+      - name: Build an activation package that turns everything on
+        run: |
+          mkdir -p /tmp/hm && cd /tmp/hm
+          cat > flake.nix <<'NIX'
+          {
+            inputs = {
+              nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+              home-manager.url = "github:nix-community/home-manager";
+              home-manager.inputs.nixpkgs.follows = "nixpkgs";
+              nixi.url = "path:@SRC@";
+              nixi.inputs.nixpkgs.follows = "nixpkgs";
+            };
+            outputs = { nixpkgs, home-manager, nixi, ... }: {
+              homeConfigurations.ci = home-manager.lib.homeManagerConfiguration {
+                pkgs = nixpkgs.legacyPackages.x86_64-linux;
+                modules = [
+                  nixi.homeModules.default
+                  {
+                    home = { username = "ci"; homeDirectory = "/home/ci"; stateVersion = "24.05"; };
+                    services.nixi = {
+                      enable = true;
+                      watcher.enable = true;
+                      omarchyHooks.enable = true;
+                      menuEntry.enable = true;
+                    };
+                  }
+                ];
+              };
+            };
+          }
+          NIX
+          sed -i "s|@SRC@|$GITHUB_WORKSPACE|" flake.nix
+          nix build .#homeConfigurations.ci.activationPackage \
+            --no-link --print-out-paths --print-build-logs
+
+  lint:
+    name: Lint (python, shell, actions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: ruff
+        run: |
+          pipx install ruff
+          # The programs in bin/ have no .py suffix, so copy them somewhere
+          # ruff will actually look at.
+          tmp=$(mktemp -d)
+          for f in bin/nixi-server bin/nixi-watch bin/nixi-update-manual; do
+            cp "$f" "$tmp/$(basename "$f").py"
+          done
+          ruff check --select=F,B,E9,E71,E72 --output-format=concise \
+            "$tmp" install.py tools/
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning bin/nixi nixi-launch install.sh hooks/*.hook
+
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  installer:
+    name: Imperative installer (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      # --no-systemd places files without touching a user manager; a throwaway
+      # HOME keeps the runner's own dotfiles out of it. The manual fetch at the
+      # end is best-effort and already swallowed by install.py.
+      # NIXI_SKIP_MANUAL keeps this deterministic: the first-run manual fetch
+      # is best-effort and hits the GitHub API unauthenticated, which is rate
+      # limited per runner IP. The fetch itself is covered by `manual` below.
+      - name: install.py --all into a throwaway HOME
+        env:
+          NIXI_SKIP_MANUAL: '1'
+        run: |
+          fake=$(mktemp -d)
+          HOME="$fake" python3 install.py --no-systemd --all
+          HOME="$fake" python3 install.py --no-systemd --status | tee /tmp/status.json
+          python3 - <<'PY'
+          import json
+          s = json.load(open("/tmp/status.json"))
+          assert s == {"watcher": True, "skill": True, "hooks": True}, s
+          print("installer status OK:", s)
+          PY
+          for f in .local/bin/nixi .local/bin/nixi-server .config/nixi/ui.html \
+                   .config/systemd/user/nixi.service .claude/skills/nixi/SKILL.md; do
+            test -e "$fake/$f" || { echo "missing $f"; exit 1; }
+          done
+          echo "installer placed everything it claims to"
+
+  server:
+    name: Server smoke test (auth + endpoints)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Start the server and exercise the HTTP surface
+        run: |
+          # Private state MUST live under $HOME -- the server refuses anything
+          # else by design, so these cannot be plain /tmp dirs.
+          data=$(mktemp -d -p "$HOME") conf=$(mktemp -d -p "$HOME")
+          chmod 700 "$data" "$conf"
+          cp share/ui.html share/faq.json share/KNOWLEDGE.md \
+             share/CLAUDE.md share/AGENTS.md "$conf/"
+          mkdir -p "$conf/vendor" && cp share/vendor/*.js "$conf/vendor/"
+
+          NIXI_DATA="$data" NIXI_DIR="$conf" NIXI_PORT=8642 \
+            python3 bin/nixi-server > /tmp/server.log 2>&1 &
+          for _ in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8642/health >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+
+          tok=$(cat "$data/.token")
+          test "$(stat -c '%a' "$data/.token")" = 600 \
+            || { echo "token file is not 0600"; exit 1; }
+
+          # No token -> refused.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8642/trust)
+          test "$code" = 403 || { echo "unauthenticated /trust returned $code"; exit 1; }
+
+          # Bogus Host -> refused (DNS-rebinding guard).
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \
+                   -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/trust)
+          test "$code" = 403 || { echo "bad-Host /trust returned $code"; exit 1; }
+
+          # With the token, the endpoints that used to raise must answer.
+          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/setup \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "features" in d, d; print("/setup ok")'
+          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/learn \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total"] > 0; print("/learn ok:", d["total"], "stops")'
+          curl -fsS http://127.0.0.1:8642/ > /tmp/ui.html
+          python3 - <<'PY'
+          h = open("/tmp/ui.html").read()
+          assert "__TOKEN__" not in h, "session token was not injected"
+          assert "Content-Security-Policy" in h, "CSP missing from served page"
+          print("served UI ok")
+          PY
+
+          echo "--- server log (expected empty) ---"; cat /tmp/server.log
+          test ! -s /tmp/server.log || { echo "server logged errors"; exit 1; }
+
+      # The descriptor-bound state primitives refuse to operate outside $HOME.
+      # That is a security boundary, so prove it rather than assume it.
+      - name: State outside HOME is refused
+        run: |
+          if NIXI_DATA=/tmp/nixi-escape NIXI_DIR=/tmp/nixi-escape \
+               timeout 20 python3 bin/nixi-server 2>/tmp/escape.log; then
+            echo "server started with state outside HOME -- boundary broken"; exit 1
+          fi
+          # "outside .HOME" matches the server's PermissionError text; the dot
+          # avoids quoting a literal dollar sign in this script.
+          grep -q "outside .HOME" /tmp/escape.log \
+            || { echo "expected an out-of-HOME refusal, got:"; cat /tmp/escape.log; exit 1; }
+          echo "state-dir boundary holds"
+
+  manual:
+    name: Manual fetch (network, non-blocking)
+    runs-on: ubuntu-latest
+    # Hits api.github.com unauthenticated, so it is rate limited by runner IP.
+    # It must not be able to fail a PR -- it exists to notice when either
+    # upstream repo moves its manual, not to gate merges.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Fetch and hash-verify both manuals
+        run: |
+          data=$(mktemp -d -p "$HOME") && chmod 700 "$data"
+          NIXI_DATA="$data" python3 bin/nixi-update-manual
+          # nixarchy must win the pages it overrides, omarchy must backfill.
+          test -f "$data/manual/per-project-environments.md"   # nixarchy only
+          test -f "$data/manual/hotkeys.md"                    # omarchy backfill
+          grep -q 'olafkfreund/nixarchy' "$data/manual/.fetched"
+          grep -q 'omacom/omarchy-site' "$data/manual/.fetched"
+          echo "pages: $(find "$data/manual" -name '*.md' | wc -l)"
