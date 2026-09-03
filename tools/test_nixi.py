@@ -135,7 +135,6 @@ def test_port_is_configurable():
     """services.nixi.port moves the server, so every program that talks to it
     must read NIXI_PORT. The watcher used to hard-code 8642, which made the
     option silently wrong."""
-    import re
     for prog in ("bin/nixi-server", "bin/nixi-watch", "bin/nixi"):
         text = open(os.path.join(ROOT, prog)).read()
         assert "NIXI_PORT" in text, prog + " ignores NIXI_PORT"
