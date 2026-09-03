@@ -125,6 +125,7 @@ installer both detect it and stand down rather than writing over the store.
 | **Live tour** | 🚀 in the widget. Eleven steps, and it *watches Hyprland events* — it knows when you actually pressed the key, so it moves at your pace |
 | **Learning path** | 🎓 walks 16 topics and skips the ones the watcher has seen you use |
 | **Ask anything** | Type. Paths in answers are clickable and open in your editor |
+| **Speak instead of typing** | 🎤 next to the input, if you enabled voice. Click, talk, click. The transcript lands **in the box** for you to check — Nixi never sends it on its own |
 | **Terminal instead** | `nixi --tui` |
 
 ### What it knows about NixOS
@@ -139,6 +140,41 @@ collision, then backfills the rest from Omarchy. So it gives you
 It leads with the things NixOS gives you that Arch cannot: generations and
 rollback when an update goes wrong, and `nixarchy dev init` for per-project
 toolchains.
+
+### Talking to it
+
+Voice input is off by default. Turn it on and a 🎤 appears beside the input:
+
+```nix
+services.nixi.voice.enable = true;
+```
+
+That is the whole setup — the speech model is a pinned `fetchurl`, so it
+arrives with your rebuild rather than being downloaded on first use.
+
+**Speech never leaves the machine.** Recording happens in the page, and
+`whisper.cpp` transcribes it locally. Nixi deliberately does *not* use the
+browser's `SpeechRecognition` API, for two reasons: it streams your microphone
+to Google's servers, and it is a silent no-op on any Chromium built without
+Google API keys — which includes the one in nixpkgs, where it fails with a bare
+`network` error and no visible symptom.
+
+**The transcript is never auto-sent.** It goes into the input box and waits for
+you to press Enter. In Mechanic mode a single misheard word would otherwise act
+on your system.
+
+Tuning, all optional:
+
+| Option | Default | |
+|---|---|---|
+| `voice.model` | `ggml-base.en.bin` (148 MB) | `small.en` is more accurate and ~3x slower; `tiny.en` for a weak CPU |
+| `voice.language` | `en` | `"auto"` with a multilingual model |
+| `voice.prompt` | Nixi's nixarchy word list | Add your own jargon. This matters more than it sounds: without it `base.en` hears *"nixarchy"* as *"Nixaki"* |
+
+Installing via the plugin manager instead of the flake? Put `whisper-cpp` and
+`ffmpeg` on your PATH and fetch a model into
+`~/.local/share/nixi/models/ggml-base.en.bin`. If anything is missing the
+widget hides the mic button and `/voice` tells you exactly which piece.
 
 ---
 
@@ -172,6 +208,11 @@ Set it with ⚙ in the widget.
 - **The network is one code path.** Only `nixi-update-manual` talks to the
   internet, only to two pinned GitHub repositories, and every page is verified
   against its git blob hash at a pinned commit before it is used.
+- **Voice is local too.** Audio is transcribed on your machine by
+  `whisper.cpp`, scratch files are written through the same descriptor-bound
+  path as every other private file and deleted immediately, and no speech API
+  is ever called. The browser's `SpeechRecognition` would have sent the raw
+  microphone stream to Google; it is not used.
 - **Python standard library only.** The only vendored code is `marked` and
   `DOMPurify` for rendering Markdown safely in the widget.
 

@@ -42,6 +42,12 @@
   input { flex:1; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--ink); font:inherit; outline:none; }
   input:focus { border-color:var(--ember); }
   input:disabled { opacity:.5; }
+  #mic { display:none; flex:0 0 auto; width:38px; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:1rem; cursor:pointer; padding:0; }
+  #mic.on { display:block; }
+  #mic:hover { color:var(--ember); border-color:var(--ember); }
+  #mic[aria-pressed="true"] { color:#fff; background:#c0392b; border-color:#c0392b; animation:rec 1.2s ease-in-out infinite; }
+  #mic:disabled { opacity:.5; cursor:default; animation:none; }
+  @keyframes rec { 50% { opacity:.55; } }
   #mini { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 10px; font-weight:700; line-height:1.4; }
   #mini:hover { color:var(--ember); border-color:var(--ember); }
   #gear { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:2px 8px; line-height:1.4; cursor:pointer; }
@@ -118,6 +124,7 @@
 </div>
 <form id="f">
   <input id="q" autocomplete="off" placeholder="Type a question and press Enter…" autofocus>
+  <button id="mic" type="button" aria-pressed="false" title="Hold to talk" aria-label="Hold to talk">&#127908;</button>
 </form>
 <script src="/vendor/marked.min.js"></script>
 <script src="/vendor/purify.min.js"></script>
@@ -421,6 +428,76 @@ async function checkPrimed() {
 checkPrimed();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkPrimed();
+});
+
+// --- voice input ----------------------------------------------------------
+// Record here, transcribe on the local server, drop the text in the box. The
+// button only appears once /voice says the model and tools are actually
+// present, so there is no mic that silently does nothing. Click to start,
+// click to stop -- a toggle behaves the same for mouse, touch and keyboard,
+// where hold-to-talk loses the clip the moment the pointer slips off.
+const mic = document.getElementById('mic');
+let recorder = null, chunks = [], micTimer = null;
+
+fetch('/voice').then(r => r.json()).then(j => {
+  if (j.ok && navigator.mediaDevices && window.MediaRecorder) mic.classList.add('on');
+}).catch(() => {});
+
+function micIdle() {
+  mic.setAttribute('aria-pressed', 'false');
+  mic.disabled = false;
+  mic.textContent = '\u{1F3A4}';
+  mic.title = 'Click to talk';
+}
+
+async function startRec() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    add('bot', 'I could not open the microphone (' + (e.name || e) +
+               '). Allow it for this page, or check SUPER+SPACE → Audio.');
+    return;
+  }
+  chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());   // drops the browser's mic indicator
+    clearTimeout(micTimer);
+    const blob = new Blob(chunks, { type: recorder.mimeType });
+    recorder = null;
+    mic.disabled = true; mic.textContent = '…'; mic.title = 'Transcribing…';
+    try {
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      // Chunked: String.fromCharCode(...buf) overflows the stack on a long clip.
+      let s = '';
+      for (let i = 0; i < buf.length; i += 8192) s += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
+      const j = await (await fetch('/transcribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: btoa(s) }) })).json();
+      if (j.error) add('bot', j.error);
+      else if (!j.text) add('bot', "I didn't catch any speech in that — try again a bit closer to the mic.");
+      // Into the input box, never straight to ask(): in Mechanic mode a single
+      // misheard word would act on the machine. The human reads it, then Enter.
+      else input.value = input.value ? input.value + ' ' + j.text : j.text;
+    } catch (e) {
+      add('bot', 'Voice failed: ' + e.message);
+    }
+    micIdle(); input.focus();
+  };
+  recorder.start();
+  mic.setAttribute('aria-pressed', 'true');
+  mic.textContent = '⏹'; mic.title = 'Stop and transcribe';
+  // Hard cap, matching the server's clip limit, so a forgotten open mic stops.
+  micTimer = setTimeout(() => {
+    if (recorder && recorder.state === 'recording') recorder.stop();
+  }, 60000);
+}
+
+mic.addEventListener('click', () => {
+  if (recorder && recorder.state === 'recording') recorder.stop();
+  else startRec();
 });
 
 form.addEventListener('submit', (e) => {
