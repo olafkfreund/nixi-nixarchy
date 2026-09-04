@@ -143,7 +143,7 @@ toolchains.
 
 ### What voice needs
 
-Nothing, if you use the flake. `voice.enable = true` pulls in every piece and
+Nothing, if you use the flake. `services.nixi.voice.enable = true` pulls in every piece and
 wraps the programs so they carry it:
 
 | | Where it comes from |
@@ -160,9 +160,15 @@ started the server or `nixi` did.
 and you have to provide the same three things yourself:
 
 ```nix
-# in your NixOS or Home Manager config
-environment.systemPackages = [ pkgs.whisper-cpp ];   # pipewire is already there
+# NixOS
+environment.systemPackages = [ pkgs.whisper-cpp ];
+# ...or Home Manager
+home.packages = [ pkgs.whisper-cpp ];
 ```
+
+`pw-record` comes from `pkgs.pipewire`. On nixarchy it is already there — the
+desktop needs it — but add it alongside if `command -v pw-record` finds
+nothing.
 ```bash
 mkdir -p ~/.local/share/nixi/models
 whisper-cpp-download-ggml-model base.en ~/.local/share/nixi/models

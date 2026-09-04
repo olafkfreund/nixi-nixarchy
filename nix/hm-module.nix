@@ -36,8 +36,8 @@ let
             rm -f "$out/bin/$p"
             makeWrapper ${cfg.package}/bin/"$p" "$out/bin/$p" \
               --prefix PATH : ${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]} \
-              --set-default NIXI_WHISPER_MODEL ${cfg.voice.model} \
-              --set-default NIXI_WHISPER_LANG ${cfg.voice.language} \
+              --set-default NIXI_WHISPER_MODEL ${lib.escapeShellArg "${cfg.voice.model}"} \
+              --set-default NIXI_WHISPER_LANG ${lib.escapeShellArg cfg.voice.language} \
               --set-default NIXI_VOICE_SILENCE_RMS ${toString cfg.voice.silenceThreshold} \
               ${lib.optionalString (cfg.voice.prompt != "")
                 "--set-default NIXI_WHISPER_PROMPT ${lib.escapeShellArg cfg.voice.prompt}"}
@@ -274,17 +274,6 @@ in
           run chmod 700 "$HOME/.local/share/nixi"
         '';
     }
-
-    (lib.mkIf cfg.voice.enable {
-      # Only PATH is set here, and only so the unit can still find the user's
-      # agent binary; every voice-specific value lives in the wrapper above,
-      # in ONE place. Duplicating it across the module and the unit file is
-      # exactly how these two install paths drifted apart before.
-      systemd.user.services.nixi.Service.Environment = lib.mkForce [
-        "PATH=${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]}:${unitPath}"
-        "NIXI_PORT=${toString cfg.port}"
-      ];
-    })
 
     (lib.mkIf cfg.barWidget.enable {
       xdg.configFile = {
