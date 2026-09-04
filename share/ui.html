@@ -491,7 +491,9 @@ mic.addEventListener('click', async () => {
   try {
     const j = await (await fetch('/listen/stop', { method: 'POST' })).json();
     if (j.error) add('bot', j.error);
-    else if (!j.text) add('bot', "I didn't hear anything — check your input device with SUPER+SPACE → Audio, or speak a little closer.");
+    // An empty transcript always arrives with a reason. Showing "I didn't hear
+    // anything" for every case is what made this impossible to diagnose.
+    else if (!j.text) add('bot', j.note || "I didn't hear any speech in that.");
     // Into the input box, never straight to ask(): in Mechanic mode a single
     // misheard word would act on the machine. The human reads it, then Enter.
     else input.value = input.value ? input.value + ' ' + j.text : j.text;

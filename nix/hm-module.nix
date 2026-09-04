@@ -194,6 +194,24 @@ in
         '';
       };
 
+      vadModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = pkgs.fetchurl {
+          url = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
+          hash = "sha256-KZQNmNQrkfvQXOSJ8+z3xy8KQvAn5IdZGaKPtMBOos8=";
+        };
+        defaultText = lib.literalExpression "fetchurl { ... ggml-silero-v5.1.2.bin }";
+        description = ''
+          Silero voice-activity model (885 KB). This is what stops whisper
+          inventing text: given a clip with no speech in it, whisper does not
+          return nothing, it returns something plausible -- digital silence
+          decodes as "You" and a quiet room as "(wind howling)". VAD empties
+          both while still transcribing quiet speech correctly.
+
+          `null` disables it, at the cost of having to discard more.
+        '';
+      };
+
       language = lib.mkOption {
         type = lib.types.str;
         default = "en";

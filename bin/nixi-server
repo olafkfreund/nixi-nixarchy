@@ -1045,20 +1045,24 @@ VOICE_PROMPT = os.environ.get("NIXI_WHISPER_PROMPT", (
     "rebuild, generation, rollback, derivation, dotfiles, workspace."))
 MAX_SECONDS = 60
 # Whisper does not return nothing when it hears nothing -- it INVENTS. Digital
-# silence decodes as " You"; four seconds of an ordinary quiet room produced
-# "Or, if they want to be successful." A fabricated question landing in the
-# input box looks exactly like something the user really said, which is worse
-# than an error, so a recording too quiet to contain speech is refused before
-# the model ever runs.
+# silence decodes as " You", a quiet room as "(wind howling)" or a whole
+# fabricated sentence. A made-up question in the input box is indistinguishable
+# from one the user really asked, so no-speech has to be caught.
 #
-# Measured on this hardware (16-bit full scale 32767): a quiet room through a
-# real microphone is RMS ~530, speech is RMS ~3500. RMS, not peak -- one
-# keyboard clack or a door closing pushes peak past any sane threshold while
-# the recording still holds no speech at all. Silero VAD was tried instead and
-# rejected: it clears digital silence but still calls room noise speech, for
-# an extra 885 KB model. Tunable because microphone gain is hardware, and
-# hardware never matches the numbers measured on someone else's desk.
-SILENCE_RMS = int(os.environ.get("NIXI_VOICE_SILENCE_RMS", "1100"))
+# It is caught by Silero VAD, NOT by a loudness threshold. The first version of
+# this shipped an RMS gate at 1100 and it was simply wrong: whisper normalises
+# internally and transcribes the same sentence correctly at RMS 576, 288, 138,
+# 69 and 34. Level is nearly irrelevant to it. All the gate did was discard
+# audio whisper handles fine -- on a real machine the user spoke, was heard at
+# roughly RMS 780, and got back an empty string.
+#
+# VAD keeps quiet speech at every one of those levels and empties both digital
+# silence and a real quiet room. What remains here is a dead-microphone check
+# only: a muted or absent input device gives essentially zero signal, and that
+# is worth naming rather than sending to a model.
+SILENCE_RMS = int(os.environ.get("NIXI_VOICE_SILENCE_RMS", "15"))
+VOICE_VAD_MODEL = os.path.expanduser(os.environ.get(
+    "NIXI_VAD_MODEL", os.path.join(DATA, "models", "ggml-silero-v5.1.2.bin")))
 voice_lock = threading.Lock()
 _rec = {"proc": None, "path": None, "timer": None}
 
@@ -1153,7 +1157,7 @@ def stop_recording():
         path = _rec["path"]
         _rec["path"] = None
     try:
-        return transcribe(path)
+        return transcribe(path)          # (text, note)
     finally:
         try:
             os.unlink(path)
@@ -1176,19 +1180,27 @@ def _rms(path):
 
 
 def transcribe(path):
+    """Returns (text, note). An empty text ALWAYS comes with a note saying
+    why: an empty string on its own is indistinguishable from 'you said
+    nothing', 'your mic is muted' and 'the gate ate it', which is exactly how
+    the first version of this failed invisibly on a real machine."""
     try:
         level = _rms(path)
     except (wave.Error, EOFError):
         raise ValueError("that recording was not readable audio") from None
     if level is not None and level < SILENCE_RMS:
-        # Refused BEFORE the model runs: see SILENCE_RMS above.
-        return ""
+        return "", ("Your microphone produced no signal at all (level %.0f). "
+                    "Check it is not muted: SUPER+SPACE \u2192 Audio, or "
+                    "wpctl get-volume @DEFAULT_AUDIO_SOURCE@." % level)
+    cmd = ["whisper-cli", "-m", VOICE_MODEL, "-l", VOICE_LANG, "-nt", "-np",
+           "--prompt", VOICE_PROMPT,
+           "-t", str(min(8, os.cpu_count() or 4))]
+    # Without VAD, a clip with no speech in it comes back as invented text.
+    if os.path.isfile(VOICE_VAD_MODEL):
+        cmd += ["--vad", "--vad-model", VOICE_VAD_MODEL]
     try:
-        out = subprocess.run(
-            ["whisper-cli", "-m", VOICE_MODEL, "-l", VOICE_LANG, "-nt", "-np",
-             "--prompt", VOICE_PROMPT,
-             "-t", str(min(8, os.cpu_count() or 4)), path],
-            check=True, timeout=120, capture_output=True, text=True).stdout
+        out = subprocess.run(cmd + [path], check=True, timeout=120,
+                             capture_output=True, text=True).stdout
     except subprocess.CalledProcessError:
         # Raising the CalledProcessError would put the whole argv, and the
         # user's home path, in a chat bubble. Say the useful thing instead.
@@ -1198,7 +1210,14 @@ def transcribe(path):
     lines = [ln.strip() for ln in out.splitlines()]
     keep = [ln for ln in lines
             if ln and not (ln.startswith("[") and ln.endswith("]"))]
-    return " ".join(keep).strip()[:2000]
+    text = " ".join(keep).strip()[:2000]
+    if text:
+        return text, ""
+    if os.path.isfile(VOICE_VAD_MODEL):
+        return "", ("I heard the recording (level %.0f) but no speech in it." % level)
+    return "", ("No speech found (level %.0f). Speech detection is off because "
+                "there is no VAD model at %s -- without it I have to discard "
+                "anything I am unsure about." % (level, VOICE_VAD_MODEL))
 
 
 # ---- feature-specific consent for persistent integrations ----------------
@@ -1547,14 +1566,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                             + str(e)[-200:]})
                 return self._send(200, {"recording": True})
             try:
-                text = stop_recording()
+                text, note = stop_recording()
             except ValueError as e:
                 return self._send(200, {"error": str(e)})
             except subprocess.TimeoutExpired:
                 return self._send(200, {"error": "transcription timed out"})
             except Exception as e:
                 return self._send(200, {"error": "could not transcribe: " + str(e)[-200:]})
-            return self._send(200, {"text": text})
+            return self._send(200, {"text": text, "note": note})
         if self.path != "/ask":
             return self._send(404, {"error": "not found"})
         try:
