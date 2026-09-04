@@ -300,6 +300,23 @@ def test_voice_deps_reach_every_entry_point():
     print("  ok  voice deps reach both the service and the launcher")
 
 
+def test_installer_model_pins_match_the_flake():
+    """install.py fetches the same two models the Nix module pins, so the
+    plugin path is not left with voice inert. Two sources of the same hash
+    drift, and I typed both of these wrong by eye the first time."""
+    import base64
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    inst = open(os.path.join(ROOT, "install.py")).read()
+    sris = re.findall(r'hash = "sha256-([^"]+)"', mod)
+    assert len(sris) >= 2, "expected the speech and VAD models to be pinned"
+    for sri in sris:
+        hexd = base64.b64decode(sri).hex()
+        assert '"%s"' % hexd in inst, (
+            "install.py does not carry the flake's pin %s...; a plugin install "
+            "would fetch something the flake never verified" % hexd[:16])
+    print("  ok  installer and flake pin the same models")
+
+
 def test_no_speech_is_caught_and_explained():
     """Whisper INVENTS text from clips with no speech: digital silence decodes
     as " You", a quiet room as "(wind howling)". That is caught by VAD, not by
@@ -382,6 +399,7 @@ if __name__ == "__main__":
                test_both_install_paths_know_about_voice,
                test_mic_button_describes_what_it_does,
                test_voice_deps_reach_every_entry_point,
+               test_installer_model_pins_match_the_flake,
                test_no_speech_is_caught_and_explained,
                test_recorder_is_always_released,
                test_voice_scratch_stays_under_home):

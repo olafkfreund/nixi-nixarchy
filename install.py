@@ -5,7 +5,9 @@
     install.py --with-watcher  | --without-watcher   coaching watcher service
     install.py --with-skill    | --without-skill     agent skill (~/.claude/skills)
     install.py --with-hooks    | --without-hooks     boot/update hooks + weekly timer
-    install.py --all           core + every integration (documented consent)
+    install.py --with-voice    | --without-voice     speech models for voice input
+    install.py --all           core + every integration except voice (which
+                               downloads 149 MB of models; ask for it by name)
     install.py --refresh       re-place core + whatever is already installed
     install.py --status        JSON: which integrations are installed
     install.py --no-systemd    (tests) place files only
@@ -36,7 +38,7 @@ HOOKS_BOOT = os.path.join(HOME, ".config", "omarchy", "hooks", "post-boot.d")
 HOOKS_UPD = os.path.join(HOME, ".config", "omarchy", "hooks", "post-update.d")
 EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
 NO_SYSTEMD = "--no-systemd" in sys.argv
-FEATURES = ("watcher", "skill", "hooks")
+FEATURES = ("watcher", "skill", "hooks", "voice")
 _LOG = []
 
 
@@ -326,13 +328,21 @@ def merge_menu(j):
            '"aliases": ["how", "nixi", "ayuda"]}')
     if s.strip():
         j.place(EXT_DIR, "omarchy-menu.jsonc.bak-nixi", s.encode())
-    if not re.sub(r"//.*", "", s).strip().strip("{}").strip():
-        out = "{\n  " + row + "\n}\n"
-    else:
+    # Insert before the closing brace whenever there IS one, comments and all.
+    # This used to strip comments to decide whether the file was *effectively*
+    # empty and then, in that branch, synthesise a fresh file -- discarding the
+    # comments it had only stripped for the test. nixarchy seeds this file once
+    # with a commented example and never again (nixarchy#220), so the
+    # documentation did not come back. Only a file with no object at all is
+    # written from scratch.
+    if "}" in s:
         i = s.rindex("}")
         body = s[:i].rstrip()
-        sep = "," if body.endswith(("}", '"', "]")) and not body.endswith("{") else ""
+        stripped = re.sub(r"//.*", "", body).strip()
+        sep = "," if stripped.endswith(("}", '"', "]")) and not stripped.endswith("{") else ""
         out = body + sep + "\n  " + row + "\n}\n"
+    else:
+        out = "{\n  " + row + "\n}\n"
     j.place(EXT_DIR, "omarchy-menu.jsonc", out.encode())
     log("menu: Help entry added (backup: omarchy-menu.jsonc.bak-nixi)")
 
@@ -386,17 +396,71 @@ def disable_hooks(j, svc):
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
+# Voice needs two models, and only the Nix module knows where to get them --
+# the URLs live in nix/hm-module.nix, so a plugin-manager install leaves voice
+# inert until someone fetches them by hand. Same pins, same hashes.
+MODELS = (
+    ("ggml-base.en.bin",
+     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
+     "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"),
+    ("ggml-silero-v5.1.2.bin",
+     "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
+     "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"),
+)
+
+
+def enable_voice(j, svc):
+    """Fetch the speech and VAD models, hash-verified. Everything else voice
+    needs (whisper-cli, pw-record) is a package, which this installer does not
+    manage -- the server names whatever is missing rather than failing."""
+    import hashlib
+    import urllib.request
+    mdir = os.path.join(DATA, "models")
+    for name, url, want in MODELS:
+        dest = os.path.join(mdir, name)
+        if os.path.exists(dest):
+            log("voice: %s already present" % name)
+            continue
+        log("voice: fetching %s ..." % name)
+        req = urllib.request.Request(url, headers={"User-Agent": "nixi-installer"})
+        with urllib.request.urlopen(req, timeout=600) as r:
+            blob = r.read()
+        got = hashlib.sha256(blob).hexdigest()
+        if got != want:
+            raise RuntimeError("%s failed its hash check (got %s)" % (name, got[:16]))
+        j.place(mdir, name, blob, mode=0o644, dir_mode=0o700)
+        log("voice: %s verified (%d MB)" % (name, len(blob) // (1024 * 1024)))
+    if not _shutil_which("whisper-cli"):
+        log("voice: models are in place, but whisper-cli is not on PATH. "
+            "Add pkgs.whisper-cpp to your config; until then the mic button "
+            "stays hidden and /voice says what is missing.")
+
+
+def disable_voice(j, svc):
+    for name, _url, _h in MODELS:
+        j.remove(os.path.join(DATA, "models"), name)
+
+
+def _shutil_which(b):
+    import shutil
+    return shutil.which(b)
+
+
 def status():
     return {
         "watcher": os.path.exists(os.path.join(UNITS, "nixi-watch.service"))
                    and is_enabled("nixi-watch.service"),
         "skill": os.path.exists(os.path.join(SKILLS, "SKILL.md")),
         "hooks": os.path.exists(os.path.join(HOOKS_UPD, "nixi-manual-refresh.hook")),
+        "voice": all(os.path.exists(os.path.join(DATA, "models", n))
+                     for n, _u, _h in MODELS),
     }
 
 
-ENABLE = {"watcher": enable_watcher, "skill": enable_skill, "hooks": enable_hooks}
-DISABLE = {"watcher": disable_watcher, "skill": disable_skill, "hooks": disable_hooks}
+ENABLE = {"watcher": enable_watcher, "skill": enable_skill,
+          "hooks": enable_hooks, "voice": enable_voice}
+DISABLE = {"watcher": disable_watcher, "skill": disable_skill,
+           "hooks": disable_hooks, "voice": disable_voice}
 
 
 def main(argv):
@@ -407,7 +471,11 @@ def main(argv):
     want_on, want_off, core = [], [], True
     for a in args:
         if a == "--all":
-            want_on = list(FEATURES)
+            # NOT voice: it is the only feature that downloads anything (149 MB
+            # of models), and a flag meaning "everything" should not quietly
+            # pull that over someone's connection. It also keeps this
+            # installable offline, which CI depends on.
+            want_on = [f for f in FEATURES if f != "voice"]
         elif a == "--refresh":
             want_on = [f for f, on in status().items() if on]
         elif a.startswith("--with-") and a[7:] in FEATURES:
@@ -461,6 +529,24 @@ def main(argv):
         log("enabled: " + f)
     for f in want_off:
         log("disabled: " + f)
+    # A bare `install.py` enables NO optional feature, and used to end with the
+    # same sentence as `--all`. On a second machine that produced one unit
+    # where the first had four, with nothing to say so: the only external tell
+    # was `nixi-watch.service` reporting "could not be found" rather than
+    # "inactive". Say which features are off and how to turn them on.
+    if core:
+        off = [f for f, on in status().items() if not on]
+        if off:
+            msg = ("not enabled: %s — add with %s"
+                   % (", ".join(off), " ".join("--with-" + f for f in off)))
+            # Only offer --all when it would actually turn these on; voice is
+            # deliberately excluded from it, and saying otherwise is the kind
+            # of true-sounding message this change exists to stop.
+            if [f for f in off if f != "voice"]:
+                msg += ", or --all for everything but voice"
+            log(msg)
+        else:
+            log("all optional features are enabled")
     write_log()
     return 0
 

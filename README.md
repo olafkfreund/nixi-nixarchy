@@ -156,8 +156,14 @@ Nothing is installed onto your interactive `PATH` and nothing is downloaded on
 first use. The binaries are wrapped, so voice behaves the same whether systemd
 started the server or `nixi` did.
 
-**Installing with the plugin manager instead?** Then Nix is not managing this,
-and you have to provide the same three things yourself:
+**Installing with the plugin manager instead?** The models come from:
+
+```bash
+python3 install.py --with-voice     # fetches both, hash-checked
+```
+
+deliberately not from `--all`, which stays offline rather than quietly pulling
+149 MB. The binaries are still yours to provide:
 
 ```nix
 # NixOS
