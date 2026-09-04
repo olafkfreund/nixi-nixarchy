@@ -186,7 +186,10 @@ jobs:
           python3 - <<'PY'
           import json
           s = json.load(open("/tmp/status.json"))
-          assert s == {"watcher": True, "skill": True, "hooks": True}, s
+          # voice is deliberately NOT in --all: it is the only feature that
+          # downloads anything (149 MB of models), and this job is offline.
+          assert s["voice"] is False, "--all fetched models; this job has no network budget"
+          assert all(v for k, v in s.items() if k != "voice"), s
           print("installer status OK:", s)
           PY
           for f in .local/bin/nixi .local/bin/nixi-server .config/nixi/ui.html \
