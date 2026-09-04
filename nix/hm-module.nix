@@ -39,6 +39,8 @@ let
               --set-default NIXI_WHISPER_MODEL ${lib.escapeShellArg "${cfg.voice.model}"} \
               --set-default NIXI_WHISPER_LANG ${lib.escapeShellArg cfg.voice.language} \
               --set-default NIXI_VOICE_SILENCE_RMS ${toString cfg.voice.silenceThreshold} \
+              ${lib.optionalString (cfg.voice.vadModel != null)
+                "--set-default NIXI_VAD_MODEL ${lib.escapeShellArg "${cfg.voice.vadModel}"} \\"}
               ${lib.optionalString (cfg.voice.prompt != "")
                 "--set-default NIXI_WHISPER_PROMPT ${lib.escapeShellArg cfg.voice.prompt}"}
           done
@@ -194,6 +196,24 @@ in
         '';
       };
 
+      vadModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = pkgs.fetchurl {
+          url = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
+          hash = "sha256-KZQNmNQrkfvQXOSJ8+z3xy8KQvAn5IdZGaKPtMBOos8=";
+        };
+        defaultText = lib.literalExpression "fetchurl { ... ggml-silero-v5.1.2.bin }";
+        description = ''
+          Silero voice-activity model (885 KB). This is what stops whisper
+          inventing text: given a clip with no speech in it, whisper does not
+          return nothing, it returns something plausible -- digital silence
+          decodes as "You" and a quiet room as "(wind howling)". VAD empties
+          both while still transcribing quiet speech correctly.
+
+          `null` disables it, at the cost of having to discard more.
+        '';
+      };
+
       language = lib.mkOption {
         type = lib.types.str;
         default = "en";
@@ -207,18 +227,21 @@ in
 
       silenceThreshold = lib.mkOption {
         type = lib.types.ints.between 0 32767;
-        default = 1100;
+        default = 15;
         description = ''
-          RMS level below which a recording is treated as silence and never
-          sent to the model. This is not a nicety: whisper does not return
-          nothing when it hears nothing, it invents plausible sentences, and
-          a fabricated question in the input box looks exactly like one you
-          asked. Measured here, a quiet room through a real microphone is
-          ~530 and speech is ~3500, out of a 32767 full scale.
+          RMS level below which a recording is treated as a DEAD MICROPHONE
+          and never sent to the model, out of a 32767 full scale.
 
-          Raise it if a silent room still produces text; lower it if quiet
-          speech is being dropped. Microphone gain is hardware, so the
-          default cannot be right for every desk.
+          Deliberately far below speech, and not a quality gate. This shipped
+          at 1100 on the theory that quiet audio transcribes badly; measured,
+          it does not -- whisper normalises internally and returns the same
+          sentence correctly at RMS 576, 288, 138, 69 and 34. All the high
+          threshold did was discard speech it could have understood, silently.
+          Clips with no speech in them are handled by {option}`voice.vadModel`
+          instead, which is the right tool for it.
+
+          Raise this only to catch a noisy-but-empty input device; anything
+          near speech level will start eating real questions again.
         '';
       };
 

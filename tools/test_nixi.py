@@ -300,21 +300,61 @@ def test_voice_deps_reach_every_entry_point():
     print("  ok  voice deps reach both the service and the launcher")
 
 
-def test_silence_never_reaches_the_model():
-    """Whisper does not return nothing when it hears nothing -- it INVENTS.
-    Digital silence decoded as " You"; a quiet room produced "Or, if they
-    want to be successful." A fabricated question in the input box is
-    indistinguishable from one the user really asked."""
+def test_installer_model_pins_match_the_flake():
+    """install.py fetches the same two models the Nix module pins, so the
+    plugin path is not left with voice inert. Two sources of the same hash
+    drift, and I typed both of these wrong by eye the first time."""
+    import base64
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    inst = open(os.path.join(ROOT, "install.py")).read()
+    sris = re.findall(r'hash = "sha256-([^"]+)"', mod)
+    assert len(sris) >= 2, "expected the speech and VAD models to be pinned"
+    for sri in sris:
+        hexd = base64.b64decode(sri).hex()
+        assert '"%s"' % hexd in inst, (
+            "install.py does not carry the flake's pin %s...; a plugin install "
+            "would fetch something the flake never verified" % hexd[:16])
+    print("  ok  installer and flake pin the same models")
+
+
+def test_no_speech_is_caught_and_explained():
+    """Whisper INVENTS text from clips with no speech: digital silence decodes
+    as " You", a quiet room as "(wind howling)". That is caught by VAD, not by
+    a loudness threshold -- the first version gated on RMS 1100 and merely
+    discarded audio whisper transcribes fine (correct at RMS 576 down to 34),
+    so a user spoke and got back an empty string."""
     srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    assert "SILENCE_RMS" in srv, "no silence gate"
     body = srv.split("def transcribe(")[1].split("\ndef ")[0]
-    # Comments in here NAME the threshold; comparing raw indexes would compare
-    # prose order, not execution order, and pass however the code is arranged.
-    code = re.sub(r"#[^\n]*", "", body)
-    code = code.split('"""')[2] if code.count('"""') >= 2 else code
-    assert code.index("SILENCE_RMS") < code.index('"whisper-cli"'), \
-        "the silence gate must run BEFORE whisper, not after"
-    print("  ok  silence is refused before the model can invent")
+    assert "--vad" in body, "no voice-activity detection; whisper will invent"
+    # The loudness check may only catch a dead mic, never ordinary quiet speech.
+    m = re.search(r'SILENCE_RMS = int\(os\.environ\.get\([^,]+,\s*"(\d+)"\)', srv)
+    assert m, "SILENCE_RMS default not found"
+    assert int(m.group(1)) <= 50, (
+        "the loudness gate is back above dead-mic level (%s); whisper "
+        "transcribes correctly down to RMS 34, so this discards real speech"
+        % m.group(1))
+    # Every empty result must say which of the several causes it was.
+    assert body.count("return \"\",") >= 2, "an empty transcript with no reason"
+    assert "no signal at all" in body and "no speech in it" in body, \
+        "the empty cases are not distinguished for the user"
+    ui = open(os.path.join(ROOT, "share/ui.html")).read()
+    assert "j.note" in ui, "the widget throws away the reason the server gave"
+
+    # The module OVERRIDES the server's defaults through the wrapper, so
+    # checking bin/nixi-server alone proves nothing about a flake install.
+    # This shipped once with the server at 15 and the module still at 1100,
+    # which made the whole fix inert for every Home Manager user.
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    assert "NIXI_VAD_MODEL" in mod, \
+        "the module fetches a VAD model and never tells the server where it is"
+    dflt = re.search(r"silenceThreshold = lib\.mkOption \{.*?default = (\d+);",
+                     mod, re.S)
+    assert dflt, "silenceThreshold default not found in the module"
+    assert int(dflt.group(1)) == int(m.group(1)), (
+        "module default (%s) overrides the server's (%s); the flake install "
+        "would behave differently from every other one"
+        % (dflt.group(1), m.group(1)))
+    print("  ok  no-speech caught by VAD, and every empty result explains itself")
 
 
 def test_recorder_is_always_released():
@@ -359,7 +399,8 @@ if __name__ == "__main__":
                test_both_install_paths_know_about_voice,
                test_mic_button_describes_what_it_does,
                test_voice_deps_reach_every_entry_point,
-               test_silence_never_reaches_the_model,
+               test_installer_model_pins_match_the_flake,
+               test_no_speech_is_caught_and_explained,
                test_recorder_is_always_released,
                test_voice_scratch_stays_under_home):
         fn()

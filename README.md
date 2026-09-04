@@ -156,8 +156,14 @@ Nothing is installed onto your interactive `PATH` and nothing is downloaded on
 first use. The binaries are wrapped, so voice behaves the same whether systemd
 started the server or `nixi` did.
 
-**Installing with the plugin manager instead?** Then Nix is not managing this,
-and you have to provide the same three things yourself:
+**Installing with the plugin manager instead?** The models come from:
+
+```bash
+python3 install.py --with-voice     # fetches both, hash-checked
+```
+
+deliberately not from `--all`, which stays offline rather than quietly pulling
+149 MB. The binaries are still yours to provide:
 
 ```nix
 # NixOS
@@ -205,12 +211,21 @@ it fails with a bare `network` error and no visible symptom.
 you to press Enter. In Mechanic mode a single misheard word would otherwise act
 on your system.
 
-**Silence is refused before the model sees it.** This one matters more than it
-looks: whisper does not return nothing when it hears nothing — it *invents*.
-Digital silence decodes as `" You"`, and four seconds of an ordinary quiet room
-produced *"Or, if they want to be successful."* A fabricated question in your
-input box is indistinguishable from one you actually asked, so anything below
-`voice.silenceThreshold` never reaches the model.
+**Clips with no speech are caught, and every empty result says why.** This
+matters more than it looks: whisper does not return nothing when it hears
+nothing — it *invents*. Digital silence decodes as `" You"`, a quiet room as
+`"(wind howling)"`. A fabricated question in your input box is
+indistinguishable from one you actually asked.
+
+That is caught by Silero VAD, not by a volume threshold. Loudness turns out to
+be nearly irrelevant to whisper, which normalises internally and transcribes
+the same sentence correctly at RMS 576, 288, 138, 69 and 34 — so a volume gate
+only discards speech it could have understood. The one level check left catches
+a muted or absent microphone, and says so.
+
+If nothing comes back you are told which it was: *"Your microphone produced no
+signal at all (level 0)"*, or *"I heard the recording (level 315) but no speech
+in it."*
 
 Tuning, all optional:
 
@@ -219,7 +234,8 @@ Tuning, all optional:
 | `voice.model` | `ggml-base.en.bin` (148 MB) | `small.en` is more accurate and ~3x slower; `tiny.en` for a weak CPU |
 | `voice.language` | `en` | `"auto"` with a multilingual model |
 | `voice.prompt` | Nixi's nixarchy word list | Add your own jargon. This matters more than it sounds: without it `base.en` hears *"nixarchy"* as *"Nixaki"* |
-| `voice.silenceThreshold` | `1100` | RMS out of 32767. Measured here: quiet room ~530, speech ~3500. Raise it if a silent room still produces text; lower it if quiet speech is dropped — microphone gain is hardware |
+| `voice.vadModel` | Silero (885 KB) | What stops whisper inventing text. `null` disables it, at the cost of discarding more |
+| `voice.silenceThreshold` | `15` | RMS out of 32767 — a dead-mic check only. Whisper handles quiet audio fine, so this is deliberately far below speech |
 
 Wrong input device? `SUPER+SPACE → Audio`, or `omarchy-audio-input-set-default`.
 Nixi uses the system default, so fixing it once fixes it everywhere.
