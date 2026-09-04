@@ -322,6 +322,21 @@ def test_no_speech_is_caught_and_explained():
         "the empty cases are not distinguished for the user"
     ui = open(os.path.join(ROOT, "share/ui.html")).read()
     assert "j.note" in ui, "the widget throws away the reason the server gave"
+
+    # The module OVERRIDES the server's defaults through the wrapper, so
+    # checking bin/nixi-server alone proves nothing about a flake install.
+    # This shipped once with the server at 15 and the module still at 1100,
+    # which made the whole fix inert for every Home Manager user.
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    assert "NIXI_VAD_MODEL" in mod, \
+        "the module fetches a VAD model and never tells the server where it is"
+    dflt = re.search(r"silenceThreshold = lib\.mkOption \{.*?default = (\d+);",
+                     mod, re.S)
+    assert dflt, "silenceThreshold default not found in the module"
+    assert int(dflt.group(1)) == int(m.group(1)), (
+        "module default (%s) overrides the server's (%s); the flake install "
+        "would behave differently from every other one"
+        % (dflt.group(1), m.group(1)))
     print("  ok  no-speech caught by VAD, and every empty result explains itself")
 
 
