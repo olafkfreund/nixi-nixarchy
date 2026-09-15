@@ -231,6 +231,49 @@ check passes.
 
 **⏸ Milestone 1 gate:** report the result to the user before starting step 8.
 
+**Step 7 results (p620, 2026-09-15)** — recorded at the gate, before step 8.
+
+Verified without a person at the keyboard:
+- The card renders natively in the live shell: a `nixi` layer surface on
+  DP-1, 0.7 s after `omarchy-shell shell toggle`, with **no QML errors**
+  (no `MenuModel.js` import failure, no `qs.Ui` incompatibility on 4.0.3).
+- The bridge starts from the pinned `nodejs-slim` (step 6) and from the test
+  plugin's own `…/nixi-next/bridge/` directory (step 4's `Qt.resolvedUrl` fix).
+- The bridge streams: driven headless through the same `nixi-node` wrapper
+  and the shell's real `PATH`, a reply arrived as 48 chunks over 2.9 s.
+- The bridge exits when the card closes; no process is left behind.
+- The menu data the card reads is nixarchy's (`OMARCHY_PATH`: 246
+  nixarchy/`apps.nix` references vs 10 in the profile copy). This checks the
+  file, not a typed search in the card.
+- The Home Manager-managed `io.github.olafkfreund.nixi` and `nixi.service`
+  were untouched; three bars on three monitors, no doubled bar.
+
+Found:
+- **`omarchy-shell shell rescanPlugins` re-instantiates every plugin**, not
+  just new ones. On p620 it produced ~40 "Handler was registered but will not
+  be used" warnings over 5 s, IPC timed out meanwhile, and `omarchy plugin
+  list` briefly returned nothing. The shell recovered by itself (verified:
+  30 s idle with no log activity, then `listPlugins` answered in 0.1 s).
+  `omarchy plugin enable` itself caused no reload. Any future test install
+  should expect this, and step 22 should prefer the shell's normal start-up
+  discovery over a rescan.
+- `claude-agent-acp` is not on the Omarchy shell's `PATH` on p620 (read from
+  the shell process's environment), so an unpinned install shows the
+  "adapter is not on the system PATH" message. The test used the package's
+  `claudeAcp` argument, which is how step 17's module supplies it.
+- The flake's pinned nixpkgs provides `claude-agent-acp` **0.70.0**, not the
+  0.75.1 read from the system registry at spec time.
+- When summoned from a terminal with nobody interacting, the card closes by
+  itself after ~1.9 s, through upstream's outside-dismiss path. Expected for
+  an ephemeral launcher; unconfirmed until a person summons it with a key.
+- Two `bridge.js` processes start on summon and one exits within 2 s. Upstream
+  says one conversation owns one bridge; the second is unexplained and
+  short-lived. To identify before step 10, which changes session start-up.
+
+Not yet verified, needs a person at the keyboard: the card stays open when
+summoned by key; a question typed into the card streams visibly; typing
+`install` shows nixarchy's Install row.
+
 ### Milestone 2 — nixi's features inside the overlay
 
 8. **`bin/nixi-context`.** Extract `local_answer()`, `_keybinds()` and their
