@@ -9,6 +9,16 @@ import qs.Ui
 
 Item {
   id: root
+
+  // Bridge scripts are resolved next to this file, the way Ask.qml already
+  // loads HarnessSelector.qml, not from a fixed ~/.config/omarchy/plugins/<id>/
+  // path: a Nix store install, a symlinked checkout and a second plugin id all
+  // put the plugin somewhere else, and the fixed path then silently points at
+  // a directory with no bridge in it.
+  function bridgeScript(name) {
+    return decodeURIComponent(String(Qt.resolvedUrl("bridge/" + name)).replace(/^file:\/\//, ""))
+  }
+
   signal closed()
   signal copyConfirmed()
   signal permissionModeConfirmed(string mode)
@@ -185,7 +195,7 @@ Item {
     return ["env", "HUGINN_INTERNAL=1", "NIXI_AGENT=" + agentName,
       "NIXI_MODEL=" + modelName,
       "NIXI_REASONING_EFFORT=" + reasoningEffort].concat(prefix).concat([
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/bridge.js"
+      root.bridgeScript("bridge.js")
     ])
   }
 
@@ -783,8 +793,7 @@ Item {
     // particular file manager or rewrite machine-specific compositor config.
     Quickshell.execDetached([
       "node",
-      Quickshell.env("HOME")
-        + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/reveal.js",
+      root.bridgeScript("reveal.js"),
       String(path || "")
     ])
   }
@@ -2471,8 +2480,7 @@ Item {
               filePreviewProc.running = false
               filePreviewProc.command = [
                 "gjs",
-                Quickshell.env("HOME")
-                  + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/preview.js",
+                root.bridgeScript("preview.js"),
                 String(root.filePreviewRequestId), root.hoverPreviewPath
               ]
               filePreviewProc.running = true

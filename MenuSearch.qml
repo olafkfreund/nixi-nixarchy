@@ -15,12 +15,27 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
-import "file:///usr/share/omarchy/shell/plugins/menu/MenuModel.js" as MenuModel
+// The menu LOGIC comes from the system profile, which is stable across nixarchy
+// updates; a QML import cannot read OMARCHY_PATH, a store path that changes on
+// every update. The file is byte-identical to the one under OMARCHY_PATH.
+import "file:///run/current-system/sw/share/omarchy/shell/plugins/menu/MenuModel.js" as MenuModel
 
 Item {
   id: root
 
-  readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
+  // Bridge scripts are resolved next to this file, the way Ask.qml already
+  // loads HarnessSelector.qml, not from a fixed ~/.config/omarchy/plugins/<id>/
+  // path: a Nix store install, a symlinked checkout and a second plugin id all
+  // put the plugin somewhere else, and the fixed path then silently points at
+  // a directory with no bridge in it.
+  function bridgeScript(name) {
+    return decodeURIComponent(String(Qt.resolvedUrl("bridge/" + name)).replace(/^file:\/\//, ""))
+  }
+
+  // The menu DATA must come from OMARCHY_PATH, never the profile path: nixarchy
+  // rewrites the Install rows there, and the profile copy still runs pacman. No
+  // fallback, matching the shell: missing rows are better than wrong ones.
+  readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH") || ""
   readonly property string defaultMenuPath: omarchyPath + "/default/omarchy/omarchy-menu.jsonc"
   readonly property string userMenuPath: Quickshell.env("HOME") + "/.config/omarchy/extensions/omarchy-menu.jsonc"
 
@@ -299,7 +314,7 @@ Item {
     } else if (row.isWindow) {
       Quickshell.execDetached([
         "node",
-        Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/windows.js",
+        root.bridgeScript("windows.js"),
         "--focus", String(row.stableId || "")
       ])
     } else if (row.route) {
@@ -434,7 +449,7 @@ Item {
     id: mathProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/math.js"
+      root.bridgeScript("math.js")
     ]
     running: true
     stdinEnabled: true
@@ -445,7 +460,7 @@ Item {
     id: fileProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/files.js"
+      root.bridgeScript("files.js")
     ]
     running: true
     stdinEnabled: true
@@ -456,7 +471,7 @@ Item {
     id: windowProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/windows.js"
+      root.bridgeScript("windows.js")
     ]
     running: true
     stdinEnabled: true

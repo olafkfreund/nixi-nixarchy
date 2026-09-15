@@ -168,9 +168,21 @@ check passes.
    functions, which are not branding and are deleted in step 16);
    `node --test bridge/harness-policy.test.js bridge/harness-errors.test.js` passes.
 
-4. **Menu logic import.** `MenuSearch.qml:18` → the profile path.
-   → verify: `git grep -n '/usr/share/omarchy' -- '*.qml'` is empty, and the
-   data path still reads `OMARCHY_PATH`.
+4. **Hard-coded paths.** `MenuSearch.qml:18` → the profile path. **Added
+   during implementation:** the QML also hard-codes the bridge location as
+   `~/.config/omarchy/plugins/<id>/bridge/*.js` in seven places
+   (`Conversation.qml` ×3, `MenuSearch.qml` ×4). That breaks the step 7 test
+   id — a plugin at `…/nixi-next/` would look for its bridge in Home Manager's
+   `…/nixi/` directory — and any store install. Each becomes
+   `root.bridgeScript(name)`, resolved with `Qt.resolvedUrl` next to the QML
+   file, the convention `Ask.qml:238` already uses for `HarnessSelector.qml`.
+   `MenuSearch.qml:23`'s `/usr/share/omarchy` data fallback is removed rather
+   than repointed: the profile copy is the upstream data with `pacman` rows,
+   and the shell itself has no fallback.
+   → verify: `git grep -n '/usr/share/omarchy' -- '*.qml'` and
+   `git grep -n 'plugins/io\.github\.olafkfreund\.nixi/bridge' -- '*.qml'` are
+   empty; the data path still reads `OMARCHY_PATH`; `qmllint` reports no syntax
+   errors in any QML file (confirmed to catch one on a deliberately broken copy).
 
 5. **Drop bundled adapters.** Remove the two adapter packages from
    `bridge/package.json`; regenerate `bridge/package-lock.json`; change the
