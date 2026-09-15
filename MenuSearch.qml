@@ -37,6 +37,14 @@ Item {
   // fallback, matching the shell: missing rows are better than wrong ones.
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH") || ""
   readonly property string defaultMenuPath: omarchyPath + "/default/omarchy/omarchy-menu.jsonc"
+
+  FileView {
+    path: Qt.resolvedUrl("share/faq.json")
+    onLoaded: {
+      try { root.faqEntries = JSON.parse(text()) || [] } catch (error) { root.faqEntries = [] }
+    }
+    onLoadFailed: { root.faqEntries = [] }
+  }
   readonly property string userMenuPath: Quickshell.env("HOME") + "/.config/omarchy/extensions/omarchy-menu.jsonc"
 
   property var defaultMenuItems: []
@@ -78,6 +86,10 @@ Item {
   property bool lastRunKeepsOpen: false
 
   signal actionRan(string label)
+  // Nixi's own rows: an answer already written down, and the two commands.
+  signal faqAnswered(string question, string answer)
+  signal nixiActionRequested(string action)
+  property var faqEntries: []
   signal browseRequested(string mode, string query)
   signal pathActionRequested(string path, bool repository, string verb)
 
@@ -144,6 +156,44 @@ Item {
       isRepoAggregate: true,
       appIcon: "", appId: "", action: "", route: "", score: -0.9
     })
+    // Nixi's own rows, ranked just below an exact menu hit: an answer that is
+    // already written down costs nothing, and the tour and learning path are
+    // otherwise only discoverable as typed commands.
+    if (!focusedMode) {
+      var needle = text.toLowerCase()
+      var faqHits = 0
+      for (var q = 0; q < root.faqEntries.length && faqHits < 3; q++) {
+        var entry = root.faqEntries[q]
+        var question = String(entry.q || "")
+        if (question.toLowerCase().indexOf(needle) === -1) continue
+        faqHits++
+        scored.push({
+          id: "nixi-faq:" + q,
+          label: question,
+          path: "Nixi · " + String(entry.cat || "answer"),
+          icon: "󰋗", iconFont: "JetBrainsMono Nerd Font",
+          isApp: false, isMath: false, isNixiFaq: true,
+          answer: String(entry.a || ""),
+          appIcon: "", appId: "", action: "", route: "", score: 0.5 + 0.01 * q
+        })
+      }
+      var commands = [
+        { id: "tour", label: "Start the guided tour", path: "Nixi · learn by doing", words: "tour guide start walkthrough" },
+        { id: "learn", label: "Teach me something new", path: "Nixi · learning path", words: "learn teach next topic" },
+      ]
+      for (var c = 0; c < commands.length; c++) {
+        if (commands[c].words.indexOf(needle) === -1 && commands[c].label.toLowerCase().indexOf(needle) === -1) continue
+        scored.push({
+          id: "nixi-action:" + commands[c].id,
+          label: commands[c].label,
+          path: commands[c].path,
+          icon: "󰒋", iconFont: "JetBrainsMono Nerd Font",
+          isApp: false, isMath: false, isNixiAction: true,
+          nixiAction: commands[c].id,
+          appIcon: "", appId: "", action: "", route: "", score: 0.8
+        })
+      }
+    }
     for (var w = 0; !fileOnly && !repoOnly && w < root.windowRows.length
          && w < (windowOnly ? 40 : 3); w++) {
       var window = root.windowRows[w]
@@ -296,7 +346,16 @@ Item {
     if (index < 0 || index >= root.rows.length) return false
     var row = root.rows[index]
     root.lastRunKeepsOpen = false
-    if (row.isMath) {
+    if (row.isNixiFaq) {
+      // The card stays: the answer appears in it rather than launching anything.
+      root.lastRunKeepsOpen = true
+      root.faqAnswered(String(row.label), String(row.answer))
+      return true
+    } else if (row.isNixiAction) {
+      root.lastRunKeepsOpen = true
+      root.nixiActionRequested(String(row.nixiAction))
+      return true
+    } else if (row.isMath) {
       Quickshell.execDetached(["wl-copy", String(row.answer)])
     } else if (row.isFileAggregate || row.isRepoAggregate) {
       root.lastRunKeepsOpen = true

@@ -151,6 +151,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     install -Dm644 TourModel.js $plugin/TourModel.js
     install -Dm644 share/tour.json $plugin/share/tour.json
     install -Dm644 share/learn.json $plugin/share/learn.json
+    # The FAQ is searchable from the card, so it ships beside the QML.
+    install -Dm644 share/faq.json $plugin/share/faq.json
     for js in bridge/*.js; do
       case "$js" in *.test.js|*/model-smoke.js) ;; *) install -Dm644 "$js" "$plugin/$js" ;; esac
     done
@@ -220,7 +222,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
     for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
-             share/tour.json share/learn.json bridge/bridge.js bridge/grounding.js \
+             share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done

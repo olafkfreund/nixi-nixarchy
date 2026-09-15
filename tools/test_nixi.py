@@ -235,6 +235,22 @@ def test_tour_and_learning_data():
     print("  ok  tour and learning data are valid and never wait for the old widget")
 
 
+def test_nixi_rows_are_searchable():
+    """The FAQ, the tour and the learning path are reachable from the card's
+    search, not only as typed commands -- and an FAQ answer is shown in the
+    card rather than launching something."""
+    menu = open(os.path.join(ROOT, "MenuSearch.qml")).read()
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    assert "share/faq.json" in menu, "the FAQ is not loaded into the search"
+    for flag in ("isNixiFaq", "isNixiAction"):
+        assert flag in menu, "search has no %s row" % flag
+    assert "lastRunKeepsOpen = true" in menu.split("if (row.isNixiFaq)")[1][:400], \
+        "answering an FAQ closes the card"
+    assert "onFaqAnswered" in card and "onNixiActionRequested" in card, \
+        "the card ignores its own search rows"
+    print("  ok  FAQ, tour and learn are searchable from the card")
+
+
 def test_voice_stays_local():
     """The browser SpeechRecognition API would ship the microphone to Google,
     and is a silent no-op on any Chromium without Google API keys (nixpkgs'
@@ -441,7 +457,8 @@ if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_learned_broker,
                test_no_runtime_rename, test_port_is_configurable,
                test_units_have_a_nixos_path, test_window_rule_is_valid_lua,
-               test_faq_schema, test_tour_and_learning_data, test_voice_stays_local,
+               test_faq_schema, test_tour_and_learning_data,
+               test_nixi_rows_are_searchable, test_voice_stays_local,
                test_transcript_is_never_auto_sent, test_whisper_flags_exist,
                test_both_install_paths_know_about_voice,
                test_mic_button_describes_what_it_does,
