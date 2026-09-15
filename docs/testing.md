@@ -10,7 +10,8 @@ From the repository root:
 
 ```sh
 node --check bridge/bridge.js
-node --test bridge/harness-policy.test.js bridge/harness-errors.test.js
+node --test bridge/*.test.js
+python3 tools/test_nixi.py
 git diff --check
 
 check_dir=$(mktemp -d /tmp/nixi-check.XXXXXX)
@@ -31,16 +32,16 @@ Omit `--full` for the default plus eight models at low effort.
 
 ```sh
 omarchy plugin add https://github.com/olafkfreund/nixi-nixarchy.git --enable --yes
-cd ~/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge
-npm ci
+~/.config/omarchy/plugins/io.github.olafkfreund.nixi/install.sh
 omarchy restart shell
 ```
 
 Confirm the configured shortcut opens a centered overlay with an input caret,
-square marker, Ask/YOLO label, and bottom-right pin icon. With
+square marker, GUIDE label, and bottom-right pin icon, and no text above the
+input. With
 `useHyprlandShortcutSubmap` enabled, confirm `hyprctl submap` reports
 `nixi` while the overlay is mapped and `default` after close or pin.
-Confirm a main-map chord such as Ctrl+Return reaches Ask inside the overlay and
+Confirm a main-map chord such as Ctrl+Return reaches Nixi inside the overlay and
 its original global binding still exists and works after dismissal.
 
 ## Conversation checklist
@@ -57,13 +58,14 @@ its original global binding still exists and works after dismissal.
 6. Scroll a long transcript with a trackpad and with a touch drag. Confirm the
    surface coasts after release and stops cleanly at both ends.
 7. Press Ctrl+, from the composer and the transcript. Confirm the motion editor
-   opens as a companion popup immediately right of Ask and both remain usable.
+   opens as a companion popup immediately right of Nixi and both remain usable.
    Drag its curve endpoint and verify impulse,
    friction, distance, and duration update live in every open conversation;
-   close and reopen Ask and confirm the values persisted. Reset restores the
+   close and reopen Nixi and confirm the values persisted. Reset restores the
    defaults.
 8. Press Super+, from both overlay and pinned windows. Confirm the selector
-   shows Codex/Claude, model, and thinking controls; Escape cancels and Return
+   shows Codex/Claude/OpenCode, model, and thinking controls (disabled, reading
+   "OpenCode settings", for OpenCode); Escape cancels and Return
    saves. Open a new conversation and confirm the bridge uses the selection,
    then restart the shell and confirm it persists. Verify an already-open
    conversation retains its existing ACP session.
@@ -74,7 +76,7 @@ its original global binding still exists and works after dismissal.
    does not produce a calculator row.
 9. Type text matching files and repositories. Confirm compact `matched files`
    and `matched git repos` rows rank near the top without flooding ordinary
-   menu results. Select each and confirm Ask enters the corresponding inline
+   menu results. Select each and confirm Nixi enters the corresponding inline
    result mode. Repeat by typing `@`, `^`, and `%`; confirm the square marker
    becomes the boxed prefix and Backspace on an empty query restores the
    square. Confirm `%` groups windows under workspace headers without making
@@ -83,7 +85,7 @@ its original global binding still exists and works after dismissal.
    backend matches remain reachable rather than stopping after eight rows.
    Confirm Return opens the result, Ctrl+Return opens its containing folder,
    and Shift+Return copies the absolute path. Confirm all three actions close
-   the transient overlay but leave a pinned Ask window open. Confirm the first
+   the transient overlay but leave a pinned Nixi window open. Confirm the first
    ten visible rows show Ctrl+1 through
    Ctrl+0, that each shortcut only moves the selection, and that the numbering
    follows the visible viewport 0.5 seconds after scrolling stops. Confirm
@@ -108,6 +110,9 @@ its original global binding still exists and works after dismissal.
 
 ## Permission checklist
 
+These run at Mechanic (`/mechanic`); "Ask mode" is the permission mode, as
+opposed to YOLO.
+
 1. In Ask mode, request a tool operation. Confirm the centered dialog appears
    above long tool/status text and both buttons work.
 2. Repeat using `Y`, then using `N`.
@@ -116,6 +121,27 @@ its original global binding still exists and works after dismissal.
 5. Trigger a tool in YOLO and confirm ACP's allow option is selected without a
    dialog.
 6. Switch back to Ask and confirm the persisted setting changes.
+
+## Nixi checklist
+
+1. Open the card with `nixi`, the bar button and SUPER+SPACE → Help. Each opens
+   an empty card.
+2. Type `install`. Confirm the FAQ answer row and nixarchy's Install row appear
+   and the Install action has no `pacman`. Type `tour` and `learn`; confirm the
+   Tour and Learning rows.
+3. At GUIDE, ask Nixi to create a file in `/tmp`. Confirm no permission dialog
+   appears and no file is created. Click GUIDE; confirm it only says how to
+   leave Guide.
+4. Type `/mechanic`. Repeat the request; confirm the dialog appears, No leaves
+   no file, Yes creates it. Click MECHANIC to reach YOLO; `/guide` returns to
+   GUIDE and a queued dialog disappears.
+5. Ask "how do I install an app". Confirm the answer uses `nixarchy apply`.
+6. Correct the agent on a fact. Confirm no `LEARNED:` line is shown and
+   `~/.local/share/nixi/LEARNED.md` gains a dated line.
+7. `/tour`: step 1 appears once, as separate lines. Open a terminal; the next
+   step appears. Close the card, reopen it: it is empty. `/tour` resumes at the
+   same step.
+8. With Super+, select each installed agent in turn and repeat 3 and 4.
 
 ## Pinning and concurrency checklist
 
@@ -132,7 +158,7 @@ its original global binding still exists and works after dismissal.
 8. Close the pinned window. Its final bridge process must exit.
 9. Leave a pinned conversation unfocused while its reply completes. Confirm
    Hyprland receives one urgency event, focus and workspace do not change, and
-   focusing the Ask window clears its attention state. Repeat while Ask is
+   focusing the Nixi window clears its attention state. Repeat while Nixi is
    focused and confirm it does not enter the attention list. Repeat with two
    pinned conversations using native window urgency; confirm only
    the conversation that completed is marked.
@@ -150,7 +176,8 @@ journalctl --user --since '5 minutes ago' --no-pager \
 
 - Static checks pass.
 - No QML errors appear during open, permission, pin, second-open, or close.
-- Ask remains the safe default on a clean settings directory.
+- Guide, and Ask mode within Mechanic, remain the defaults on a clean settings
+  directory.
 - The exact open → pin → one shortcut sequence succeeds.
 - The manifest version equals the intended tag without the leading `v`.
 - The source tree and installed plugin contain every QML entry/dependency file.

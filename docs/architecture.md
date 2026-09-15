@@ -16,8 +16,9 @@ the live card and permission layer into a `FloatingWindow`; it must not copy
 messages, restart the bridge, or create a replacement ACP session.
 
 `bridge/bridge.js` adapts newline-delimited JSON between QML and ACP. It starts
-one `claude-agent-acp` or `codex-acp` child, initializes one ACP session, and
-keeps that session until the conversation closes.
+one agent child -- `claude-agent-acp`, `codex-acp`, or `opencode acp` --
+initializes one ACP session, and keeps that session until the conversation
+closes.
 
 ```text
 Omarchy Shell
@@ -115,6 +116,47 @@ Bridge stdout is reserved for machine-readable UI events. Agent stderr is
 converted to diagnostic events but is not rendered or persisted by the UI.
 Avoid logging raw ACP request bodies because they may contain sensitive tool
 arguments.
+
+## Nixi: grounding, trust, tour and learned facts
+
+These are Nixi's additions to the upstream card. Each has a test that fails
+if the invariant breaks.
+
+**Grounding** (`bridge/grounding.js`). Before every prompt the bridge runs
+`nixi-context` with the question (3 s timeout) and prepends its excerpt of the
+local manuals. A missing or failing `nixi-context` sends the question
+unchanged and emits a diagnostic; it never blocks the turn. The agent runs in
+`~/.config/nixi` when it exists, so its `CLAUDE.md`/`AGENTS.md` is the tutor
+brief.
+
+**Trust** (`bridge/trust-policy.js`). `guide` or `mechanic`, stored beside the
+permission mode in `nixi.json`; anything else is Guide.
+
+- Guide: every ACP permission request is cancelled in the bridge and never
+  reaches the card. The agent is also put in its most restrictive mode, through
+  ACP session modes or, for OpenCode, the `mode` config option.
+- Mechanic: requests are queued in the card as upstream does. YOLO applies only
+  here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
+  requests.
+- `/guide` and `/mechanic` are handled in `Conversation.qml.submit()` and never
+  reach the agent.
+- OpenCode is always spawned with `OPENCODE_CONFIG_CONTENT` set to Nixi's
+  permission rules, replacing any inherited value. Without them its defaults
+  run tools with no request for Guide to cancel.
+
+**Tour and learning path** (`Tour.qml`, `TourModel.js`, `share/tour.json`,
+`share/learn.json`). The tour lives in the `Ask.qml` manager, not in a
+conversation, because a conversation is destroyed when its card closes and the
+tour asks the user to go and do things on the desktop. Steps advance on
+Hyprland socket events, a default-agent check, or the card being summoned. The
+card opens empty: a step is shown when `/tour` starts or resumes it, or when it
+advances while a card is open -- never merely because the card opened.
+`TourModel.js` is Qt-free and exported for `node --test`.
+
+**Learned facts** (`bridge/learned.js`). A reply line starting `LEARNED:` is
+withheld from the card, even when split across chunks, and appended to
+`~/.local/share/nixi/LEARNED.md` at the end of the turn. The bridge writes
+it, not the agent, so it works at Guide where agent writes are cancelled.
 
 ## Compatibility boundary
 

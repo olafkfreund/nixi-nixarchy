@@ -15,8 +15,8 @@
         default = nixi;
       });
 
-      # `nix run github:olafkfreund/nixi-nixarchy` opens the widget without
-      # installing anything.
+      # `nix run github:olafkfreund/nixi-nixarchy` opens the card, if the Nixi
+      # plugin is installed and enabled in the running Omarchy shell.
       apps = forAllSystems (pkgs: rec {
         nixi = {
           type = "app";
@@ -45,9 +45,9 @@
         # program, bash -n on the launcher, assets non-empty).
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
 
-        # The behavioural self-check: updater precedence, offline search,
-        # the learned-fact broker, and the invariant that no Omarchy runtime
-        # integration point was renamed. Needs git and a writable HOME.
+        # The behavioural self-check: updater precedence, offline search, tour
+        # and search data, portability, and the invariant that no Omarchy
+        # runtime integration point was renamed. Needs git and a writable HOME.
         selfcheck = pkgs.runCommand "nixi-selfcheck"
           { nativeBuildInputs = [ pkgs.python3 pkgs.git ]; } ''
           cp -r ${./.} src && chmod -R u+w src && cd src

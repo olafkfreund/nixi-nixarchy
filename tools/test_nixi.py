@@ -237,6 +237,22 @@ def test_lock_bundles_no_adapter():
     print("  ok  the bridge lock bundles no agent adapter")
 
 
+def test_old_widget_stays_gone():
+    """The browser widget, its server and voice input were removed (plan step
+    16). Only the checks that they are absent, and the installer's list of what
+    to delete from an old install, may name them."""
+    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py",
+               ".github/workflows/ci.yml", "install.py")
+    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token")
+    for f in _tracked():
+        if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
+            continue
+        text = open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
+        m = pattern.search(text)
+        assert not m, "the old widget is back in %s: %r" % (f, m.group(0))
+    print("  ok  the old widget, server and voice input stay gone")
+
+
 def test_nixi_rows_are_searchable():
     """The FAQ, the tour and the learning path are reachable from the card's
     search, not only as typed commands -- and an FAQ answer is shown in the
@@ -255,7 +271,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")

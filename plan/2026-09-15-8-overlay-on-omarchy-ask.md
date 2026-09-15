@@ -675,6 +675,23 @@ summoned by key; a question typed into the card streams visibly; typing
     section for grounding, trust and tour.
     → verify: `git grep -nE 'ui\.html|8642|token|voice|browser'` in the docs
     only where describing history.
+    **Result:** `README.md`, `CONTRIBUTING.md` and `SECURITY.md` rewritten
+    for the overlay (install via nixarchy, the flake with `agents`, and the
+    plugin manager plus `install.sh`; the card's controls as they exist in the
+    code; trust per agent; no server). `docs/architecture.md` keeps upstream's
+    invariants and gains a Nixi section (grounding, trust, tour, learned
+    facts). Also: `docs/testing.md` renames the app from Ask to Nixi (Ask
+    mode, the permission mode, keeps its name) and gains a Nixi checklist --
+    the interactive checks steps 12-15 deferred; the tutor brief and skill
+    now tell the agent to end with `LEARNED:` instead of writing LEARNED.md,
+    which it cannot do at Guide; stale "widget"/⚙ wording and the
+    `.impeccable` rule for the deleted `ui.html` are gone.
+    `docs/model-verification.md` is left as a dated record.
+    The docs grep matches only the 0.9.x migration notes and "no voice input
+    of its own". **Step 16's grep now passes** outside its absence checks
+    (CI, `install.py`'s removal list) and is a test,
+    `test_old_widget_stays_gone` (mutation: `8642` in README fails it).
+    Python pass, node 39/39, `nix flake check` and actionlint clean.
 
 22. **Migrate p620, then razer.** Announce on the bus. Remove the test id
     plugin. p620: rebuild with the updated `services.nixi` module. razer:

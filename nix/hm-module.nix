@@ -126,7 +126,7 @@ in
       default = true;
       description = ''
         Install the Nixi tutor skill into `~/.claude/skills/nixi` so your agent
-        answers the Nixi way outside the widget too.
+        answers the Nixi way outside the card too.
       '';
     };
 
