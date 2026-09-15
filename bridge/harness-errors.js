@@ -10,6 +10,6 @@ export function explainHarnessError(error, agent) {
   if (/requires? (?:a )?newer|upgrade.*(?:codex|claude)|(?:codex|claude).*outdated/i.test(message))
     return `${name} needs an update. Update the system harness, then start a new session in Nixi. ${message}`;
   if (/^(?:ACP )?connection closed\.?$/i.test(message))
-    return `${name} closed the connection. Start a new session; if it happens again, check that the system harness opens successfully outside Ask.`;
+    return `${name} closed the connection. Start a new session; if it happens again, check that the system harness opens successfully outside Nixi.`;
   return message;
 }

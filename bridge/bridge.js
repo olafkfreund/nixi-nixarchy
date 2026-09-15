@@ -3,10 +3,9 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolveHarness, resolveExecutable } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import {
   ClientSideConnection,
@@ -14,7 +13,6 @@ import {
   ndJsonStream,
 } from "@agentclientprotocol/sdk";
 
-const here = dirname(fileURLToPath(import.meta.url));
 function startupValue(resolve) {
   try { return resolve(); }
   catch (error) {
@@ -23,18 +21,12 @@ function startupValue(resolve) {
   }
 }
 const agentName = startupValue(() => resolveHarness());
-const bundledAgentBinary = join(
-  here,
-  "node_modules",
-  ".bin",
-  agentName === "codex" ? "codex-acp" : "claude-agent-acp",
-);
 function configuredAgentCommand() {
   const specificName = agentName === "codex"
     ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
   const raw = String(process.env[specificName]
     || process.env.NIXI_ACP_COMMAND || "").trim();
-  if (!raw) return [bundledAgentBinary];
+  if (!raw) return [resolveAdapter(agentName)];
   let command;
   try { command = JSON.parse(raw); }
   catch { throw new Error("NIXI_ACP_COMMAND must be a JSON array of arguments"); }

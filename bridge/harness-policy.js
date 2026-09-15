@@ -18,13 +18,36 @@ export function resolveHarness(env = process.env) {
 export function resolveExecutable(agent, env = process.env) {
   const override = env[agent === "codex" ? "CODEX_PATH" : "CLAUDE_CODE_EXECUTABLE"];
   const executable = override || agent;
-  const candidates = executable.includes("/") ? [executable]
-    : (env.PATH || "").split(":").filter(Boolean).map(directory => join(directory, executable));
+  const found = firstExecutable(executable.includes("/") ? [executable] : onPath(executable, env));
+  if (found) return found;
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Nixi (Super+,).`);
+}
+
+function onPath(name, env) {
+  return (env.PATH || "").split(":").filter(Boolean).map(directory => join(directory, name));
+}
+
+function firstExecutable(candidates) {
   for (const candidate of candidates) {
     try {
       accessSync(candidate, constants.X_OK);
       if (statSync(candidate).isFile()) return candidate;
     } catch {}
   }
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Nixi (Super+,).`);
+  return null;
+}
+
+// Nixi does not bundle the ACP adapters. Upstream's npm copies bring
+// @anthropic-ai/claude-agent-sdk and its platform binaries, which are not
+// open-source licensed, into node_modules; building those into a Nix package
+// would ship them past Nix's license check. The adapters come from the user's
+// own system instead (nixpkgs' claude-agent-acp and codex-acp), resolved the
+// same way the harness itself is, so a missing one fails at startup with a
+// message that says what to install -- not as a bare spawn ENOENT.
+export function resolveAdapter(agent, env = process.env) {
+  const name = agent === "codex" ? "codex-acp" : "claude-agent-acp";
+  const found = firstExecutable(onPath(name, env));
+  if (found) return found;
+  const variable = agent === "codex" ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On NixOS add pkgs.${name} to your configuration, or point ${variable} at it.`);
 }

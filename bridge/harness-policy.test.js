@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { resolveHarness, resolveExecutable } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 
 test("system default, explicit override, and missing/unsupported defaults", () => {
   const home = mkdtempSync(join(tmpdir(), "ask-policy-"));
@@ -42,12 +42,21 @@ test("PATH and executable overrides, without bundled fallback", () => {
 
 test("startup failures reach the popup as structured fatal events", () => {
   const home = mkdtempSync(join(tmpdir(), "ask-startup-"));
+  // Adapters are resolved from PATH before the harness executable, so a case
+  // that tests the harness must have an adapter present, or the adapter error
+  // fires first and hides the thing under test.
+  const adapters = join(home, "adapters");
+  mkdirSync(adapters);
+  writeFileSync(join(adapters, "codex-acp"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   try {
     for (const [overrides, expected] of [
       [{ NIXI_AGENT: "" }, /No default agent/],
       [{ NIXI_AGENT: "gemini" }, /not supported/],
-      [{ NIXI_AGENT: "codex", CODEX_PATH: "/nonexistent/ask-test" }, /configured executable/],
+      [{ NIXI_AGENT: "codex", CODEX_PATH: "/nonexistent/ask-test", PATH: adapters }, /configured executable/],
       [{ NIXI_AGENT: "codex", NIXI_CODEX_ACP_COMMAND: "invalid" }, /JSON array/],
+      // No adapter anywhere: the card must say what to install, not surface a
+      // bare spawn ENOENT from an adapter nobody told it was missing.
+      [{ NIXI_AGENT: "claude", PATH: home }, /claude-agent-acp.*not on the system PATH.*pkgs\.claude-agent-acp/],
     ]) {
       const result = spawnSync(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
         env: { ...process.env, HOME: home, NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", ...overrides },
@@ -59,4 +68,26 @@ test("startup failures reach the popup as structured fatal events", () => {
       assert.match(event.message, expected);
     }
   } finally { rmSync(home, { recursive: true }); }
+});
+
+test("ACP adapters come from the system PATH, never a bundled node_modules copy", () => {
+  const bin = mkdtempSync(join(tmpdir(), "nixi-adapter-"));
+  try {
+    const env = { PATH: bin };
+    for (const [agent, name] of [["claude", "claude-agent-acp"], ["codex", "codex-acp"]]) {
+      assert.throws(() => resolveAdapter(agent, env), new RegExp(`${name}\\) is not on the system PATH`));
+      assert.throws(() => resolveAdapter(agent, env), new RegExp(`pkgs\\.${name}`));
+      const adapter = join(bin, name);
+      writeFileSync(adapter, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+      const resolved = resolveAdapter(agent, env);
+      assert.equal(resolved, adapter);
+      assert.doesNotMatch(resolved, /node_modules/);
+    }
+    // A directory named like the adapter is not an adapter.
+    const decoy = mkdtempSync(join(tmpdir(), "nixi-decoy-"));
+    try {
+      mkdirSync(join(decoy, "codex-acp"));
+      assert.throws(() => resolveAdapter("codex", { PATH: decoy }), /not on the system PATH/);
+    } finally { rmSync(decoy, { recursive: true }); }
+  } finally { rmSync(bin, { recursive: true }); }
 });
