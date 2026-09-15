@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
+import { resolveTrust, trustPolicy } from "./trust-policy.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -49,29 +50,42 @@ const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy"
 const settingsPath = join(settingsDir, "nixi.json");
 
 let permissionMode = "permission";
+// Guide unless nixi.json says otherwise; unknown values are Guide too.
+let trust = "guide";
 
 async function loadSettings() {
   try {
     const settings = JSON.parse(await readFile(settingsPath, "utf8"));
     permissionMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
+    trust = resolveTrust(settings.trust);
   } catch {}
 }
 
-async function savePermissionMode(mode) {
-  const nextMode = mode === "yolo" ? "yolo" : "permission";
+async function mergeSettings(patch) {
   await mkdir(settingsDir, { recursive: true });
   // The UI writes its own keys (font scale) to this file. Merge rather than
-  // replace so toggling the mode cannot drop them.
+  // replace so changing one setting cannot drop the others.
   let settings = {};
   try {
     const parsed = JSON.parse(await readFile(settingsPath, "utf8"));
     if (parsed && typeof parsed === "object") settings = parsed;
   } catch {}
-  settings.permissionMode = nextMode;
+  Object.assign(settings, patch);
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, {
     mode: 0o600,
   });
+}
+
+async function savePermissionMode(mode) {
+  const nextMode = mode === "yolo" ? "yolo" : "permission";
+  if (nextMode === "yolo" && trust !== "mechanic")
+    throw new Error("YOLO is only available in Mechanic");
+  await mergeSettings({ permissionMode: nextMode });
   permissionMode = nextMode;
+}
+
+function currentPolicy() {
+  return trustPolicy(agentName, trust, permissionMode);
 }
 
 function emit(event) {
@@ -205,7 +219,14 @@ const client = {
       label: option.name,
       kind: option.kind,
     }));
-    if (permissionMode === "yolo") {
+    const policy = currentPolicy();
+    // Guide: nothing that asks for permission ever runs, and nothing is shown
+    // to approve. This, not the session mode, is Guide's guarantee.
+    if (policy.permission === "cancel") {
+      emit({ type: "status", text: `Guide · not run: ${title}` });
+      return Promise.resolve({ outcome: { outcome: "cancelled" } });
+    }
+    if (policy.permission === "yolo") {
       const option = options.find((item) => item.kind === "allow_once");
       if (option) {
         emit({ type: "status", text: `YOLO · ${title}` });
@@ -241,7 +262,9 @@ async function start() {
     } : {}),
   });
   sessionId = session.sessionId;
+  sessionModes = session.modes || null;
   await applyRequestedModel(session.configOptions || []);
+  await applyTrustMode();
   emit({
     type: "ready",
     agent: agentName,
@@ -249,6 +272,7 @@ async function start() {
     capabilities: initialized.agentCapabilities || {},
     steeringSupported,
     permissionMode,
+    trust,
   });
 }
 
@@ -295,6 +319,28 @@ function answerPermission(message) {
     pending.resolve({ outcome: { outcome: "cancelled" } });
   }
   emit({ type: "status", text: message.allow ? "Working…" : "Tool denied" });
+}
+
+function cancelAllPendingPermissions() {
+  for (const [id, pending] of pendingPermissions.entries()) {
+    pendingPermissions.delete(id);
+    pending.resolve({ outcome: { outcome: "cancelled" } });
+  }
+}
+
+let sessionModes = null;
+
+// The session mode is the second layer under the permission policy. An agent
+// that does not offer the mode is still safe in Guide, because every request is
+// cancelled regardless -- so a missing mode is reported, not fatal.
+async function applyTrustMode() {
+  const { modeId } = currentPolicy();
+  const offered = (sessionModes?.availableModes || []).map((mode) => mode.id);
+  if (!offered.includes(modeId)) {
+    emit({ type: "diagnostic", text: `Session mode ${modeId} is not offered by this agent; relying on permission handling` });
+    return;
+  }
+  await connection.setSessionMode({ sessionId, modeId });
 }
 
 function allowAllPendingPermissions() {
@@ -351,6 +397,17 @@ input.on("line", (line) => {
     });
   } else if (message.type === "permission") {
     answerPermission(message);
+  } else if (message.type === "trust") {
+    const next = resolveTrust(message.trust);
+    mergeSettings({ trust: next }).then(async () => {
+      trust = next;
+      // Leaving Mechanic must not leave an approval waiting in the card.
+      if (trust === "guide") cancelAllPendingPermissions();
+      if (connection && sessionId) await applyTrustMode();
+      emit({ type: "trust", trust });
+    }).catch((error) => {
+      emit({ type: "trust_error", trust, message: `Could not change trust level: ${error.message}` });
+    });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
       if (permissionMode === "yolo") allowAllPendingPermissions();

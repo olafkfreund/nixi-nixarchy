@@ -318,6 +318,29 @@ summoned by key; a question typed into the card streams visibly; typing
     unknown values → Guide; on p620 with Claude **and** Codex: Guide asked to
     create `~/nixi-guide-probe` leaves no file and shows no prompt; Mechanic
     shows a prompt, deny → no file, allow → file (then removed).
+    **Result (p620, real agents through the packaged bridge):**
+
+    | agent | Guide | Mechanic, deny | Mechanic, allow |
+    |---|---|---|---|
+    | Claude | 0 prompts, no file | 1 prompt, no file | 1 prompt, file |
+    | Codex | 0 prompts, no file | 1 prompt, no file | 1 prompt, file |
+
+    Claude's blocked Guide request was plan mode's own "Ready to code?" — the
+    two layers working together. Codex has no `plan`, so its Guide result is
+    the bridge's cancellation alone. Bridge tests 21/21; each of the four
+    guarantees (Guide cancels, YOLO unreachable from Guide, default is Guide,
+    policy says cancel) was removed in turn and failed the suite.
+    Card: clicking the corner label keeps upstream's YOLO toggle inside
+    Mechanic only; in Guide it explains how to leave, so leaving Guide is
+    always a typed `/mechanic`.
+
+    **Step 7's open item, resolved before this step as the plan required:** the
+    two `bridge.js` processes on summon were an artefact of `rescanPlugins`
+    loading the plugin twice. In a fresh shell one toggle starts exactly one
+    bridge (verified; the process is named `MainThread`, which is why an
+    earlier `comm == node` filter saw none), so upstream's one-conversation,
+    one-bridge invariant holds. The ~1.9 s self-dismiss was not seen in the
+    fresh shell either: the card stayed open until toggled closed.
 
 11. **Tour and learning data.** `share/tour.json` and `share/learn.json`
     generated from `TOUR` and `CURRICULUM`, with the matcher format above and

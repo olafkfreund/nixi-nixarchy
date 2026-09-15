@@ -43,6 +43,10 @@ Item {
   property var permissionQueue: []
   property string permissionMode: "permission"
   property bool permissionModePending: false
+  // Nixi trust level, owned by the bridge (see bridge/trust-policy.js). Guide
+  // explains and never changes the machine; Mechanic asks before each change.
+  property string trust: "guide"
+  property bool trustPending: false
 
   // Font scale is owned by the manager so every conversation and both window
   // modes share one value, and so a single writer persists it.
@@ -1080,6 +1084,12 @@ Item {
   function submit() {
     var text = prompt.text.trim()
     if (text === "" || sessionLost) return
+    // Leaving Guide is always a typed, deliberate command -- never a stray click.
+    if (text === "/guide" || text === "/mechanic") {
+      prompt.text = ""
+      setTrust(text.slice(1))
+      return
+    }
     if (waiting) {
       if (!steeringSupported || steeringPending || !bridgeReady || !agent.running) return
       steeringPending = true
@@ -1117,6 +1127,15 @@ Item {
       text: queuedPrompt
     }) + "\n")
     queuedPrompt = ""
+  }
+
+  function setTrust(level) {
+    if (trustPending) return
+    if (agent.running && bridgeReady) {
+      trustPending = true
+      statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
+      agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
+    }
   }
 
   function setPermissionMode(mode) {
@@ -1180,6 +1199,7 @@ Item {
         bridgeReady = true
         steeringSupported = event.steeringSupported === true
         permissionMode = event.permissionMode === "yolo" ? "yolo" : "permission"
+        trust = event.trust === "mechanic" ? "mechanic" : "guide"
         statusText = queuedPrompt === "" ? "" : "Thinking…"
         sendQueuedPrompt()
       } else if (event.type === "text") {
@@ -1219,6 +1239,17 @@ Item {
         permissionModePending = false
         if (permissionMode === "yolo") clearPermissions()
         permissionModeConfirmed(permissionMode)
+      } else if (event.type === "trust") {
+        trust = event.trust === "mechanic" ? "mechanic" : "guide"
+        trustPending = false
+        if (trust === "guide") clearPermissions()
+        statusText = trust === "mechanic"
+          ? "Mechanic: Nixi asks before each change"
+          : "Guide: Nixi explains, and changes nothing"
+      } else if (event.type === "trust_error") {
+        trust = event.trust === "mechanic" ? "mechanic" : "guide"
+        trustPending = false
+        statusText = String(event.message || "Could not change trust level")
       } else if (event.type === "permission_mode_error") {
         permissionMode = event.mode === "yolo" ? "yolo" : "permission"
         permissionModePending = false
@@ -2223,10 +2254,12 @@ Item {
         anchors.topMargin: Style.space(10)
         anchors.rightMargin: Style.space(10)
         z: 10
-        text: root.permissionMode === "yolo" ? "YOLO" : "Ask"
-        color: root.permissionMode === "yolo"
+        text: root.trust === "guide" ? "GUIDE"
+          : (root.permissionMode === "yolo" ? "YOLO" : "MECHANIC")
+        color: root.trust === "mechanic" && root.permissionMode === "yolo"
           ? root.accent
-          : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.42)
+          : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b,
+              root.trust === "guide" ? 0.42 : 0.78)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
 
@@ -2234,7 +2267,14 @@ Item {
           anchors.fill: parent
           anchors.margins: -Style.space(6)
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.setPermissionMode(root.permissionMode === "yolo" ? "permission" : "yolo")
+          // YOLO stays a Mechanic-only switch; from Guide a click only says how to leave it.
+          onClicked: {
+            if (root.trust !== "mechanic") {
+              root.statusText = "Guide changes nothing. Type /mechanic to let Nixi make changes."
+              return
+            }
+            root.setPermissionMode(root.permissionMode === "yolo" ? "permission" : "yolo")
+          }
         }
       }
 

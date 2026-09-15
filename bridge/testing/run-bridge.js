@@ -22,6 +22,7 @@ export async function runBridge(options = {}) {
   mkdirSync(bin);
   // resolveExecutable() insists on a real harness binary; the fake agent never runs it.
   executable(join(bin, "claude"), "#!/bin/sh\nexit 0\n");
+  executable(join(bin, "codex"), "#!/bin/sh\nexit 0\n");
   if (options.context !== null && options.context !== undefined) {
     executable(join(bin, "nixi-context"),
       `#!/bin/sh\nprintf '%s\\n' "$*" > "${join(home, "context-args")}"\ncat <<'NIXI_EOF'\n${options.context}\nNIXI_EOF\n`);
@@ -42,6 +43,7 @@ export async function runBridge(options = {}) {
   };
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
   const events = [];
+  let permissionFailure = null;
   let buffer = "";
   const waiters = [];
   child.stdout.on("data", (chunk) => {
@@ -53,6 +55,11 @@ export async function runBridge(options = {}) {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
       events.push(event);
+      // options.onPermission answers a permission prompt the way the card would.
+      if (event.type === "permission" && options.onPermission) {
+        try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
+        catch (error) { permissionFailure = error; }
+      }
       for (const waiter of waiters.splice(0)) waiter();
     }
   });
@@ -73,17 +80,24 @@ export async function runBridge(options = {}) {
       if (message.type === "prompt") {
         const target = ++turns;
         await until(() => events.filter((e) => e.type === "done").length >= target, `turn ${target}`);
+      } else if (message.type === "trust" || message.type === "permission_mode") {
+        const count = events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length;
+        await until(() => events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length > count,
+          `${message.type} acknowledgement`);
       }
     }
     const agent = existsSync(log)
       ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
       : [];
+    if (permissionFailure) throw permissionFailure;
     const contextArgsPath = join(home, "context-args");
+    const settingsPath = join(home, ".config", "omarchy", "nixi.json");
     return {
       home,
       events,
       agent,
       contextArgs: existsSync(contextArgsPath) ? readFileSync(contextArgsPath, "utf8").trim() : null,
+      settingsAfter: existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : null,
     };
   } finally {
     child.kill("SIGTERM");
