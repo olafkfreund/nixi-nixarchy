@@ -494,6 +494,49 @@ summoned by key; a question typed into the card streams visibly; typing
     → verify: node tests for the policy table and auth fallback; the probe's
     safety gate on p620; the card answers a question with Antigravity selected.
 
+17b. **OpenCode as an agent — PROPOSED, awaiting approval (added 2026-09-15 at
+    the user's request; not part of the approved spec).** Probed on p620 with
+    OpenCode 1.18.29 over real ACP (all measured):
+    - ACP is built in: `opencode acp`. nixpkgs `opencode` 1.18.25, MIT, so no
+      separate adapter and no `allowUnfree`. Login is outside ACP
+      (`opencode auth login`, method `opencode-login`); the user's existing
+      providers are used as-is.
+    - No ACP session modes. The mode is a config option `mode` (category
+      `mode`): `build` ("Executes tools based on configured permissions") and
+      `plan` ("Disallows all edit tools").
+    - **With OpenCode's default permissions Guide is not safe.** `opencode
+      debug agent build|plan` resolve to `* -> allow`; in `build` a write ran
+      with no `requestPermission` at all, so the bridge had nothing to cancel.
+      In `plan`, `edit` is denied but `bash` is still `* -> allow` and
+      `plan_exit` is allowed; the model's refusal was prompt-level only.
+    - **Fix, verified:** spawn with `OPENCODE_CONFIG_CONTENT` set to
+      `{"permission":{"*":"ask","read":{"*":"allow","*.env":"ask","*.env.*":"ask"},"grep":"allow","glob":"allow","list":"allow","lsp":"allow","todowrite":"allow","question":"allow","plan_exit":"deny"}}`.
+      Nixi's rules are appended after the built-in ones and win. In `build`,
+      cancelled: the write arrived as an `edit` request and failed, no file;
+      `echo hi > shell.txt` arrived as an `execute` request and failed, no
+      file. Allowed: the write arrived as a request and the file was created
+      (Mechanic works). Reads need no permission: with every request
+      cancelled, the agent still read a file and answered. `* -> ask` also
+      covers MCP and plugin tools from the user's `opencode.json`.
+    Proposed steps:
+    1. `bridge/harness-policy.js`: accept `opencode`; the adapter is the
+       `opencode` executable with argument `acp` (`NIXI_OPENCODE_COMMAND`
+       override); always set `OPENCODE_CONFIG_CONTENT` as above,
+       replacing any value already in the environment, so the user's env
+       cannot weaken the guarantee.
+    2. `bridge/trust-policy.js`: `opencode: { guide: "plan", mechanic: "build" }`.
+    3. `bridge/bridge.js` `applyTrustMode()`: when `modeId` is not among ACP
+       `sessionModes`, set it through the `configOptions` entry of category
+       `mode` with `setSessionConfigOption`; keep the diagnostic when neither
+       offers it.
+    4. `HarnessSelector.qml`: add `opencode`.
+    5. `package.nix` `opencode ? null` pinned like the other adapters; the Home
+       Manager module offers it in `services.nixi.agents`.
+    → verify: node tests for the policy table, the config-option fallback and
+    that the spawned env always carries Nixi's permission JSON; the three
+    probes above (write/cancel, shell/cancel, write/allow) re-run through the
+    bridge itself; the card answers a question with OpenCode selected.
+
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report
     which adapters and whether file search are available.
