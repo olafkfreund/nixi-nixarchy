@@ -176,6 +176,14 @@ in
         "nixi/SKILL.md".source = "${share}/skills/SKILL.md";
       };
 
+      # A 0.9.x install left a real directory where the plugin link now goes,
+      # which would fail checkLinkTargets; see the script for what it removes.
+      home.activation.nixiOldPluginDir =
+        lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+          DRY_RUN=''${DRY_RUN:+1} ${pkgs.bash}/bin/bash ${./migrate-plugin-dir.sh} \
+            "${config.xdg.configHome}/omarchy/plugins/${pluginId}"
+        '';
+
       # The mutable state directory is created up front with a private mode,
       # so the first run never has to widen anything.
       home.activation.nixiStateDir =

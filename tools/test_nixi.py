@@ -253,6 +253,54 @@ def test_old_widget_stays_gone():
     print("  ok  the old widget, server and voice input stay gone")
 
 
+def test_old_plugin_dir_migration():
+    """0.9.x left a real directory where 0.10 links the plugin, which fails
+    Home Manager's checkLinkTargets on every upgraded machine. The migration
+    may remove it only when it holds nothing but Home Manager's own links."""
+    script = os.path.join(ROOT, "nix", "migrate-plugin-dir.sh")
+    hm = "/nix/store/2l4gxghyqargbik6bx57rvkck6rrc8qh-home-manager-files/.config/omarchy/plugins/x/"
+    root = tempfile.mkdtemp()
+    try:
+        def plugin_dir(name, entries):
+            d = os.path.join(root, name)
+            os.mkdir(d)
+            for entry, target in entries:
+                if target is None:
+                    open(os.path.join(d, entry), "w").write("mine")
+                else:
+                    os.symlink(target, os.path.join(d, entry))
+            return d
+
+        def run(d, **env):
+            return subprocess.run(["bash", script, d], capture_output=True, text=True,
+                                  env={**os.environ, **env}, check=True)
+
+        ours = plugin_dir("ours", [("manifest.json", hm + "manifest.json"), ("BarWidget.qml", hm + "BarWidget.qml")])
+        out = run(ours, DRY_RUN="1")
+        assert os.path.isdir(ours) and "would remove" in out.stdout, "dry run deleted something"
+        run(ours)
+        assert not os.path.lexists(ours), "Home Manager's old directory was not removed"
+
+        checkout = plugin_dir("checkout", [("manifest.json", hm + "manifest.json"), ("install.py", None)])
+        out = run(checkout)
+        assert os.path.isfile(os.path.join(checkout, "install.py")), "a user's file was deleted"
+        assert "move it aside" in out.stderr, "a foreign directory was kept silently"
+
+        elsewhere = plugin_dir("elsewhere", [("manifest.json", "/home/someone/manifest.json")])
+        run(elsewhere)
+        assert os.path.islink(os.path.join(elsewhere, "manifest.json")), "a link not made by Home Manager was deleted"
+
+        target = plugin_dir("target", [])
+        linked = os.path.join(root, "linked")
+        os.symlink(target, linked)
+        run(linked)
+        run(os.path.join(root, "absent"))
+        assert os.path.islink(linked) and os.path.isdir(target), "an existing 0.10 link was touched"
+        print("  ok  the 0.9 plugin directory is removed only when it is Home Manager's")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_nixi_rows_are_searchable():
     """The FAQ, the tour and the learning path are reachable from the card's
     search, not only as typed commands -- and an FAQ answer is shown in the
@@ -271,7 +319,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")

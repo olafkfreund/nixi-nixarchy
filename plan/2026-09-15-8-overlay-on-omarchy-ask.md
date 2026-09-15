@@ -667,8 +667,8 @@ summoned by key; a question typed into the card streams visibly; typing
     before pushing: actionlint clean; `nix flake check` passes; the bridge
     job's command 39/39 on Node 24.19; the installer steps; shellcheck and
     ruff clean; the home-manager job's own flake (unpinned home-manager main)
-    builds both configurations and passes its assertions. "Green on the PR"
-    is checked at step 23.
+    builds both configurations and passes its assertions. Green on draft PR
+    #9: all six jobs pass.
 
 21. **Docs.** Rewrite `README.md`, `CONTRIBUTING.md`, `SECURITY.md` for the
     overlay; keep upstream's `docs/architecture.md` rebranded with a nixi
@@ -699,6 +699,33 @@ summoned by key; a question typed into the card streams visibly; typing
     → verify, per host: every milestone 2 check from the spec passes with the
     real id; `nixi.service` is gone and `ss -ltn` shows nothing on 8642;
     `SUPER+H` and the Help row open the card; no transcript file exists.
+    **Result (2026-09-15):** both hosts run 0.10 through nixos_config #1828 (a
+    `nixi` input on this branch, followed by nixarchy, so other nixarchy users
+    keep 0.9.7). razer first, then p620 in the handover between two nixarchy
+    install checks on its runners (#1820). Each verified by end state:
+    current system = the build, 0 failed units, Home Manager activation
+    succeeded, both plugins whole-directory links and enabled, `nixi.service`
+    gone, `nixi` = 0.10.0, shell restarted, the installed bridge `ready` with
+    Claude; on p620 the user is chatting with the card.
+    Found on the way, each handled:
+    - Home Manager (no `backupFileExtension` here) refuses to replace the old
+      real plugin directory 0.9.x left, even when it holds only Home Manager's
+      links. Removed by hand on both hosts -- and then fixed in the module for
+      every other machine: `nix/migrate-plugin-dir.sh` runs before
+      `checkLinkTargets` and removes that directory only when every entry is a
+      link into `home-manager-files` (tested, mutation-checked; confirmed
+      ordered before `checkLinkTargets` in the generated activation script).
+      p510 has exactly that directory, so this lands before #1828 merges.
+    - A 0.9.x `install.py` left `nixi`, `nixi-server`, `nixi-update-manual` in
+      `~/.local/bin`, ahead of the Home Manager profile on PATH: the old `nixi`
+      would keep opening the browser widget. Moved to
+      `~/.cache/nixi-0.9-backup-20260915/` on both; `nixi-watch` and its unit
+      left running.
+    - razer had no Omarchy default agent, so the card fataled with its (correct)
+      "No default agent" message; set to claude. `omarchy default agent` also
+      launches the agent in a terminal and blocks.
+    - Right after a shell restart IPC fails for ~2 min while plugins load.
+    The nixi-next test plugins are removed.
 
 23. **PR** linking `intent/`, `spec/` and `plan/` files; review compares the
     diff against this plan.
