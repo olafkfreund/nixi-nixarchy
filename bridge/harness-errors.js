@@ -1,0 +1,17 @@
+import { agentLabel } from "./harness-policy.js";
+
+export function needsNewSession(error) {
+  return /authentication required|not logged in|please log in|please login|^(?:ACP )?connection closed\.?$/i.test(String(error?.message || error || ""));
+}
+
+export function explainHarnessError(error, agent) {
+  const message = String(error?.message || error || "Unknown agent error");
+  const name = agentLabel(agent);
+  if (/authentication required|not logged in|please log in|please login/i.test(message))
+    return `${name} needs a login. Open the system ${agent} harness and sign in, then start a new session in Nixi.`;
+  if (/requires? (?:a )?newer|upgrade.*(?:codex|claude|opencode)|(?:codex|claude|opencode).*outdated/i.test(message))
+    return `${name} needs an update. Update the system harness, then start a new session in Nixi. ${message}`;
+  if (/^(?:ACP )?connection closed\.?$/i.test(message))
+    return `${name} closed the connection. Start a new session; if it happens again, check that the system harness opens successfully outside Nixi.`;
+  return message;
+}

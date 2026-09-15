@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -69,7 +70,8 @@ def test_local_search():
     try:
         shutil.copy(os.path.join(ROOT, "share/KNOWLEDGE.md"), conf)
         os.environ["NIXI_DATA"], os.environ["NIXI_DIR"] = data, conf
-        srv = load("srv", "bin/nixi-server")
+        # The overlay's grounding CLI.
+        srv = load("srv", "bin/nixi-context")
         srv._keybinds = lambda: ""          # no subprocesses in a test
 
         hit = srv.local_answer("how do I install an app")
@@ -84,25 +86,6 @@ def test_local_search():
         shutil.rmtree(conf, ignore_errors=True)
 
 
-def test_learned_broker():
-    """LEARNED: lines are stripped from the reply and persisted; the tutor
-    itself never writes."""
-    data = tempfile.mkdtemp(dir=os.path.expanduser("~/.cache"))
-    os.chmod(data, 0o700)
-    try:
-        os.environ["NIXI_DATA"] = data
-        os.environ["NIXI_DIR"] = data
-        srv = load("srv2", "bin/nixi-server")
-        out = srv.absorb_learned("Press SUPER+K.\nLEARNED: this box has 3 monitors")
-        assert out == "Press SUPER+K.", repr(out)
-        body = open(os.path.join(data, "LEARNED.md")).read()
-        assert "3 monitors" in body, body
-        assert oct(os.stat(os.path.join(data, "LEARNED.md")).st_mode)[-3:] == "600"
-        print("  ok  learned-fact broker appends privately, strips the marker")
-    finally:
-        shutil.rmtree(data, ignore_errors=True)
-
-
 def test_no_runtime_rename():
     """The fork renamed branding only. If any of these ever disappears, the
     widget silently stops talking to the desktop."""
@@ -111,7 +94,7 @@ def test_no_runtime_rename():
     # docs/FORK.md is the one file whose JOB is to name the old identifiers.
     # docs/FORK.md records the old names on purpose; this file spells them
     # out as search needles. Neither is shipped branding.
-    SKIP = ("share/vendor/", "docs/FORK.md", "flake.lock", "tools/test_nixi.py")
+    SKIP = ("docs/FORK.md", "flake.lock", "tools/test_nixi.py", "intent/", "spec/", "plan/")
     blob = ""
     for f in files:
         if f.endswith((".png", ".gif", ".jpg")) or f.startswith(SKIP):
@@ -120,30 +103,29 @@ def test_no_runtime_rename():
             blob += open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
         except OSError:
             pass
+    # The config-editor launch and the theme file were the old widget's own
+    # integration points and went with it (plan step 16); the card uses
+    # Omarchy's theme through qs.Commons instead.
     for token in ("omarchy menu keybindings --print", "omarchy-launch-webapp",
-                  "omarchy-launch-or-focus", "omarchy-launch-config-editor",
+                  "omarchy-launch-or-focus",
+                  # the overlay's own: how nixi and the button reach the card,
+                  # and where the menu model and data live
+                  "omarchy-shell shell toggle", "omarchy-shell shell summon",
+                  "share/omarchy/shell/plugins/menu/MenuModel.js", "OMARCHY_PATH",
                   "omarchy-notification-send", ".config/omarchy/defaults/agent",
-                  ".config/omarchy/extensions/omarchy-menu.jsonc",
-                  "local/state/omarchy/current/theme"):
+                  ".config/omarchy/extensions/omarchy-menu.jsonc"):
         assert token in blob, "runtime integration point lost in the rename: " + token
+    # Each entry point reaches the card itself; one file mentioning the call
+    # must not cover for another that lost it.
+    for f, calls in (("bin/nixi", ("omarchy-shell shell toggle", "omarchy-shell shell summon")),
+                     ("button/BarWidget.qml", ("omarchy-shell shell toggle",))):
+        text = open(os.path.join(ROOT, f)).read()
+        for call in calls:
+            assert call in text, "%s no longer calls %s" % (f, call)
     # ...and none of the old branding survived
     for stale in ("omarchy-help", "OMARCHY_HELP", "X-Archy-Token"):
         assert stale not in blob, "stale branding still present: " + stale
     print("  ok  omarchy runtime integration intact, old branding gone")
-
-
-def test_port_is_configurable():
-    """services.nixi.port moves the server, so every program that talks to it
-    must read NIXI_PORT. The watcher used to hard-code 8642, which made the
-    option silently wrong."""
-    for prog in ("bin/nixi-server", "bin/nixi-watch", "bin/nixi"):
-        text = open(os.path.join(ROOT, prog)).read()
-        assert "NIXI_PORT" in text, prog + " ignores NIXI_PORT"
-        # 8642 may appear only as the default beside NIXI_PORT, never bare.
-        for line in text.splitlines():
-            if "8642" in line:
-                assert "NIXI_PORT" in line, "%s hard-codes 8642: %s" % (prog, line.strip())
-    print("  ok  every program honours NIXI_PORT")
 
 
 def test_units_have_a_nixos_path():
@@ -161,247 +143,303 @@ def test_units_have_a_nixos_path():
     print("  ok  systemd units carry a NixOS-usable PATH")
 
 
-def test_window_rule_is_valid_lua():
-    """The class pattern is injected into Lua. Inside a QUOTED Lua string a
-    backslash-dot is an invalid escape and Hyprland rejects the entire rule,
-    which silently leaves the widget tiled instead of a pinned panel."""
-    text = open(os.path.join(ROOT, "bin", "nixi-server")).read()
-    call = next((l for l in text.splitlines() if "hl.window_rule" in l), None)
-    assert call, "window rule call not found"
-    assert "[[" in call, "class pattern must use a Lua long string: " + call.strip()
-    # a regex escape must never sit inside a double-quoted Lua string
-    quoted = re.findall(r'class\s*=\s*"([^"]*)"', call)
-    assert not any("\\." in q for q in quoted), \
-        "backslash escape inside a quoted Lua string: " + call.strip()
-    print("  ok  window rule survives Lua parsing")
-
-
 def test_faq_schema():
-    """ui.html renders e.cat / e.q / e.a as strings."""
+    """The card's search rows render e.cat / e.q / e.a as strings."""
     faq = json.load(open(os.path.join(ROOT, "share/faq.json")))
     assert faq and all(
         set(e) == {"cat", "q", "a"} and all(isinstance(v, str) and v for v in e.values())
-        for e in faq), "faq.json does not match what ui.html renders"
+        for e in faq), "faq.json does not match what the card renders"
     joined = json.dumps(faq)
     assert "nixarchy apply" in joined
     assert not _recommends_arch(joined), "FAQ recommends Arch package management"
     print("  ok  faq schema + NixOS-correct install answer")
 
 
-def test_voice_stays_local():
-    """The browser SpeechRecognition API would ship the microphone to Google,
-    and is a silent no-op on any Chromium without Google API keys (nixpkgs'
-    has none). Reaching for it is the regression to catch."""
-    ui = open(os.path.join(ROOT, "share/ui.html")).read()
-    for api in ("webkitSpeechRecognition", "SpeechRecognition",
-                "speechSynthesis", "speech.googleapis.com"):
-        assert api not in ui, "ui.html reaches for %s; audio must stay local" % api
-    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    assert "whisper-cli" in srv, "no local transcriber"
-    # Capture belongs to the desktop, not the page: pw-record behaves the same
-    # in every browser and needs no per-origin microphone permission.
-    assert "pw-record" in srv, "no local recorder"
-    for api in ("MediaRecorder", "getUserMedia", "btoa("):
-        assert api not in ui, \
-            "ui.html records audio itself (%s); the desktop does that" % api
-    print("  ok  voice never leaves the machine")
+def test_tour_and_learning_data():
+    """The overlay reads the tour and learning path from share/*.json. Every
+    step must be a matcher Tour.qml understands, and none may wait for the old
+    browser widget -- the overlay has no 127.0.0.1 window, so such a step would
+    never complete."""
+    tour = json.load(open(os.path.join(ROOT, "share", "tour.json")))
+    learn = json.load(open(os.path.join(ROOT, "share", "learn.json")))
+    raw = open(os.path.join(ROOT, "share", "tour.json")).read()
+    assert "127.0.0.1" not in raw, "a tour step still waits for the browser widget"
+
+    known = {"event", "check", "self", "classAny", "dataContainsAny"}
+    for i, step in enumerate(tour["steps"]):
+        assert isinstance(step.get("text"), str) and step["text"].strip(), f"step {i} has no text"
+        assert isinstance(step.get("count"), int) and step["count"] >= 1, f"step {i} count"
+        m = step.get("match") or {}
+        assert set(m) <= known, f"step {i} uses an unknown matcher key: {set(m) - known}"
+        assert len({"event", "check", "self"} & set(m)) == 1, f"step {i} needs exactly one of event/check/self"
+        if "classAny" in m or "dataContainsAny" in m:
+            assert "event" in m, f"step {i}: classAny/dataContainsAny only qualify an event"
+        if "check" in m:
+            assert m["check"] == "defaultAgent", f"step {i}: unknown check {m['check']}"
+        if "self" in m:
+            assert m["self"] == "opened", f"step {i}: unknown self matcher {m['self']}"
+    assert tour["steps"][-1]["match"] == {"self": "opened"}, "the last step must complete on summon"
+
+    # The card renders CommonMark: a lone \n is a space, and a plain line after
+    # a bullet joins that bullet ("try it Bonus: ..."). Only a list item may
+    # follow a single newline.
+    for i, step in enumerate(tour["steps"]):
+        assert not re.search(r"(?<!\n)\n(?!\n|- )", step["text"]), \
+            f"step {i}: a single newline collapses in the card; use a blank line"
+
+    # Google Chrome is p620's default browser; the old matcher missed it.
+    browser = next(s["match"] for s in tour["steps"] if "dataContainsAny" in s["match"])
+    assert "chrome" in browser["dataContainsAny"], "the browser step cannot complete in Chrome"
+
+    ids = [t["id"] for t in learn["topics"]]
+    assert len(ids) == len(set(ids)), "duplicate learning topic ids"
+    print("  ok  tour and learning data are valid and never wait for the old widget")
 
 
-def test_transcript_is_never_auto_sent():
-    """A misheard word in Mechanic mode would act on the machine. The
-    transcript goes in the input box; only a human keypress submits it."""
-    ui = open(os.path.join(ROOT, "share/ui.html")).read()
-    m = re.search(r"mic\.addEventListener\('click',\s*async\s*\(\)\s*=>\s*\{(.*?)\n\}\);",
-                  ui, re.S)
-    assert m, "could not find the mic click handler"
-    # Comments in here talk *about* ask(); only real calls count.
-    body = re.sub(r"//[^\n]*", "", m.group(1))
-    assert "input.value" in body, "transcript never reaches the input box"
-    assert not re.search(r"\bask\s*\(", body), \
-        "voice path calls ask() directly -- speech must not auto-submit"
-    assert not re.search(r"form\.(submit|requestSubmit)\b", body), \
-        "voice path submits the form -- speech must not auto-submit"
-    print("  ok  speech lands in the box, never auto-sent")
+def _tracked():
+    return subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
+                          text=True, check=True).stdout.split()
 
 
-def test_whisper_flags_exist():
-    """Flags are version specific: -nt/-np/--prompt/-m/-l are whisper-cli 1.9's
-    names. A renamed flag makes every transcription fail at runtime only."""
-    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    m = re.search(r'\["whisper-cli",(.*?)\]', srv, re.S)
-    assert m, "whisper-cli invocation not found"
-    args = m.group(1)
-    for flag in ("-m", "-l", "-nt", "-np", "--prompt"):
-        assert '"%s"' % flag in args, "whisper-cli invocation lost %s" % flag
-    r = re.search(r'\["pw-record",(.*?)\]', srv, re.S)
-    assert r, "pw-record invocation not found"
-    # whisper wants 16k mono s16, and recording straight into it is what let
-    # ffmpeg go; losing any of these silently reintroduces a transcode step.
-    for a in ('"16000"', '"1"', '"s16"'):
-        assert a in r.group(1), "pw-record no longer records whisper's format: " + a
-    # The domain prompt is the difference between "nixarchy" and "Nixaki".
-    assert "nixarchy" in srv.split("VOICE_PROMPT")[1][:400], \
-        "the whisper prompt no longer biases towards nixarchy vocabulary"
-    print("  ok  whisper invoked with flags that exist")
+def test_rebrand_is_complete():
+    """omarchy-ask's own names must not survive the rebrand (plan step 3).
+    docs/FORK.md and LICENSE record the origin; intent/spec/plan discuss it."""
+    allowed = ("docs/FORK.md", "LICENSE", "intent/", "spec/", "plan/", "tools/test_nixi.py")
+    pattern = re.compile(r"[Oo]marchy [Aa]sk|clickety-clacks\.ask|ask\.json|\bASK_")
+    for f in _tracked():
+        if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
+            continue
+        text = open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
+        m = pattern.search(text)
+        assert not m, "omarchy-ask branding survives in %s: %r" % (f, m.group(0))
+    print("  ok  no omarchy-ask branding outside the fork record")
 
 
-def test_both_install_paths_know_about_voice():
-    """There are two installers -- the Nix module and install.py's unit file --
-    and they have drifted before (the Arch-shaped PATH that made the service
-    exit 127). Whatever one can do, the other must at least be able to reach."""
-    unit = open(os.path.join(ROOT, "systemd", "nixi.service")).read()
-    module = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
-    if "NIXI_WHISPER_MODEL" in module:
-        assert "NIXI_WHISPER_MODEL" in unit, (
-            "the Nix module can do voice but the plain systemd unit cannot; "
-            "plugin installs would get a mic button that never appears")
-    print("  ok  both install paths can reach voice")
+def test_qml_is_portable():
+    """The card must run from any plugin directory -- a store path, a test id
+    -- and on NixOS (plan step 4)."""
+    for f in [f for f in _tracked() if f.endswith(".qml")]:
+        text = open(os.path.join(ROOT, f)).read()
+        assert "/usr/share/omarchy" not in text, f + " reads Arch's /usr/share/omarchy"
+        assert not re.search(r"plugins/io\.github\.olafkfreund\.nixi[^\"]*/bridge", text), \
+            f + " hard-codes the bridge under one plugin id; use bridgeScript()"
+    menu = open(os.path.join(ROOT, "MenuSearch.qml")).read()
+    assert 'Quickshell.env("OMARCHY_PATH")' in menu, "menu data no longer comes from OMARCHY_PATH"
+    print("  ok  QML has no Arch paths and no hard-coded plugin location")
 
 
-def test_mic_button_describes_what_it_does():
-    """The button shipped saying "Hold to talk" while the handler was a click
-    toggle, and only the title was ever updated -- so a screen reader
-    announced the wrong interaction, permanently."""
-    ui = open(os.path.join(ROOT, "share/ui.html")).read()
-    tag = re.search(r'<button id="mic"[^>]*>', ui)
-    assert tag, "mic button not found"
-    assert "hold" not in tag.group(0).lower(), \
-        "mic button still advertises hold-to-talk: " + tag.group(0)
-    # aria-label has to move with the title, or it keeps the first state.
-    assert "mic.setAttribute('aria-label'" in ui, \
-        "aria-label is never updated as the button changes state"
-    # Exactly one assignment, and it is the helper's own: any other caller
-    # setting the title directly would leave aria-label behind again.
-    helper = ui.split("function micLabel(")[1].split("\n}")[0]
-    assert len(re.findall(r"mic\.title\s*=", ui)) == 1, \
-        "title is set outside micLabel(); aria-label will drift from it"
-    assert "mic.title" in helper, "micLabel does not set the title"
-    print("  ok  mic button label matches its behaviour")
+def test_lock_bundles_no_adapter():
+    """Adapters come from the user's system, never node_modules: upstream's
+    npm copies ship non-free SDK binaries past Nix's license check (step 5)."""
+    lock = json.load(open(os.path.join(ROOT, "bridge", "package-lock.json")))
+    for name in lock.get("packages", {}):
+        for banned in ("@anthropic-ai/", "@openai/", "claude-agent-acp", "codex-acp"):
+            assert banned not in name, "bridge lock bundles %s (%s)" % (banned, name)
+    print("  ok  the bridge lock bundles no agent adapter")
 
 
-def test_voice_deps_reach_every_entry_point():
-    """`nixi` starts its own server whenever the health check fails, and that
-    copy inherits the user's interactive PATH. Putting whisper only on the
-    systemd unit gives voice that works from the service and silently does
-    not work from the launcher -- the same two-paths drift that made the
-    service exit 127."""
-    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
-    assert "makeWrapper" in mod and "nixi-server" in mod, \
-        "voice dependencies are not wrapped onto the programs"
-    wrapper = mod.split("nixiPkg =")[1].split("\n  # Units run")[0]
-    for need in ("voice.package", "pipewire"):
-        assert need in wrapper, "wrapper does not provide " + need
-    # Both binaries, or the launcher-spawned server is left without them.
-    assert "for p in nixi nixi-server" in wrapper, \
-        "only one binary is wrapped; the other entry point loses voice"
-    # The wrapped package, not the bare one, must be what gets installed.
-    assert "home.packages = [ nixiPkg ]" in mod, \
-        "the unwrapped package is installed, so nothing carries the deps"
-    print("  ok  voice deps reach both the service and the launcher")
+def test_old_widget_stays_gone():
+    """The browser widget, its server and voice input were removed (plan step
+    16). Only the checks that they are absent, and the installer's list of what
+    to delete from an old install, may name them."""
+    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py",
+               ".github/workflows/ci.yml", "install.py")
+    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token")
+    for f in _tracked():
+        if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
+            continue
+        text = open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
+        m = pattern.search(text)
+        assert not m, "the old widget is back in %s: %r" % (f, m.group(0))
+    print("  ok  the old widget, server and voice input stay gone")
 
 
-def test_installer_model_pins_match_the_flake():
-    """install.py fetches the same two models the Nix module pins, so the
-    plugin path is not left with voice inert. Two sources of the same hash
-    drift, and I typed both of these wrong by eye the first time."""
-    import base64
-    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
-    inst = open(os.path.join(ROOT, "install.py")).read()
-    sris = re.findall(r'hash = "sha256-([^"]+)"', mod)
-    assert len(sris) >= 2, "expected the speech and VAD models to be pinned"
-    for sri in sris:
-        hexd = base64.b64decode(sri).hex()
-        assert '"%s"' % hexd in inst, (
-            "install.py does not carry the flake's pin %s...; a plugin install "
-            "would fetch something the flake never verified" % hexd[:16])
-    print("  ok  installer and flake pin the same models")
+def test_old_plugin_dir_migration():
+    """0.9.x left a real directory where 0.10 links the plugin, which fails
+    Home Manager's checkLinkTargets on every upgraded machine. The migration
+    may remove it only when it holds nothing but Home Manager's own links."""
+    script = os.path.join(ROOT, "nix", "migrate-plugin-dir.sh")
+    hm = "/nix/store/2l4gxghyqargbik6bx57rvkck6rrc8qh-home-manager-files/.config/omarchy/plugins/x/"
+    root = tempfile.mkdtemp()
+    try:
+        def plugin_dir(name, entries):
+            d = os.path.join(root, name)
+            os.mkdir(d)
+            for entry, target in entries:
+                if target is None:
+                    open(os.path.join(d, entry), "w").write("mine")
+                else:
+                    os.symlink(target, os.path.join(d, entry))
+            return d
+
+        def run(d, **env):
+            return subprocess.run(["bash", script, d], capture_output=True, text=True,
+                                  env={**os.environ, **env}, check=True)
+
+        ours = plugin_dir("ours", [("manifest.json", hm + "manifest.json"), ("BarWidget.qml", hm + "BarWidget.qml")])
+        out = run(ours, DRY_RUN="1")
+        assert os.path.isdir(ours) and "would remove" in out.stdout, "dry run deleted something"
+        run(ours)
+        assert not os.path.lexists(ours), "Home Manager's old directory was not removed"
+
+        checkout = plugin_dir("checkout", [("manifest.json", hm + "manifest.json"), ("install.py", None)])
+        out = run(checkout)
+        assert os.path.isfile(os.path.join(checkout, "install.py")), "a user's file was deleted"
+        assert "move it aside" in out.stderr, "a foreign directory was kept silently"
+
+        elsewhere = plugin_dir("elsewhere", [("manifest.json", "/home/someone/manifest.json")])
+        run(elsewhere)
+        assert os.path.islink(os.path.join(elsewhere, "manifest.json")), "a link not made by Home Manager was deleted"
+
+        target = plugin_dir("target", [])
+        linked = os.path.join(root, "linked")
+        os.symlink(target, linked)
+        run(linked)
+        run(os.path.join(root, "absent"))
+        assert os.path.islink(linked) and os.path.isdir(target), "an existing 0.10 link was touched"
+        print("  ok  the 0.9 plugin directory is removed only when it is Home Manager's")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
-def test_no_speech_is_caught_and_explained():
-    """Whisper INVENTS text from clips with no speech: digital silence decodes
-    as " You", a quiet room as "(wind howling)". That is caught by VAD, not by
-    a loudness threshold -- the first version gated on RMS 1100 and merely
-    discarded audio whisper transcribes fine (correct at RMS 576 down to 34),
-    so a user spoke and got back an empty string."""
-    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    body = srv.split("def transcribe(")[1].split("\ndef ")[0]
-    assert "--vad" in body, "no voice-activity detection; whisper will invent"
-    # The loudness check may only catch a dead mic, never ordinary quiet speech.
-    m = re.search(r'SILENCE_RMS = int\(os\.environ\.get\([^,]+,\s*"(\d+)"\)', srv)
-    assert m, "SILENCE_RMS default not found"
-    assert int(m.group(1)) <= 50, (
-        "the loudness gate is back above dead-mic level (%s); whisper "
-        "transcribes correctly down to RMS 34, so this discards real speech"
-        % m.group(1))
-    # Every empty result must say which of the several causes it was.
-    assert body.count("return \"\",") >= 2, "an empty transcript with no reason"
-    assert "no signal at all" in body and "no speech in it" in body, \
-        "the empty cases are not distinguished for the user"
-    ui = open(os.path.join(ROOT, "share/ui.html")).read()
-    assert "j.note" in ui, "the widget throws away the reason the server gave"
+def test_enable_card():
+    """The card is enabled once per home (nixarchy#709), without ever costing
+    the user their bar: a user shell.json REPLACES Omarchy's defaults, so the
+    file is only ever extended, or created whole from the defaults."""
+    script = os.path.join(ROOT, "nix", "enable-card.py")
+    card, button = "io.github.olafkfreund.nixi", "io.github.olafkfreund.nixi-button"
+    root = tempfile.mkdtemp()
+    try:
+        defaults = os.path.join(root, "defaults.json")
+        json.dump({"version": 1, "idle": {"x": 1}, "bar": {"layout": {"left": [{"id": "a"}], "center": [{"id": "b"}], "right": []}}, "plugins": []},
+                  open(defaults, "w"))
 
-    # The module OVERRIDES the server's defaults through the wrapper, so
-    # checking bin/nixi-server alone proves nothing about a flake install.
-    # This shipped once with the server at 15 and the module still at 1100,
-    # which made the whole fix inert for every Home Manager user.
-    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
-    assert "NIXI_VAD_MODEL" in mod, \
-        "the module fetches a VAD model and never tells the server where it is"
-    dflt = re.search(r"silenceThreshold = lib\.mkOption \{.*?default = (\d+);",
-                     mod, re.S)
-    assert dflt, "silenceThreshold default not found in the module"
-    assert int(dflt.group(1)) == int(m.group(1)), (
-        "module default (%s) overrides the server's (%s); the flake install "
-        "would behave differently from every other one"
-        % (dflt.group(1), m.group(1)))
-    print("  ok  no-speech caught by VAD, and every empty result explains itself")
+        def case(name, config=None, raw=None, marker=False, with_defaults=True):
+            d = os.path.join(root, name)
+            os.makedirs(d)
+            path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "enabled-once")
+            if raw is not None:
+                open(path, "w").write(raw)
+            elif config is not None:
+                json.dump(config, open(path, "w"), indent=2)
+            if marker:
+                os.makedirs(os.path.dirname(mark))
+                open(mark, "w").write("x")
+            before = open(path).read() if os.path.exists(path) else None
+            out = subprocess.run([sys.executable, script, path, mark, card, button]
+                                 + ([defaults] if with_defaults else []),
+                                 capture_output=True, text=True, check=True).stdout
+            after = json.load(open(path)) if os.path.exists(path) and raw is None or (raw is not None and before != open(path).read()) else None
+            return path, mark, before, after, out
+
+        user = {"version": 1, "idle": {"keep": True}, "bar": {"layout": {"left": [], "center": [{"id": "clock"}], "right": []}}, "plugins": [{"id": "vimarchy"}]}
+
+        path, mark, _, after, _ = case("nowhere", json.loads(json.dumps(user)))
+        assert {"id": card} in after["plugins"] and {"id": "vimarchy"} in after["plugins"], after
+        assert after["idle"] == {"keep": True} and {"id": "clock"} in after["bar"]["layout"]["center"], "other keys lost"
+        assert {"id": button} in after["bar"]["layout"]["center"] and os.path.exists(mark)
+
+        old = json.loads(json.dumps(user)); old["bar"]["layout"]["right"] = [{"id": card}]
+        _, _, _, after, out = case("in-bar", old)
+        assert {"id": card} in after["plugins"] and {"id": card} not in after["bar"]["layout"]["right"], "0.9 bar slot not moved"
+        assert "moved" in out
+
+        done = json.loads(json.dumps(user)); done["plugins"].append({"id": card}); done["bar"]["layout"]["center"].append({"id": button})
+        path, mark, before, _, _ = case("already", done)
+        assert open(path).read() == before and os.path.exists(mark), "an enabled card was rewritten"
+
+        turned_off = json.loads(json.dumps(user))
+        path, mark, before, _, _ = case("marker", turned_off, marker=True)
+        assert open(path).read() == before, "a card the user turned off was re-enabled"
+
+        path, mark, _, after, _ = case("missing")
+        assert after["idle"] == {"x": 1} and after["bar"]["layout"]["left"] == [{"id": "a"}], "not created from the defaults"
+        assert {"id": card} in after["plugins"] and after["version"] == 1
+
+        path, mark, _, _, out = case("missing-no-defaults", with_defaults=False)
+        assert not os.path.exists(path) and not os.path.exists(mark) and "Setup > Plugins" in out, "a bare shell.json would replace the whole bar"
+
+        for name, raw in (("broken", "{not json"), ("unversioned", json.dumps({"plugins": []}))):
+            path, mark, before, _, out = case(name, raw=raw)
+            assert open(path).read() == before and not os.path.exists(mark), name + " file was edited"
+
+        d = os.path.join(root, "linked"); os.makedirs(d)
+        real = os.path.join(root, "real.json"); json.dump(user, open(real, "w"))
+        os.symlink(real, os.path.join(d, "shell.json"))
+        subprocess.run([sys.executable, script, os.path.join(d, "shell.json"), os.path.join(d, "m"), card, button], check=True, capture_output=True)
+        assert json.load(open(real)) == user, "wrote through a symlinked shell.json"
+        assert os.path.islink(os.path.join(d, "shell.json")), "replaced a symlinked (dotfile-managed) shell.json with a file"
+        print("  ok  the card is enabled once, and shell.json is only ever extended")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
-def test_recorder_is_always_released():
-    """The widget can be closed mid-recording. Without a watchdog and an exit
-    hook the microphone would stay open with nothing left to stop it."""
-    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    assert "threading.Timer(MAX_SECONDS" in srv, "no recording watchdog"
-    quit_fn = srv.split("def _shutdown(")[1].split("\ndef ")[0]
-    assert "_discard()" in quit_fn, "server exit leaves the recorder running"
-    stop = srv.split("def _stop_proc(")[1].split("\ndef ")[0]
-    # SIGKILL leaves a WAV whose RIFF length header was never rewritten.
-    assert "terminate()" in stop, "recorder must be SIGTERMed so the WAV closes"
-    print("  ok  recorder is always released")
+def test_nixi_launcher():
+    """`nixi` must never silently do nothing: the shell accepts a toggle for a
+    plugin that is not enabled and returns 0 (nixarchy#709)."""
+    card = "io.github.olafkfreund.nixi"
+    root = tempfile.mkdtemp()
+    try:
+        def run(plugins_json, answers=True, args=()):
+            d = tempfile.mkdtemp(dir=root)
+            log = os.path.join(d, "calls")
+            open(os.path.join(d, "omarchy-shell"), "w").write(
+                "#!/bin/sh\n"
+                'echo "shell $*" >> "%s"\n' % log
+                + ('[ "$2" = listPlugins ] && { cat <<\'EOF\'\n%s\nEOF\n exit 0; }\n' % plugins_json if answers
+                   else '[ "$2" = listPlugins ] && { echo "omarchy-shell is not responding" >&2; exit 1; }\n')
+                + "exit 0\n")
+            open(os.path.join(d, "omarchy-notification-send"), "w").write(
+                '#!/bin/sh\necho "notify $*" >> "%s"\n' % log)
+            for f in ("omarchy-shell", "omarchy-notification-send"):
+                os.chmod(os.path.join(d, f), 0o755)
+            # Stubs first, then the inherited PATH: a fixed host PATH has no bash
+            # inside the Nix build sandbox (flake check).
+            r = subprocess.run(["bash", os.path.join(ROOT, "bin", "nixi"), *args], capture_output=True, text=True,
+                               env={"PATH": d + ":" + os.environ.get("PATH", ""), "HOME": d})
+            calls = open(log).read() if os.path.exists(log) else ""
+            return r, calls
+
+        on = '[{"id":"%s","name":"Nixi","kinds":["overlay"],"enabled":true,"active":false}]' % card
+        off = '[{"id":"%s","name":"Nixi","kinds":["overlay"],"enabled":false,"active":false},' \
+              '{"id":"%s-button","name":"Nixi button","kinds":["bar-widget"],"enabled":true}]' % (card, card)
+        missing = '[{"id":"vimarchy","enabled":true}]'
+
+        r, calls = run(on)
+        assert r.returncode == 0 and "shell toggle %s" % card in calls and "notify" not in calls, (r, calls)
+        r, calls = run(on, args=("--tour",))
+        assert r.returncode == 0 and "shell summon %s" % card in calls, calls
+        for name, payload in (("disabled", off), ("missing", missing)):
+            r, calls = run(payload)
+            assert r.returncode == 1, name
+            assert "toggle" not in calls, name + ": toggled a card that is off"
+            assert "notify" in calls and "Setup > Plugins" in r.stderr, name + ": failed silently"
+        r, calls = run(on, answers=False)
+        assert r.returncode == 1 and "toggle" not in calls and "not answering" in r.stderr, (r.stderr, calls)
+        print("  ok  nixi explains a card that is off instead of doing nothing")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
-def test_voice_scratch_stays_under_home():
-    """Recordings are created through the descriptor-bound helper like every
-    other private file -- /tmp is refused by _dirfd and is world-readable --
-    and must not outlive the request that made them."""
-    srv = open(os.path.join(ROOT, "bin/nixi-server")).read()
-    make = srv.split("def _new_clip(")[1].split("\ndef ")[0]
-    # The docstring discusses /tmp; only executable lines count.
-    make = make.split('"""')[2] if make.count('"""') >= 2 else make
-    make = re.sub(r"#[^\n]*", "", make)
-    assert "_dirfd(" in make, "recordings bypass the descriptor-bound helper"
-    assert "O_EXCL" in make and "O_NOFOLLOW" in make, "clip created unsafely"
-    assert "/tmp" not in make and "tempfile" not in make, \
-        "recordings are written outside $HOME"
-    # Both the normal path and the watchdog have to delete the clip.
-    for fn in ("stop_recording", "_discard"):
-        body = srv.split("def %s(" % fn)[1].split("\ndef ")[0]
-        assert "os.unlink" in body, "%s leaves the recording on disk" % fn
-    print("  ok  recordings stay under $HOME and are deleted")
+def test_nixi_rows_are_searchable():
+    """The FAQ, the tour and the learning path are reachable from the card's
+    search, not only as typed commands -- and an FAQ answer is shown in the
+    card rather than launching something."""
+    menu = open(os.path.join(ROOT, "MenuSearch.qml")).read()
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    assert "share/faq.json" in menu, "the FAQ is not loaded into the search"
+    for flag in ("isNixiFaq", "isNixiAction"):
+        assert flag in menu, "search has no %s row" % flag
+    assert "lastRunKeepsOpen = true" in menu.split("if (row.isNixiFaq)")[1][:400], \
+        "answering an FAQ closes the card"
+    assert "onFaqAnswered" in card and "onNixiActionRequested" in card, \
+        "the card ignores its own search rows"
+    print("  ok  FAQ, tour and learn are searchable from the card")
 
 
 if __name__ == "__main__":
-    for fn in (test_updater_precedence, test_local_search, test_learned_broker,
-               test_no_runtime_rename, test_port_is_configurable,
-               test_units_have_a_nixos_path, test_window_rule_is_valid_lua,
-               test_faq_schema, test_voice_stays_local,
-               test_transcript_is_never_auto_sent, test_whisper_flags_exist,
-               test_both_install_paths_know_about_voice,
-               test_mic_button_describes_what_it_does,
-               test_voice_deps_reach_every_entry_point,
-               test_installer_model_pins_match_the_flake,
-               test_no_speech_is_caught_and_explained,
-               test_recorder_is_always_released,
-               test_voice_scratch_stays_under_home):
+    for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_enable_card, test_nixi_launcher,
+               test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")

@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 result
+
+# bridge dependencies are built by Nix or installed by install.py
+node_modules/

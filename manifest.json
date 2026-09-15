@@ -2,20 +2,15 @@
   "schemaVersion": 1,
   "id": "io.github.olafkfreund.nixi",
   "name": "Nixi",
-  "version": "0.9.7",
-  "author": "Olaf K. Freund (fork) — original Archy by Luke Warren Wills",
+  "version": "0.10.0",
+  "author": "Olaf K. Freund (overlay by Clickety Clacks, omarchy-ask)",
   "license": "MIT",
-  "description": "Nixi, your nixarchy guide — a live guided tour, a learning path, and an AI tutor grounded in your machine. Click the snowflake to summon.",
+  "description": "Your nixarchy guide: ask anything about this machine, grounded in the local nixarchy manual.",
   "kinds": [
-    "bar-widget"
+    "overlay"
   ],
+  "keepLoaded": true,
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
-  },
-  "barWidget": {
-    "displayName": "Nixi",
-    "description": "Your nixarchy guide — tour, lessons, and answers",
-    "category": "System",
-    "allowMultiple": false
+    "overlay": "Ask.qml"
   }
 }

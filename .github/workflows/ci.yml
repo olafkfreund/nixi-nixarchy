@@ -35,47 +35,45 @@ jobs:
       # behavioural self-check derivation.
       - run: nix flake check --print-build-logs
 
-      # The README promises `nix run` works with nothing installed. It only
-      # does if the wrapper carries its own PATH and assets, so run it for
-      # real against a HOME that has no ~/.config/nixi at all.
-      - name: nix run works with nothing installed
-        run: |
-          HOME=$(mktemp -d)      # separate assign: $(...) status must not be masked
-          export HOME
-          test ! -e "$HOME/.config/nixi"
-          # The launcher opens a browser window we have no compositor for, so
-          # drive the server it starts instead of the launcher's full path.
-          out=$(nix build .#nixi --no-link --print-out-paths)
-          "$out/bin/nixi" >/tmp/run.log 2>&1 &
-          ok=
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8642/health >/dev/null 2>&1; then ok=1; break; fi
-            sleep 0.5
-          done
-          test -n "$ok" || { echo "server never came up:"; cat /tmp/run.log; exit 1; }
-          curl -fsS http://127.0.0.1:8642/ > /tmp/run-ui.html
-          python3 - <<'PY'
-          h = open("/tmp/run-ui.html").read()
-          assert "__TOKEN__" not in h, "token not injected"
-          assert "Content-Security-Policy" in h, "CSP missing"
-          assert len(h) > 10000, "page suspiciously small: %d" % len(h)
-          print("nix run served the widget from the store:", len(h), "bytes")
-          PY
-          curl -fsS -o /dev/null -w 'vendor js -> %{http_code}\n' \
-            http://127.0.0.1:8642/vendor/purify.min.js
-          test "$(stat -c '%a' "$HOME/.local/share/nixi/.token")" = 600
-
-      - name: Package builds and exposes the expected programs
+      - name: Package ships the card, the button and the programs -- not the old widget
         run: |
           out=$(nix build .#nixi --no-link --print-out-paths)
-          for p in nixi nixi-server nixi-watch nixi-update-manual; do
+          for p in nixi nixi-context nixi-watch nixi-update-manual; do
             test -x "$out/bin/$p" || { echo "missing $p"; exit 1; }
           done
-          test -s "$out/share/nixi/ui.html"
+          plugins="$out/share/omarchy/plugins"
+          for f in io.github.olafkfreund.nixi/manifest.json io.github.olafkfreund.nixi/Ask.qml \
+                   io.github.olafkfreund.nixi/bridge/bridge.js io.github.olafkfreund.nixi/bridge/nixi-node \
+                   io.github.olafkfreund.nixi-button/BarWidget.qml; do
+            test -s "$plugins/$f" || { echo "missing $f"; exit 1; }
+          done
+          for gone in bin/nixi-server share/nixi/ui.html share/nixi/vendor; do
+            test ! -e "$out/$gone" || { echo "the old widget is back: $gone"; exit 1; }
+          done
+          # Omarchy refuses symlinks inside a plugin folder.
+          ! find "$plugins" -mindepth 2 -type l | grep -q . \
+            || { echo "symlink inside a plugin folder"; exit 1; }
           # The build must never ship bytecode caches.
           ! find "$out" -name '__pycache__' -o -name '*.pyc' | grep -q . \
             || { echo "bytecode leaked into the store output"; exit 1; }
           echo "package OK: $out"
+
+  bridge:
+    name: Bridge tests (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@526118121621777ccd86f79b04685a9319637641 # v31.3.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Node from the flake's own nixpkgs, the same major the package runs.
+      - name: npm ci and node --test
+        run: |
+          nix shell --inputs-from . nixpkgs#nodejs \
+            -c bash -c 'cd bridge && npm ci --no-audit --no-fund && node --test ./*.test.js'
 
   home-manager:
     name: Home Manager module evaluates
@@ -93,7 +91,9 @@ jobs:
 
       # The module is the documented install path, so a broken option or a
       # bad unit must fail the build, not the user's `home-manager switch`.
-      - name: Build an activation package that turns everything on
+      # Two configurations: the default agents need allowUnfree
+      # (claude-agent-acp pulls in claude-code); `agents = [ ]` must not.
+      - name: Build activation packages (default agents; no agents without unfree)
         run: |
           mkdir -p /tmp/hm && cd /tmp/hm
           cat > flake.nix <<'NIX'
@@ -105,28 +105,43 @@ jobs:
               nixi.url = "path:@SRC@";
               nixi.inputs.nixpkgs.follows = "nixpkgs";
             };
-            outputs = { nixpkgs, home-manager, nixi, ... }: {
-              homeConfigurations.ci = home-manager.lib.homeManagerConfiguration {
-                pkgs = nixpkgs.legacyPackages.x86_64-linux;
-                modules = [
-                  nixi.homeModules.default
-                  {
-                    home = { username = "ci"; homeDirectory = "/home/ci"; stateVersion = "24.05"; };
-                    services.nixi = {
-                      enable = true;
-                      watcher.enable = true;
-                      omarchyHooks.enable = true;
-                      menuEntry.enable = true;
-                    };
-                  }
-                ];
+            outputs = { nixpkgs, home-manager, nixi, ... }:
+              let
+                mk = unfree: settings: home-manager.lib.homeManagerConfiguration {
+                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; };
+                  modules = [
+                    nixi.homeModules.default
+                    {
+                      home = { username = "ci"; homeDirectory = "/home/ci"; stateVersion = "24.05"; };
+                      services.nixi = { enable = true; } // settings;
+                    }
+                  ];
+                };
+              in {
+                homeConfigurations.full = mk true {
+                  agents = [ "claude" "codex" "opencode" ];
+                  watcher.enable = true;
+                  omarchyHooks.enable = true;
+                  menuEntry.enable = true;
+                };
+                # No agents set: the default must still evaluate without unfree.
+                homeConfigurations.free = mk false { };
               };
-            };
           }
           NIX
           sed -i "s|@SRC@|$GITHUB_WORKSPACE|" flake.nix
-          nix build .#homeConfigurations.ci.activationPackage \
-            --no-link --print-out-paths --print-build-logs
+          full=$(nix build .#homeConfigurations.full.activationPackage \
+            --no-link --print-out-paths --print-build-logs)
+          nix build .#homeConfigurations.free.activationPackage --no-link --print-build-logs
+          files="$full/home-files/.config"
+          test -L "$files/omarchy/plugins/io.github.olafkfreund.nixi"
+          test -L "$files/omarchy/plugins/io.github.olafkfreund.nixi-button"
+          wrapper="$files/omarchy/plugins/io.github.olafkfreund.nixi/bridge/nixi-node"
+          for v in NIXI_CLAUDE_ACP_COMMAND NIXI_CODEX_ACP_COMMAND NIXI_OPENCODE_COMMAND; do
+            grep -q "$v" "$wrapper" || { echo "adapter not pinned: $v"; exit 1; }
+          done
+          test ! -e "$files/systemd/user/nixi.service" || { echo "the server unit is back"; exit 1; }
+          echo "home-manager OK"
 
   lint:
     name: Lint (python, shell, actions)
@@ -144,7 +159,7 @@ jobs:
           # The programs in bin/ have no .py suffix, so copy them somewhere
           # ruff will actually look at.
           tmp=$(mktemp -d)
-          for f in bin/nixi-server bin/nixi-watch bin/nixi-update-manual; do
+          for f in bin/nixi-watch bin/nixi-update-manual bin/nixi-context; do
             cp "$f" "$tmp/$(basename "$f").py"
           done
           ruff check --select=F,B,E9,E71,E72 --output-format=concise \
@@ -153,7 +168,7 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck -S warning bin/nixi nixi-launch install.sh hooks/*.hook
+          shellcheck -S warning bin/nixi install.sh hooks/*.hook
 
       - name: actionlint
         run: |
@@ -171,116 +186,39 @@ jobs:
           python-version: '3.12'
 
       # --no-systemd places files without touching a user manager; a throwaway
-      # HOME keeps the runner's own dotfiles out of it. The manual fetch at the
-      # end is best-effort and already swallowed by install.py.
-      # NIXI_SKIP_MANUAL keeps this deterministic: the first-run manual fetch
-      # is best-effort and hits the GitHub API unauthenticated, which is rate
-      # limited per runner IP. The fetch itself is covered by `manual` below.
-      - name: install.py --all into a throwaway HOME
+      # HOME keeps the runner's own dotfiles out of it. NIXI_SKIP_MANUAL keeps
+      # this deterministic (the fetch is rate limited per runner IP and covered
+      # by `manual` below); NIXI_SKIP_NPM keeps it offline -- `bridge` runs npm.
+      - name: install.py --all into a throwaway HOME, over a 0.9.x install
         env:
           NIXI_SKIP_MANUAL: '1'
+          NIXI_SKIP_NPM: '1'
         run: |
           fake=$(mktemp -d)
-          HOME="$fake" python3 install.py --no-systemd --all
+          # What a 0.9.x install left behind; the installer must remove it.
+          mkdir -p "$fake/.local/bin" "$fake/.config/systemd/user" "$fake/.config/nixi"
+          echo old > "$fake/.local/bin/nixi-server"
+          echo old > "$fake/.config/systemd/user/nixi.service"
+          echo old > "$fake/.config/nixi/ui.html"
+          chmod 700 "$fake/.config/nixi"
+          HOME="$fake" python3 install.py --no-systemd --all | tee /tmp/install.log
           HOME="$fake" python3 install.py --no-systemd --status | tee /tmp/status.json
           python3 - <<'PY'
           import json
           s = json.load(open("/tmp/status.json"))
-          # voice is deliberately NOT in --all: it is the only feature that
-          # downloads anything (149 MB of models), and this job is offline.
-          assert s["voice"] is False, "--all fetched models; this job has no network budget"
-          assert all(v for k, v in s.items() if k != "voice"), s
+          assert s == {"watcher": True, "skill": True, "hooks": True}, s
           print("installer status OK:", s)
           PY
-          for f in .local/bin/nixi .local/bin/nixi-server .config/nixi/ui.html \
-                   .config/systemd/user/nixi.service .claude/skills/nixi/SKILL.md; do
+          grep -q "agents with an ACP adapter on PATH" /tmp/install.log
+          for f in .local/bin/nixi .local/bin/nixi-context .config/nixi/CLAUDE.md \
+                   .config/omarchy/plugins/io.github.olafkfreund.nixi-button/BarWidget.qml \
+                   .claude/skills/nixi/SKILL.md; do
             test -e "$fake/$f" || { echo "missing $f"; exit 1; }
           done
-          echo "installer placed everything it claims to"
-
-  server:
-    name: Server smoke test (auth + endpoints)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-
-      - name: Start the server and exercise the HTTP surface
-        run: |
-          # Private state MUST live under $HOME -- the server refuses anything
-          # else by design, so these cannot be plain /tmp dirs.
-          data=$(mktemp -d -p "$HOME") conf=$(mktemp -d -p "$HOME")
-          chmod 700 "$data" "$conf"
-          cp share/ui.html share/faq.json share/KNOWLEDGE.md \
-             share/CLAUDE.md share/AGENTS.md "$conf/"
-          mkdir -p "$conf/vendor" && cp share/vendor/*.js "$conf/vendor/"
-
-          NIXI_DATA="$data" NIXI_DIR="$conf" NIXI_PORT=8642 \
-            python3 bin/nixi-server > /tmp/server.log 2>&1 &
-          for _ in $(seq 1 40); do
-            curl -fsS http://127.0.0.1:8642/health >/dev/null 2>&1 && break
-            sleep 0.25
+          for f in .local/bin/nixi-server .config/systemd/user/nixi.service .config/nixi/ui.html; do
+            test ! -e "$fake/$f" || { echo "old widget left behind: $f"; exit 1; }
           done
-
-          tok=$(cat "$data/.token")
-          test "$(stat -c '%a' "$data/.token")" = 600 \
-            || { echo "token file is not 0600"; exit 1; }
-
-          # No token -> refused.
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8642/trust)
-          test "$code" = 403 || { echo "unauthenticated /trust returned $code"; exit 1; }
-
-          # Bogus Host -> refused (DNS-rebinding guard).
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \
-                   -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/trust)
-          test "$code" = 403 || { echo "bad-Host /trust returned $code"; exit 1; }
-
-          # With the token, the endpoints that used to raise must answer.
-          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/setup \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "features" in d, d; print("/setup ok")'
-          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/learn \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total"] > 0; print("/learn ok:", d["total"], "stops")'
-          # Voice is NOT configured on a runner, and that path has to be the
-          # honest one: the widget hides the button and every voice route
-          # explains the missing piece instead of raising a 500. This is the
-          # only part of voice CI can reach -- there is no microphone here.
-          curl -fsS -H "X-Nixi-Token: $tok" http://127.0.0.1:8642/voice \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is False, d; assert "whisper-cli" in d["reason"], d; print("/voice names what is missing")'
-          for route in /listen/start /listen/stop; do
-            curl -fsS -X POST -H "X-Nixi-Token: $tok" "http://127.0.0.1:8642$route" \
-              | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("error"), d; print("'"$route"' degrades cleanly")'
-          done
-          # ...and they are still behind the token like every other POST.
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8642/listen/start)
-          test "$code" = 403 || { echo "unauthenticated /listen/start returned $code"; exit 1; }
-
-          curl -fsS http://127.0.0.1:8642/ > /tmp/ui.html
-          python3 - <<'PY'
-          h = open("/tmp/ui.html").read()
-          assert "__TOKEN__" not in h, "session token was not injected"
-          assert "Content-Security-Policy" in h, "CSP missing from served page"
-          print("served UI ok")
-          PY
-
-          echo "--- server log (expected empty) ---"; cat /tmp/server.log
-          test ! -s /tmp/server.log || { echo "server logged errors"; exit 1; }
-
-      # The descriptor-bound state primitives refuse to operate outside $HOME.
-      # That is a security boundary, so prove it rather than assume it.
-      - name: State outside HOME is refused
-        run: |
-          if NIXI_DATA=/tmp/nixi-escape NIXI_DIR=/tmp/nixi-escape \
-               timeout 20 python3 bin/nixi-server 2>/tmp/escape.log; then
-            echo "server started with state outside HOME -- boundary broken"; exit 1
-          fi
-          # "outside .HOME" matches the server's PermissionError text; the dot
-          # avoids quoting a literal dollar sign in this script.
-          grep -q "outside .HOME" /tmp/escape.log \
-            || { echo "expected an out-of-HOME refusal, got:"; cat /tmp/escape.log; exit 1; }
-          echo "state-dir boundary holds"
+          echo "installer placed everything it claims to, and removed the old widget"
 
   manual:
     name: Manual fetch (network, non-blocking)

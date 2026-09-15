@@ -5,6 +5,34 @@ retargeted from Omarchy/Arch to [nixarchy](https://github.com/olafkfreund/nixarc
 The tour, the learning path, the trust model and the security engineering are
 his; this document is only the delta.
 
+## Second fork: the omarchy-ask overlay
+
+Nixi's interface is [omarchy-ask](https://github.com/clickety-clacks/omarchy-ask)
+by Clickety Clacks (MIT), forked at **`a6351b0`** ("Release 0.7.0", 2026-09-05)
+and merged in with its history, so later upstream releases can be merged
+rather than re-applied. The native overlay, the ACP bridge, conversation
+pinning, the permission queue and the menu search are theirs. Their copyright
+notice is kept in `LICENSE`.
+
+What nixi changes on top of it (tracked in issue #8 and
+`plan/2026-09-15-8-overlay-on-omarchy-ask.md`):
+
+- **Branding only, in place.** `clickety-clacks.ask` → `io.github.olafkfreund.nixi`,
+  `Omarchy Ask` → `Nixi`, `ask.json` → `nixi.json`, `ASK_*` → `NIXI_*`.
+  Omarchy's own names (`qs.*`, `Quickshell.*`, `omarchy-shell`, `OMARCHY_PATH`,
+  `MenuModel`) are untouched, for the same reason as the rule below.
+- **Runs on NixOS.** Upstream imports the menu logic from
+  `/usr/share/omarchy`, which does not exist on NixOS; nixi imports the
+  identical file from the system profile and keeps reading menu *data* from
+  `OMARCHY_PATH`, because nixarchy rewrites the Install rows.
+- **No bundled agent adapters.** Upstream bundles the Claude and Codex ACP
+  adapters, and with them binaries that are not open-source licensed. Nixi
+  uses nixpkgs' `claude-agent-acp` and `codex-acp` at runtime instead, so
+  `nix build .#nixi` needs no `allowUnfree`.
+- **Nixi's features inside the card**: grounding in the nixarchy manual, the
+  guided tour and learning path as commands, and Guide/Mechanic trust levels.
+- **Voice input removed.** Omarchy ships Voxtype dictation.
+
 ## The rule the port follows
 
 nixarchy runs Omarchy's real tree — the same commands, menus, themes,

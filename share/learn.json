@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "topics": [
+    {
+      "id": "menu",
+      "title": "The Omarchy menu",
+      "question": "How do I open the Omarchy menu and what can I do from it?",
+      "observe": null
+    },
+    {
+      "id": "keys",
+      "title": "The keybinding overlay",
+      "question": "How do I see every keybinding on my machine?",
+      "observe": null
+    },
+    {
+      "id": "workspaces",
+      "title": "Workspaces",
+      "question": "How do I use workspaces? Teach me the basics briefly.",
+      "observe": "workspaces"
+    },
+    {
+      "id": "movewindows",
+      "title": "Moving windows",
+      "question": "How do I move and swap windows with the keyboard?",
+      "observe": null
+    },
+    {
+      "id": "scratchpad",
+      "title": "The scratchpad",
+      "question": "What is the scratchpad and how do I use it?",
+      "observe": "scratchpad"
+    },
+    {
+      "id": "webapps",
+      "title": "Websites as apps",
+      "question": "How do I turn a website into an app with its own window and icon?",
+      "observe": "webapps"
+    },
+    {
+      "id": "install",
+      "title": "Installing software",
+      "question": "How do I install and remove apps on nixarchy, and why does the Install menu not install straight away?",
+      "observe": null
+    },
+    {
+      "id": "floating",
+      "title": "Floating windows",
+      "question": "How do I make a window float, move and resize it?",
+      "observe": "floating"
+    },
+    {
+      "id": "fullscreen",
+      "title": "Full screen modes",
+      "question": "What are the fullscreen and maximize keys and when do I use each?",
+      "observe": "fullscreen"
+    },
+    {
+      "id": "themes",
+      "title": "Themes",
+      "question": "How do I change the theme and background, and install new themes?",
+      "observe": null
+    },
+    {
+      "id": "capture",
+      "title": "Screenshots and OCR",
+      "question": "How do I take screenshots and grab text from the screen?",
+      "observe": null
+    },
+    {
+      "id": "update",
+      "title": "Staying updated",
+      "question": "How do I keep nixarchy updated, and what actually happens during a rebuild?",
+      "observe": null
+    },
+    {
+      "id": "agents",
+      "title": "Your AI agent",
+      "question": "What can my default AI agent do across nixarchy, like diagnosing crashes?",
+      "observe": null
+    },
+    {
+      "id": "config",
+      "title": "Customizing safely",
+      "question": "How do I customize nixarchy safely so updates never break my changes?",
+      "observe": null
+    },
+    {
+      "id": "rollback",
+      "title": "Undoing a bad update",
+      "question": "What are generations, and how do I roll back if an update breaks something?",
+      "observe": null
+    },
+    {
+      "id": "devenv",
+      "title": "Per-project toolchains",
+      "question": "How do I give one project its own toolchain with nixarchy dev init?",
+      "observe": null
+    }
+  ]
+}
