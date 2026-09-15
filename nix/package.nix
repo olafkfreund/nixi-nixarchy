@@ -127,7 +127,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     # Bar-widget plugin payload (Quickshell QML + manifest + launcher).
     install -Dm644 manifest.json  $out/share/nixi/plugin/manifest.json
-    install -Dm644 BarWidget.qml  $out/share/nixi/plugin/BarWidget.qml
+    install -Dm644 button/BarWidget.qml $out/share/nixi/plugin/BarWidget.qml
     install -Dm755 nixi-launch    $out/share/nixi/plugin/nixi-launch
     substituteInPlace $out/share/nixi/plugin/nixi-launch \
       --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
@@ -179,6 +179,13 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags} \
       --set-default NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
 
+    # The bar button is a SECOND plugin: Omarchy gives a third-party plugin
+    # either a bar widget or an overlay, never both (shell.qml
+    # isBarWidgetPanelPlugin), so one manifest cannot carry the icon and the card.
+    button=$out/share/omarchy/plugins/${pluginId}-button
+    install -Dm644 button/manifest.json $button/manifest.json
+    install -Dm644 button/BarWidget.qml $button/BarWidget.qml
+
     # Programs the plugin starts BY NAME resolve from the Omarchy shell's PATH,
     # not from this package. On p620 gjs is not installed at all and node, fd
     # live only in one user's profile, so each is pinned here -- in the built
@@ -225,6 +232,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
              share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
+    done
+    for f in manifest.json BarWidget.qml; do
+      test -s "$out/share/omarchy/plugins/${pluginId}-button/$f" \
+        || { echo "the bar button plugin is missing $f"; exit 1; }
     done
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
     # Omarchy's validator rejects any symlink inside a plugin folder.

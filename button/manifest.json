@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.olafkfreund.nixi-button",
+  "name": "Nixi button",
+  "version": "0.10.0",
+  "author": "Olaf K. Freund (overlay by Clickety Clacks, omarchy-ask)",
+  "license": "MIT",
+  "description": "One snowflake in the bar that summons Nixi. Separate from the overlay because Omarchy gives a third-party plugin either a bar widget or an overlay, not both.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Nixi",
+    "description": "Summon your nixarchy guide.",
+    "category": "AI",
+    "allowMultiple": false
+  }
+}

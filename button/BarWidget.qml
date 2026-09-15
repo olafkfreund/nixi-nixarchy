@@ -8,14 +8,19 @@ import qs.Ui
 // can never tofu and it recolors with the theme). Click = summon the guide.
 BarWidget {
   id: root
-  moduleName: "io.github.olafkfreund.nixi"
+  moduleName: "io.github.olafkfreund.nixi-button"
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  // The overlay this button summons: this plugin's own id without "-button".
+  // Derived rather than hard-coded so a test copy under another id toggles
+  // itself instead of the installed Nixi.
+  readonly property string overlayId: root.moduleName.replace(/-button$/, "")
+
   function launch() {
     if (root.bar)
-      root.bar.run("bash \"$HOME/.config/omarchy/plugins/io.github.olafkfreund.nixi/nixi-launch\"")
+      root.bar.run("omarchy-shell shell toggle " + root.overlayId + " '{}'")
   }
 
   BarIconButton {

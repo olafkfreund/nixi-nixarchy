@@ -381,11 +381,25 @@ summoned by key; a question typed into the card streams visibly; typing
     → verify on p620: typing `install` shows the FAQ answer row and nixarchy's
     Install row; typing `tour` shows the tour row.
 
-14. **Bar button.** Manifest `kinds: ["overlay", "bar-widget"]`, a minimal
-    `BarWidget.qml` snowflake that toggles the overlay.
-    → verify on p620 with the test id: the icon appears in the bar and toggles
-    the card. If it does not appear, apply the fallback second plugin and
-    update this plan in the same commit.
+14. **Bar button: the fallback was needed.** One manifest with both kinds does
+    NOT work for a third-party plugin on Omarchy 4.0.3. Measured on p620: with
+    `kinds: ["overlay","bar-widget"]`, `omarchy plugin enable` reported success
+    but the plugin stayed `enabled=false` and never entered the bar layout.
+    `shell.qml`'s `isBarWidgetPanelPlugin()` returns false for any plugin that
+    also declares `panel`/`overlay`/`menu`, and `omarchy.menu` only gets away
+    with it because first-party manifests take a different registry path
+    (`pluginBarWidgetRegistryFor`, `__isFirstParty`).
+
+    So the button ships as a second small plugin, `io.github.olafkfreund.nixi-button`
+    (`kinds: ["bar-widget"]`), reusing nixi's existing snowflake `BarWidget.qml`
+    — moved to `button/` and repointed from launching the browser to
+    `omarchy-shell shell toggle`. It derives the overlay's id by stripping
+    `-button` from its own, so a test copy toggles itself rather than the
+    installed Nixi. **Consequence for step 16:** `BarWidget.qml` is repurposed,
+    not removed; `nixi-launch` still goes.
+    → verified on p620: the button plugin is `enabled=true` and appears in the
+    bar layout, which the two-kind manifest never did. The icon rendering and
+    the click are deferred to the milestone 2 human test.
 
 15. **`bin/nixi`** becomes the one-line toggle.
     → verify: `SUPER+H` and the Omarchy menu Help row both open the card
