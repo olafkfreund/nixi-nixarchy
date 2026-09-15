@@ -9,8 +9,6 @@
 , glib
 , python3
 , bash
-, curl
-, coreutils
 , makeWrapper
   # Agent adapters are NOT bundled (see bridge/harness-policy.js resolveAdapter).
   # Pass nixpkgs' claude-agent-acp / codex-acp here to pin them; left null, the
@@ -89,52 +87,31 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     mkdir -p $out/bin $out/share/nixi $out/share/nixi/skills
 
-    # The four programs. Python ones get a real interpreter; the launcher
-    # needs curl and a shell.
-    for p in nixi-server nixi-watch nixi-update-manual nixi-context; do
+    # The Python programs get a real interpreter.
+    for p in nixi-watch nixi-update-manual nixi-context; do
       install -Dm755 bin/$p $out/bin/$p
       substituteInPlace $out/bin/$p \
         --replace-fail '#!/usr/bin/env python3' '#!${python3}/bin/python3'
     done
-    # nixi-server is also started directly (the systemd unit, a bare `nix run`
-    # of it), so it must find the bundled assets on its own rather than only
-    # when the launcher exported them.
-    wrapProgram $out/bin/nixi-server \
-      --set-default NIXI_FALLBACK_DIR $out/share/nixi
     # The overlay's bridge runs nixi-context before every prompt; with nothing
     # in ~/.config/nixi it must still find the bundled knowledge.
     wrapProgram $out/bin/nixi-context \
       --set-default NIXI_FALLBACK_DIR $out/share/nixi
 
     install -Dm755 bin/nixi $out/bin/nixi
+    # `nixi` only asks the running Omarchy shell to open the card, so it needs
+    # nothing beyond a shell: omarchy-shell comes from the desktop's PATH.
     substituteInPlace $out/bin/nixi \
       --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
-    # $out/bin must be on PATH so `nix run` can reach nixi-server, and the
-    # bundled assets must be findable when nothing was installed into
-    # ~/.config/nixi. --set-default keeps a real install in charge.
-    wrapProgram $out/bin/nixi \
-      --prefix PATH : ${lib.makeBinPath [ curl coreutils python3 ]}:$out/bin \
-      --set-default NIXI_FALLBACK_DIR $out/share/nixi
 
-    # Static assets the server reads at runtime (the HM module links these
-    # into ~/.config/nixi; bounded_read follows symlinks by design).
-    install -Dm644 share/ui.html      $out/share/nixi/ui.html
+    # Knowledge the agent is grounded in (the HM module links these into
+    # ~/.config/nixi; nixi-context falls back to them).
     install -Dm644 share/faq.json     $out/share/nixi/faq.json
     install -Dm644 share/KNOWLEDGE.md $out/share/nixi/KNOWLEDGE.md
     install -Dm644 share/CLAUDE.md    $out/share/nixi/CLAUDE.md
     install -Dm644 share/AGENTS.md    $out/share/nixi/AGENTS.md
-    for v in share/vendor/*.js; do
-      install -Dm644 "$v" $out/share/nixi/vendor/"$(basename "$v")"
-    done
 
     install -Dm644 skills/nixi/SKILL.md $out/share/nixi/skills/SKILL.md
-
-    # Bar-widget plugin payload (Quickshell QML + manifest + launcher).
-    install -Dm644 manifest.json  $out/share/nixi/plugin/manifest.json
-    install -Dm644 button/BarWidget.qml $out/share/nixi/plugin/BarWidget.qml
-    install -Dm755 nixi-launch    $out/share/nixi/plugin/nixi-launch
-    substituteInPlace $out/share/nixi/plugin/nixi-launch \
-      --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
 
     # Omarchy lifecycle hooks (opt-in via the module).
     for h in hooks/*.hook; do
@@ -143,9 +120,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
         --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
     done
 
-    # ---- the native overlay plugin (omarchy-ask based, issue #8) ------------
-    # Additive for now: the old widget above stays until the overlay replaces it
-    # (plan step 16), so the Home Manager module keeps evaluating meanwhile.
+    # ---- the overlay plugin (omarchy-ask based, issue #8) ---------------------
     plugin=$out/share/omarchy/plugins/${pluginId}
     install -Dm644 manifest.json $plugin/manifest.json
     for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml Tour.qml; do
@@ -214,21 +189,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # Every Python program must at least import-compile with the pinned
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
-      $out/bin/.nixi-server-wrapped $out/bin/nixi-watch $out/bin/nixi-update-manual \
-      $out/bin/.nixi-context-wrapped
+      $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped
     # py_compile drops __pycache__ beside the source; it must not ship.
     rm -rf $out/bin/__pycache__
-    ${bash}/bin/bash -n $out/bin/.nixi-wrapped
-    grep -q "NIXI_FALLBACK_DIR" $out/bin/nixi-server \
-      || { echo "nixi-server cannot find its assets when started directly"; exit 1; }
-    test -s $out/share/nixi/ui.html
-    test -s $out/share/nixi/vendor/purify.min.js
-    # `nix run` works only if the wrapper can find its own server and its own
-    # assets -- neither is on PATH or in ~/.config for a bare run.
-    grep -q "$out/bin" $out/bin/nixi \
-      || { echo "\$out/bin is not on the wrapped PATH; nix run cannot find nixi-server"; exit 1; }
-    grep -q "NIXI_FALLBACK_DIR" $out/bin/nixi \
-      || { echo "wrapper does not point at the bundled assets"; exit 1; }
+    ${bash}/bin/bash -n $out/bin/nixi
+    test ! -e $out/bin/nixi-server || { echo "the old widget server is still installed"; exit 1; }
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
@@ -271,11 +236,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   meta = {
     description = "Nixi — an offline-first guide, tour and AI tutor for nixarchy";
     longDescription = ''
-      A corner chat widget for nixarchy (Omarchy vendored for NixOS): a live
+      An Omarchy overlay card for nixarchy (Omarchy vendored for NixOS): a
       guided tour verified through Hyprland events, a learning path, and an
-      agent-backed tutor grounded in a locally fetched copy of the nixarchy
-      and Omarchy manuals. Local only (127.0.0.1), Python stdlib only, no
-      telemetry.
+      agent-backed tutor (Claude, Codex or OpenCode over ACP) grounded in a
+      locally fetched copy of the nixarchy and Omarchy manuals. No server,
+      no telemetry.
     '';
     homepage = "https://github.com/olafkfreund/nixi-nixarchy";
     license = lib.licenses.mit;

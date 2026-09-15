@@ -447,6 +447,20 @@ summoned by key; a question typed into the card streams visibly; typing
 16. **Remove the old widget and voice.** Delete everything under *Removed*.
     → verify: `git grep -nIE '/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token'`
     matches nothing outside `docs/FORK.md` and `intent/`, `spec/`, `plan/`.
+    **Result:** deleted `share/ui.html`, `share/vendor/`, `bin/nixi-server`,
+    `nixi-launch`, `systemd/nixi.service`. `nixi-watch` keeps ignoring the
+    screensaver window but no longer POSTs `/minimize` (decided at step 12).
+    The learned-fact broker was moved into the bridge first (step 8's note).
+    `package.nix` no longer installs the server, UI, vendored JS or the old
+    plugin payload; `bin/nixi` is unwrapped (it only calls `omarchy-shell`);
+    the install check now fails if `bin/nixi-server` reappears. Nine Python
+    tests whose subject was deleted were removed, and two integration tokens
+    only the old widget used (`omarchy-launch-config-editor`, the theme state
+    file) left `test_no_runtime_rename`. `nix build .#nixi` without
+    `allowUnfree` passes; the Home Manager activation still builds; node 39/39,
+    Python pass. **The grep above cannot pass yet:** `install.py` (step 18),
+    CI (step 20) and README (step 21) still name the old pieces, so it is run
+    at the end of step 21 instead.
 
 17. **Home Manager module.** Link `$pkg/share/omarchy/plugins/io.github.olafkfreund.nixi`
     as a whole-directory symlink; new option `services.nixi.agents`
