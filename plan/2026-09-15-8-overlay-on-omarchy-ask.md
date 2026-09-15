@@ -359,13 +359,14 @@ summoned by key; a question typed into the card streams visibly; typing
     instantiated and no QML errors. Typing `/tour`, the pin, advancing on real
     events and `/learn` need a person at the keyboard; deferred to the
     milestone 2 human test with steps 13-15.
-    **Design point added during implementation:** `/tour` PINS its conversation.
-    The tour asks the user to open terminals and switch workspaces, and an
-    unpinned card dismisses itself as soon as focus leaves -- the old widget was
-    a pinned window, so pinning restores that behaviour using upstream's own
-    Ctrl+P mechanism. Tour state lives in the Ask.qml manager, because a
-    conversation is destroyed when its card closes and the last step requires
-    exactly that.
+    **Design point, revised in step 15:** `/tour` does NOT pin its card. It
+    first did (the old widget was a pinned window), but tested on p620 a pinned
+    card is an ordinary toplevel that Hyprland tiles to fill the workspace
+    (1261x1390) -- the user rejected it as far too big. Pinning was also
+    unnecessary: the unpinned card closes only on an outside click, and tour
+    state lives in the Ask.qml manager, so the card may close while you follow
+    a step and reopening it shows where you are. A card the user pins with
+    Ctrl+P still receives steps (`tourCard`).
     **Two gaps found here, both about nixi-server's removal in step 16:**
     - `observed` in learning.json is read by nixi-server and written by nothing,
       so "the learning path skips what the watcher has seen you use" has never
@@ -404,6 +405,20 @@ summoned by key; a question typed into the card streams visibly; typing
 15. **`bin/nixi`** becomes the one-line toggle.
     → verify: `SUPER+H` and the Omarchy menu Help row both open the card
     (with the test id during testing).
+    **Result on p620:** `nixi --tour` summons the card with the tour payload.
+    Three tour bugs found by looking at the card, all fixed here:
+    - Pinning at creation made the card vanish, then pinning at all made it a
+      full tiled window. The pin is removed (see step 12's design point).
+    - Each step was shown twice: `start()`/`opened()` showed the step after
+      `advanceTo()` had already shown it. `advanceTo()` now only reports
+      whether the step moved; each entry point shows it once.
+    - Line breaks collapsed: the card renders CommonMark, where a lone `\n` is
+      a space and a plain line after a bullet joins it ("try it Bonus: ...").
+      tour.json uses blank lines; test_nixi.py rejects a lone newline not
+      followed by a list item (checked against the old data: fails).
+    `test_port_is_configurable` no longer lists `bin/nixi`, which has no port.
+    Checked on screen: compact overlay, "Tour 2/11" once, "Bonus:" on its own
+    paragraph. `SUPER+H` and the Help row still need a person at the keyboard.
 
 16. **Remove the old widget and voice.** Delete everything under *Removed*.
     → verify: `git grep -nIE '/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token'`

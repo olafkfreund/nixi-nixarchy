@@ -9,14 +9,14 @@
   },
   "steps": [
     {
-      "text": "**SUPER** is the Windows key (⊞, next to ALT — ⌘ on a Mac).\nIt runs this whole OS. First: connect your AI.\n- Press **SUPER+SPACE**\n- Go to **Setup → Default agent**\n- Pick one (Claude Code, Codex…)",
+      "text": "**SUPER** is the Windows key (⊞, next to ALT — ⌘ on a Mac).\n\nIt runs this whole OS. First: connect your AI.\n- Press **SUPER+SPACE**\n- Go to **Setup → Default agent**\n- Pick one (Claude Code, Codex…)",
       "count": 1,
       "match": {
         "check": "defaultAgent"
       }
     },
     {
-      "text": "Now the essentials.\n- **SUPER+RETURN** opens a terminal — try it\nBonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
+      "text": "Now the essentials.\n- **SUPER+RETURN** opens a terminal — try it\n\nBonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
       "count": 1,
       "match": {
         "event": "openwindow",
@@ -47,7 +47,7 @@
       }
     },
     {
-      "text": "One more terminal: **SUPER+RETURN**.\nWatch the windows share the screen evenly — no overlap, no dragging.\nThat’s tiling.",
+      "text": "One more terminal: **SUPER+RETURN**.\n\nWatch the windows share the screen evenly — no overlap, no dragging.\n\nThat’s tiling.",
       "count": 1,
       "match": {
         "event": "openwindow",
@@ -61,14 +61,14 @@
       }
     },
     {
-      "text": "The move that kills the mouse:\n- **SUPER+arrows** jump focus between panes\nBounce around a few times — watch the highlight travel.",
+      "text": "The move that kills the mouse:\n- **SUPER+arrows** jump focus between panes\n\nBounce around a few times — watch the highlight travel.",
       "count": 4,
       "match": {
         "event": "activewindow"
       }
     },
     {
-      "text": "Time to tidy up:\n- Steer onto a window with **SUPER+arrows**\n- **SUPER+W** closes it — no titlebar needed\nClose TWO of them.",
+      "text": "Time to tidy up:\n- Steer onto a window with **SUPER+arrows**\n- **SUPER+W** closes it — no titlebar needed\n\nClose TWO of them.",
       "count": 2,
       "match": {
         "event": "closewindow"
@@ -82,7 +82,7 @@
       }
     },
     {
-      "text": "Fresh desk:\n- Press **SUPER+2** — or any number — for another workspace\n(I’ll come along — I’m pinned.)",
+      "text": "Fresh desk:\n- Press **SUPER+2** — or any number — for another workspace\n\n(I’ll come along — I’m pinned.)",
       "count": 1,
       "match": {
         "event": "workspace"
@@ -103,7 +103,7 @@
       }
     },
     {
-      "text": "Last one — about me.\n- Dismiss me any time: **Escape**\n- Summon me back: **SUPER+H**\nGo on — close me and call me back!",
+      "text": "Last one — about me.\n- Dismiss me any time: **Escape**\n- Summon me back: **SUPER+H**\n\nGo on — close me and call me back!",
       "count": 1,
       "match": {
         "self": "opened"

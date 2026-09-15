@@ -34,7 +34,7 @@ Item {
       return
     }
     state = TourModel.start(tourData)
-    applyChecks()
+    advanceTo(TourModel.onCheck(state, tourData, { defaultAgent: defaultAgentSet }))
     show()
   }
 
@@ -60,19 +60,21 @@ Item {
   }
 
   function applyChecks() {
-    advanceTo(TourModel.onCheck(state, tourData, { defaultAgent: defaultAgentSet }))
+    if (advanceTo(TourModel.onCheck(state, tourData, { defaultAgent: defaultAgentSet }))) show()
   }
 
+  // True when the tour moved to a new, unfinished step. Callers show it, and
+  // start()/opened() show it unconditionally, so a step is never shown twice.
   function advanceTo(next) {
-    if (next === state) return
+    if (next === state) return false
     var wasStep = state.step
     state = next
     if (state.finished) {
       markToured()
       tourFinished()
-    } else if (state.step !== wasStep) {
-      show()
+      return false
     }
+    return state.step !== wasStep
   }
 
   // ---- learning path ------------------------------------------------------
@@ -106,8 +108,8 @@ Item {
     target: Hyprland
     function onRawEvent(event) {
       if (!root.active || !event || !event.name) return
-      root.advanceTo(TourModel.onEvent(root.state, root.tourData,
-        String(event.name), String(event.data || "")))
+      if (root.advanceTo(TourModel.onEvent(root.state, root.tourData,
+        String(event.name), String(event.data || "")))) root.show()
     }
   }
 

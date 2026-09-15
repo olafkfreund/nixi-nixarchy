@@ -137,7 +137,8 @@ def test_port_is_configurable():
     """services.nixi.port moves the server, so every program that talks to it
     must read NIXI_PORT. The watcher used to hard-code 8642, which made the
     option silently wrong."""
-    for prog in ("bin/nixi-server", "bin/nixi-watch", "bin/nixi"):
+    # bin/nixi no longer talks to the server: it toggles the overlay over IPC.
+    for prog in ("bin/nixi-server", "bin/nixi-watch"):
         text = open(os.path.join(ROOT, prog)).read()
         assert "NIXI_PORT" in text, prog + " ignores NIXI_PORT"
         # 8642 may appear only as the default beside NIXI_PORT, never bare.
@@ -214,6 +215,13 @@ def test_tour_and_learning_data():
             assert m["self"] == "opened", f"step {i}: unknown self matcher {m['self']}"
     assert tour["steps"][-1]["match"] == {"self": "opened"}, "the last step must complete on summon"
 
+    # The card renders CommonMark: a lone \n is a space, and a plain line after
+    # a bullet joins that bullet ("try it Bonus: ..."). Only a list item may
+    # follow a single newline.
+    for i, step in enumerate(tour["steps"]):
+        assert not re.search(r"(?<!\n)\n(?!\n|- )", step["text"]), \
+            f"step {i}: a single newline collapses in the card; use a blank line"
+
     # Google Chrome is p620's default browser; the old matcher missed it.
     browser = next(s["match"] for s in tour["steps"] if "dataContainsAny" in s["match"])
     assert "chrome" in browser["dataContainsAny"], "the browser step cannot complete in Chrome"
@@ -226,7 +234,8 @@ def test_tour_and_learning_data():
         for i, ((text, _kind, _fn, count), step) in enumerate(zip(srv.TOUR, tour["steps"])):
             assert step["count"] == count, f"step {i} count drifted"
             if i < len(srv.TOUR) - 1:
-                assert step["text"] == text, f"step {i} text drifted"
+                # The card needs \n\n where the widget broke lines on \n.
+                assert step["text"].replace("\n\n", "\n") == text, f"step {i} text drifted"
         assert [(t["id"], t["title"], t["question"], t["observe"]) for t in learn["topics"]] \
             == [tuple(c) for c in srv.CURRICULUM], "learn.json and CURRICULUM differ"
 

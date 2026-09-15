@@ -313,8 +313,8 @@ Item {
     Conversation {}
   }
 
-  // The conversation that started the tour; it is pinned, so it survives the
-  // desktop actions the tour asks for.
+  // The conversation that started the tour. Kept apart from activeOverlay so
+  // steps still reach it if the user pins it (pinning clears activeOverlay).
   property var tourCard: null
 
   function tourTarget() {
@@ -331,15 +331,15 @@ Item {
     id: tour
     onStepShown: function(text) { root.showTourText(text) }
     onTourFinished: root.showTourText(
-      "\u2705 **Tour complete.** You can always find me again with **SUPER+H**.\n"
+      "\u2705 **Tour complete.** You can always find me again with **SUPER+H**.\n\n"
       + "Type **/learn** whenever you want the next thing worth knowing.")
   }
 
   function startTour(conversation) {
     tourCard = conversation
-    // Pin it: the tour asks you to open terminals and switch workspaces, and an
-    // unpinned card dismisses itself the moment focus leaves it.
-    if (!conversation.pinned) conversation.pinConversation()
+    // Not pinned: a pinned card is a normal window that Hyprland tiles to fill
+    // the workspace. The tour lives here, not in the card, so the card may
+    // close while you follow a step; reopening it shows where you are.
     tour.start()
   }
 
@@ -413,6 +413,12 @@ Item {
     conversation.open(payloadJson || "{}")
     // A summons completes the tour's last step and re-shows where it is.
     tour.opened()
+    // `nixi --tour` (and the first-boot welcome hook) summon with an action.
+    try {
+      var payload = JSON.parse(payloadJson || "{}")
+      if (payload && payload.action === "tour") root.startTour(conversation)
+      else if (payload && payload.action === "learn") root.teachNext(conversation)
+    } catch (error) {}
     reconcileShortcutSubmap()
     return conversation
   }
