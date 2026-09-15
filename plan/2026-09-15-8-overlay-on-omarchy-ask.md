@@ -536,6 +536,23 @@ summoned by key; a question typed into the card streams visibly; typing
     that the spawned env always carries Nixi's permission JSON; the three
     probes above (write/cancel, shell/cancel, write/allow) re-run through the
     bridge itself; the card answers a question with OpenCode selected.
+    **Result (implemented as proposed, with two deviations):**
+    - The package argument is `opencodeAcp ? null`, not `opencode ? null`:
+      `callPackage` fills defaulted arguments whose name matches a nixpkgs
+      attribute, so `opencode ? null` would have pinned OpenCode into every
+      build. Plain `nix build .#nixi` (no `allowUnfree`) pins nothing.
+    - The harness picker sets no model or effort for OpenCode (its models are
+      the user's providers); the controls read "OpenCode settings".
+    Node: 33/33, including OpenCode's policy rows, the config-option mode
+    fallback, Nixi's permission JSON replacing a weaker `OPENCODE_CONFIG_CONTENT`
+    from the environment, and other agents not receiving it -- each new test
+    mutation-checked (three mutations, each fails). Through the real bridge
+    with the real `opencode` 1.18.29: Guide/write and Guide/shell -- no prompt
+    in the card, no file (the model declined in plan mode); Mechanic/write
+    allowed -- prompt shown, file created; Mechanic/write denied -- prompt
+    shown, no file. Guide's tool-level cancel is covered by the `build`-mode
+    probe above and the fake-agent test. The card with OpenCode selected in
+    Super+, needs a person at the keyboard.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report

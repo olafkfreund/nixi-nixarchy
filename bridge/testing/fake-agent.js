@@ -15,7 +15,13 @@ new AgentSideConnection((conn) => ({
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
   },
   async newSession(params) {
-    log({ method: "newSession", cwd: params.cwd });
+    log({ method: "newSession", cwd: params.cwd, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
+    // FAKE_AGENT_MODES=config: modes only as a config option, the way OpenCode offers them.
+    if (process.env.FAKE_AGENT_MODES === "config") return {
+      sessionId: "fake-session",
+      configOptions: [{ id: "mode", name: "Session Mode", category: "mode", type: "select", currentValue: "build",
+        options: [{ value: "build", name: "build" }, { value: "plan", name: "plan" }] }],
+    };
     return {
       sessionId: "fake-session",
       modes: {
@@ -31,6 +37,10 @@ new AgentSideConnection((conn) => ({
   },
   async setSessionMode(params) {
     log({ method: "setSessionMode", modeId: params.modeId });
+    return {};
+  },
+  async setSessionConfigOption(params) {
+    log({ method: "setSessionConfigOption", configId: params.configId, value: params.value });
     return {};
   },
   async authenticate() { return {}; },

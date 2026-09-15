@@ -1,6 +1,12 @@
 import { readFileSync, accessSync, statSync, constants } from "node:fs";
 import { join } from "node:path";
 
+export const AGENTS = ["claude", "codex", "opencode"];
+
+export function agentLabel(agent) {
+  return { claude: "Claude Code", codex: "Codex", opencode: "OpenCode" }[agent] || agent;
+}
+
 export function resolveHarness(env = process.env) {
   let agent = String(env.NIXI_AGENT || "").trim();
   if (!agent) {
@@ -10,17 +16,17 @@ export function resolveHarness(env = process.env) {
     }
   }
   if (!agent) throw new Error("No default agent is configured. Choose one in Omarchy’s Default Agent settings, or select a harness in Nixi (Super+,).");
-  if (!["codex", "claude"].includes(agent))
-    throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Nixi yet. Choose Codex or Claude in Nixi (Super+,).`);
+  if (!AGENTS.includes(agent))
+    throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Nixi yet. Choose Claude, Codex or OpenCode in Nixi (Super+,).`);
   return agent;
 }
 
 export function resolveExecutable(agent, env = process.env) {
-  const override = env[agent === "codex" ? "CODEX_PATH" : "CLAUDE_CODE_EXECUTABLE"];
+  const override = env[{ codex: "CODEX_PATH", opencode: "OPENCODE_PATH" }[agent] || "CLAUDE_CODE_EXECUTABLE"];
   const executable = override || agent;
   const found = firstExecutable(executable.includes("/") ? [executable] : onPath(executable, env));
   if (found) return found;
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Nixi (Super+,).`);
+  throw new Error(`${agentLabel(agent)} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Nixi (Super+,).`);
 }
 
 function onPath(name, env) {
@@ -44,10 +50,13 @@ function firstExecutable(candidates) {
 // own system instead (nixpkgs' claude-agent-acp and codex-acp), resolved the
 // same way the harness itself is, so a missing one fails at startup with a
 // message that says what to install -- not as a bare spawn ENOENT.
+//
+// OpenCode needs no adapter: it speaks ACP itself as `opencode acp`.
 export function resolveAdapter(agent, env = process.env) {
+  if (agent === "opencode") return [resolveExecutable(agent, env), "acp"];
   const name = agent === "codex" ? "codex-acp" : "claude-agent-acp";
   const found = firstExecutable(onPath(name, env));
-  if (found) return found;
+  if (found) return [found];
   const variable = agent === "codex" ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
   throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On NixOS add pkgs.${name} to your configuration, or point ${variable} at it.`);
 }

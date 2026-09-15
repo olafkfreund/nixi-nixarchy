@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
-import { resolveTrust, trustPolicy } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -25,11 +25,11 @@ function startupValue(resolve) {
 }
 const agentName = startupValue(() => resolveHarness());
 function configuredAgentCommand() {
-  const specificName = agentName === "codex"
-    ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
+  const specificName = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agentName]
+    || "NIXI_CLAUDE_ACP_COMMAND";
   const raw = String(process.env[specificName]
     || process.env.NIXI_ACP_COMMAND || "").trim();
-  if (!raw) return [resolveAdapter(agentName)];
+  if (!raw) return resolveAdapter(agentName);
   let command;
   try { command = JSON.parse(raw); }
   catch { throw new Error("NIXI_ACP_COMMAND must be a JSON array of arguments"); }
@@ -150,8 +150,12 @@ const childEnvironment = { ...process.env, HUGINN_INTERNAL: "1" };
 // adapter's transitive harness dependency when the system install is absent.
 if (agentName === "codex")
   childEnvironment.CODEX_PATH = startupValue(() => resolveExecutable(agentName));
-else
+else if (agentName === "claude")
   childEnvironment.CLAUDE_CODE_EXECUTABLE = startupValue(() => resolveExecutable(agentName));
+// Replaces any value from the environment: Nixi's permission rules are what
+// make Guide safe with OpenCode, so the user's env must not be able to weaken them.
+if (agentName === "opencode")
+  childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(OPENCODE_PERMISSIONS);
 if (agentName === "codex") {
   let codexConfig = {};
   try { codexConfig = JSON.parse(process.env.CODEX_CONFIG || "{}"); } catch {}
@@ -263,7 +267,8 @@ async function start() {
   });
   sessionId = session.sessionId;
   sessionModes = session.modes || null;
-  await applyRequestedModel(session.configOptions || []);
+  configOptions = session.configOptions || [];
+  await applyRequestedModel(configOptions);
   await applyTrustMode();
   emit({
     type: "ready",
@@ -329,6 +334,7 @@ function cancelAllPendingPermissions() {
 }
 
 let sessionModes = null;
+let configOptions = [];
 
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
@@ -336,11 +342,18 @@ let sessionModes = null;
 async function applyTrustMode() {
   const { modeId } = currentPolicy();
   const offered = (sessionModes?.availableModes || []).map((mode) => mode.id);
-  if (!offered.includes(modeId)) {
-    emit({ type: "diagnostic", text: `Session mode ${modeId} is not offered by this agent; relying on permission handling` });
+  if (offered.includes(modeId)) {
+    await connection.setSessionMode({ sessionId, modeId });
     return;
   }
-  await connection.setSessionMode({ sessionId, modeId });
+  // OpenCode offers its modes as a config option rather than ACP session modes.
+  const option = (configOptions || []).find((item) => item.category === "mode");
+  if (option && (option.options || []).some((item) => item.value === modeId)) {
+    const response = await connection.setSessionConfigOption({ sessionId, configId: option.id, value: modeId });
+    configOptions = response.configOptions || configOptions;
+    return;
+  }
+  emit({ type: "diagnostic", text: `Session mode ${modeId} is not offered by this agent; relying on permission handling` });
 }
 
 function allowAllPendingPermissions() {

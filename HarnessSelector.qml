@@ -21,6 +21,9 @@ PanelWindow {
   property string draftAgent: agent
   property string draftModel: model
   property string draftReasoningEffort: reasoningEffort
+  // OpenCode's models come from the user's own providers, so Nixi picks no
+  // model or effort for it -- OpenCode's configured default is used.
+  readonly property bool picksModel: draftAgent === "claude" || draftAgent === "codex"
   readonly property var modelChoices: draftAgent === "claude" ? [
     { label: "Opus 4.8", value: "claude-opus-4-8" },
     { label: "Opus 5", value: "claude-opus-5" },
@@ -44,7 +47,7 @@ PanelWindow {
   }
 
   function syncModelIndex() {
-    if (draftAgent === "") { modelSelect.currentIndex = -1; return }
+    if (!picksModel) { modelSelect.currentIndex = -1; return }
     for (var i = 0; i < modelChoices.length; i++) {
       if (modelChoices[i].value === draftModel) {
         modelSelect.currentIndex = i
@@ -58,7 +61,7 @@ PanelWindow {
   function chooseAgent(nextAgent) {
     if (draftAgent === nextAgent) return
     draftAgent = nextAgent
-    if (nextAgent === "") {
+    if (nextAgent === "" || nextAgent === "opencode") {
       draftModel = ""
       draftReasoningEffort = ""
       modelSelect.currentIndex = -1
@@ -109,7 +112,7 @@ PanelWindow {
       Row {
         spacing: Style.space(8)
         Repeater {
-          model: ["", "codex", "claude"]
+          model: ["", "codex", "claude", "opencode"]
           delegate: Rectangle {
             required property string modelData
             width: harnessLabel.implicitWidth + Style.space(24)
@@ -126,8 +129,9 @@ PanelWindow {
       Text { text: "Model"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body }
       ComboBox {
         id: modelSelect
-        enabled: root.draftAgent !== ""
-        displayText: root.draftAgent === "" ? "System harness settings" : currentText
+        enabled: root.picksModel
+        displayText: root.draftAgent === "" ? "System harness settings"
+          : root.draftAgent === "opencode" ? "OpenCode settings" : currentText
         width: parent.width
         height: Style.space(42)
         model: root.modelChoices
@@ -141,7 +145,7 @@ PanelWindow {
       Text { text: "Thinking"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body }
       Row {
         spacing: Style.space(7)
-        enabled: root.draftAgent !== ""
+        enabled: root.picksModel
         Repeater {
           model: ["low", "medium", "high", "xhigh", "max"]
           delegate: Rectangle {

@@ -80,8 +80,8 @@ test("ACP adapters come from the system PATH, never a bundled node_modules copy"
       const adapter = join(bin, name);
       writeFileSync(adapter, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
       const resolved = resolveAdapter(agent, env);
-      assert.equal(resolved, adapter);
-      assert.doesNotMatch(resolved, /node_modules/);
+      assert.deepEqual(resolved, [adapter]);
+      assert.doesNotMatch(resolved[0], /node_modules/);
     }
     // A directory named like the adapter is not an adapter.
     const decoy = mkdtempSync(join(tmpdir(), "nixi-decoy-"));
@@ -89,5 +89,18 @@ test("ACP adapters come from the system PATH, never a bundled node_modules copy"
       mkdirSync(join(decoy, "codex-acp"));
       assert.throws(() => resolveAdapter("codex", { PATH: decoy }), /not on the system PATH/);
     } finally { rmSync(decoy, { recursive: true }); }
+  } finally { rmSync(bin, { recursive: true }); }
+});
+
+test("OpenCode is its own ACP server: `opencode acp`, found like any harness", () => {
+  const bin = mkdtempSync(join(tmpdir(), "nixi-opencode-"));
+  try {
+    assert.equal(resolveHarness({ NIXI_AGENT: "opencode", HOME: bin }), "opencode");
+    assert.throws(() => resolveAdapter("opencode", { PATH: bin }), /OpenCode could not be launched: it is not on the system PATH/);
+    const opencode = join(bin, "opencode");
+    writeFileSync(opencode, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+    assert.deepEqual(resolveAdapter("opencode", { PATH: bin }), [opencode, "acp"]);
+    assert.throws(() => resolveAdapter("opencode", { PATH: bin, OPENCODE_PATH: join(bin, "missing") }),
+      /configured executable is missing/);
   } finally { rmSync(bin, { recursive: true }); }
 });

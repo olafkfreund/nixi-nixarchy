@@ -19,6 +19,8 @@
   # `nix build .#nixi` never needs allowUnfree.
 , claudeAcp ? null
 , codexAcp ? null
+  # OpenCode speaks ACP itself (`opencode acp`); nixpkgs' opencode is MIT.
+, opencodeAcp ? null
 }:
 
 let
@@ -58,6 +60,8 @@ let
       "--set-default NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
     ++ lib.optional (codexAcp != null)
       "--set-default NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
+    ++ lib.optional (opencodeAcp != null)
+      "--set-default NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
   );
 in
 stdenvNoCC.mkDerivation (finalAttrs: {

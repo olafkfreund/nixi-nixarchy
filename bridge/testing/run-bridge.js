@@ -23,6 +23,7 @@ export async function runBridge(options = {}) {
   // resolveExecutable() insists on a real harness binary; the fake agent never runs it.
   executable(join(bin, "claude"), "#!/bin/sh\nexit 0\n");
   executable(join(bin, "codex"), "#!/bin/sh\nexit 0\n");
+  executable(join(bin, "opencode"), "#!/bin/sh\nexit 0\n");
   if (options.context !== null && options.context !== undefined) {
     executable(join(bin, "nixi-context"),
       `#!/bin/sh\nprintf '%s\\n' "$*" > "${join(home, "context-args")}"\ncat <<'NIXI_EOF'\n${options.context}\nNIXI_EOF\n`);

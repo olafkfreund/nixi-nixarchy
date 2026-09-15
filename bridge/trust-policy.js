@@ -20,6 +20,27 @@ export function resolveTrust(value) {
 const MODES = {
   claude: { guide: "plan", mechanic: "default" },
   codex: { guide: "read-only", mechanic: "read-only" },
+  opencode: { guide: "plan", mechanic: "build" },
+};
+
+// OpenCode's own defaults resolve every tool to "allow": a write runs without
+// any permission request, so Guide's cancel would have nothing to cancel, and
+// its plan mode still allows bash. Nixi's rules are appended after OpenCode's
+// built-in ones and win: everything asks except reading and searching, and the
+// agent may not leave plan mode itself. `*` also covers MCP and plugin tools
+// from the user's opencode.json. Verified on p620 (plan step 17b).
+export const OPENCODE_PERMISSIONS = {
+  permission: {
+    "*": "ask",
+    read: { "*": "allow", "*.env": "ask", "*.env.*": "ask" },
+    grep: "allow",
+    glob: "allow",
+    list: "allow",
+    lsp: "allow",
+    todowrite: "allow",
+    question: "allow",
+    plan_exit: "deny",
+  },
 };
 
 // permission: "cancel" (never shown), "ask" (queued in the card), "yolo" (auto allow_once)
