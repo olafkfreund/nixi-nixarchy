@@ -40,6 +40,10 @@ export async function runBridge(options = {}) {
     NIXI_AGENT: "claude",
     NIXI_ACP_COMMAND: JSON.stringify([process.execPath, fakeAgent]),
     FAKE_AGENT_LOG: log,
+    // Always explicit: a machine with nixi installed has the real nixi-context
+    // on PATH, which silently grounded the "missing nixi-context" test.
+    NIXI_CONTEXT_COMMAND: JSON.stringify([options.context === null || options.context === undefined
+      ? join(home, "no-such-nixi-context") : join(bin, "nixi-context")]),
     ...(options.env || {}),
   };
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
