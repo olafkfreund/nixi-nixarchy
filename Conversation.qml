@@ -22,6 +22,8 @@ Item {
   signal closed()
   signal copyConfirmed()
   signal permissionModeConfirmed(string mode)
+  signal tourRequested()
+  signal learnRequested()
   property bool opened: false
   property bool layoutReady: false
   property bool waiting: false
@@ -1090,6 +1092,13 @@ Item {
       setTrust(text.slice(1))
       return
     }
+    // The tour and the learning path are typed, not permanent buttons.
+    if (text === "/tour" || text === "/learn") {
+      prompt.text = ""
+      if (text === "/tour") tourRequested()
+      else learnRequested()
+      return
+    }
     if (waiting) {
       if (!steeringSupported || steeringPending || !bridgeReady || !agent.running) return
       steeringPending = true
@@ -1145,6 +1154,19 @@ Item {
       permissionModePending = true
       agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
     }
+  }
+
+  // A message from Nixi itself (a tour step), rendered like an agent reply --
+  // only "You" is treated as human by the delegate.
+  function showNixiMessage(text) {
+    messages.append({ role: "Nixi", body: String(text) })
+    Qt.callLater(root.scrollToEnd)
+  }
+
+  // Ask a question on the user's behalf, as if they had typed it.
+  function askQuestion(text) {
+    prompt.text = String(text)
+    submit()
   }
 
   function appendReply(text, messageId) {

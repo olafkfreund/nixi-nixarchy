@@ -313,7 +313,50 @@ Item {
     Conversation {}
   }
 
+  // The conversation that started the tour; it is pinned, so it survives the
+  // desktop actions the tour asks for.
+  property var tourCard: null
+
+  function tourTarget() {
+    if (tourCard && tourCard.opened) return tourCard
+    return activeOverlay && activeOverlay.opened ? activeOverlay : null
+  }
+
+  function showTourText(text) {
+    var target = tourTarget()
+    if (target) target.showNixiMessage(text)
+  }
+
+  Tour {
+    id: tour
+    onStepShown: function(text) { root.showTourText(text) }
+    onTourFinished: root.showTourText(
+      "\u2705 **Tour complete.** You can always find me again with **SUPER+H**.\n"
+      + "Type **/learn** whenever you want the next thing worth knowing.")
+  }
+
+  function startTour(conversation) {
+    tourCard = conversation
+    // Pin it: the tour asks you to open terminals and switch workspaces, and an
+    // unpinned card dismisses itself the moment focus leaves it.
+    if (!conversation.pinned) conversation.pinConversation()
+    tour.start()
+  }
+
+  function teachNext(conversation) {
+    var topic = tour.nextTopic()
+    if (!topic) {
+      conversation.showNixiMessage("You have covered every topic I have. Ask me anything instead.")
+      return
+    }
+    var p = tour.progress()
+    conversation.showNixiMessage("**" + topic.title + "** \u00b7 " + (p.done + 1) + "/" + p.total)
+    conversation.askQuestion(topic.question)
+    tour.markTaught(topic.id)
+  }
+
   function removeConversation(conversation) {
+    if (tourCard === conversation) tourCard = null
     if (activeOverlay === conversation) activeOverlay = null
     var remaining = []
     for (var i = 0; i < conversations.length; i++) {
@@ -365,7 +408,11 @@ Item {
         root.activeOverlay = null
       root.reconcileShortcutSubmap()
     })
+    conversation.tourRequested.connect(function() { root.startTour(conversation) })
+    conversation.learnRequested.connect(function() { root.teachNext(conversation) })
     conversation.open(payloadJson || "{}")
+    // A summons completes the tour's last step and re-shows where it is.
+    tour.opened()
     reconcileShortcutSubmap()
     return conversation
   }

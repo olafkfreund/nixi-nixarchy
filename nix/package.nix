@@ -144,9 +144,13 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # (plan step 16), so the Home Manager module keeps evaluating meanwhile.
     plugin=$out/share/omarchy/plugins/${pluginId}
     install -Dm644 manifest.json $plugin/manifest.json
-    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml; do
+    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml Tour.qml; do
       install -Dm644 "$q" "$plugin/$q"
     done
+    # Tour logic shared with the node tests, and the tour/learning data.
+    install -Dm644 TourModel.js $plugin/TourModel.js
+    install -Dm644 share/tour.json $plugin/share/tour.json
+    install -Dm644 share/learn.json $plugin/share/learn.json
     for js in bridge/*.js; do
       case "$js" in *.test.js|*/model-smoke.js) ;; *) install -Dm644 "$js" "$plugin/$js" ;; esac
     done
@@ -215,7 +219,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
-    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml bridge/bridge.js bridge/grounding.js bridge/nixi-node; do
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
+             share/tour.json share/learn.json bridge/bridge.js bridge/grounding.js \
+             bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js

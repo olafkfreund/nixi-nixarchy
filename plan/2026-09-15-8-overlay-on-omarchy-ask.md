@@ -353,6 +353,28 @@ summoned by key; a question typed into the card streams visibly; typing
     `~/.local/share/nixi/learning.json` (progress only, no transcript).
     → verify on p620: `/tour` shows step 1; opening a terminal advances the
     terminal step; summoning the card completes the last step.
+    **Status: the logic is tested, the interaction is not.** TourModel.js is
+    unit tested under node against the real share/tour.json (8 tests, three
+    mutations checked), and the card loads in the live shell with Tour.qml
+    instantiated and no QML errors. Typing `/tour`, the pin, advancing on real
+    events and `/learn` need a person at the keyboard; deferred to the
+    milestone 2 human test with steps 13-15.
+    **Design point added during implementation:** `/tour` PINS its conversation.
+    The tour asks the user to open terminals and switch workspaces, and an
+    unpinned card dismisses itself as soon as focus leaves -- the old widget was
+    a pinned window, so pinning restores that behaviour using upstream's own
+    Ctrl+P mechanism. Tour state lives in the Ask.qml manager, because a
+    conversation is destroyed when its card closes and the last step requires
+    exactly that.
+    **Two gaps found here, both about nixi-server's removal in step 16:**
+    - `observed` in learning.json is read by nixi-server and written by nothing,
+      so "the learning path skips what the watcher has seen you use" has never
+      worked. The `observe` field is carried into learn.json and honoured by
+      TourModel, but nothing populates it yet.
+    - `bin/nixi-watch` POSTs to the server's `/minimize` when the screensaver
+      starts, to hide the old widget. Step 16 deletes that endpoint. The
+      overlay closes on focus loss by itself, so the call should simply be
+      removed rather than reimplemented.
 
 13. **Search rows.** FAQ entries, `Tour`, `Learn` added as rows beside menu
     rows and apps in `MenuSearch.qml`.
