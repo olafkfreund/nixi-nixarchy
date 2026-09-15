@@ -494,8 +494,8 @@ summoned by key; a question typed into the card streams visibly; typing
     → verify: node tests for the policy table and auth fallback; the probe's
     safety gate on p620; the card answers a question with Antigravity selected.
 
-17b. **OpenCode as an agent — PROPOSED, awaiting approval (added 2026-09-15 at
-    the user's request; not part of the approved spec).** Probed on p620 with
+17b. **OpenCode as an agent — APPROVED 2026-09-15 (added at the user's
+    request; extends the approved spec).** Probed on p620 with
     OpenCode 1.18.29 over real ACP (all measured):
     - ACP is built in: `opencode acp`. nixpkgs `opencode` 1.18.25, MIT, so no
       separate adapter and no `allowUnfree`. Login is outside ACP
