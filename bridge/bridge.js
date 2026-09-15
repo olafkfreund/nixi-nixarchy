@@ -5,8 +5,10 @@ import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
+import { groundPrompt } from "./grounding.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -36,7 +38,13 @@ function configuredAgentCommand() {
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
-const cwd = process.env.NIXI_CWD || process.env.HOME || process.cwd();
+// The agent runs in nixi's config directory when it exists, so Claude Code loads
+// nixi's CLAUDE.md -- the tutor brief that points it at the nixi skill and the
+// local manual. Without it, HOME, as upstream did.
+const nixiConfigDir = join(process.env.HOME || "", ".config", "nixi");
+const cwd = process.env.NIXI_CWD
+  || (process.env.HOME && existsSync(nixiConfigDir) ? nixiConfigDir : "")
+  || process.env.HOME || process.cwd();
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
 const settingsPath = join(settingsDir, "nixi.json");
 
@@ -250,9 +258,11 @@ async function prompt(text) {
   turnRunning = true;
   emit({ type: "status", text: "Thinking…" });
   try {
+    const grounding = await groundPrompt(text);
+    if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     const response = await connection.prompt({
       sessionId,
-      prompt: [{ type: "text", text }],
+      prompt: [{ type: "text", text: grounding.prompt }],
     });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {

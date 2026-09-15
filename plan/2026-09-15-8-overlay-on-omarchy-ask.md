@@ -294,6 +294,20 @@ summoned by key; a question typed into the card streams visibly; typing
    → verify: a bridge test with a stub `nixi-context` asserts the prompt sent
    over ACP contains the excerpt; on p620, "how do I install an app" answers
    with `nixarchy apply`.
+   **Result (p620):** the real agent, through the packaged bridge with the
+   Omarchy shell's own `PATH`, answered "how do I install an app" with
+   `nixarchy apply` and the `apps.nix` queue, and no `pacman`/`yay`.
+   **Input for step 10, found here:** in its new working directory the agent
+   follows nixi's `CLAUDE.md` and verifies live, so even that ordinary question
+   produced a permission request — for a *pipeline*,
+   `omarchy menu keybindings --print 2>/dev/null | grep … | head`. Nothing
+   answered it headless, which is why the first run hung. Guide cancelling every
+   request (step 10) is therefore not an edge case but the common path, and the
+   agent then says it could not verify. Allow-listing "read-only" commands is
+   rejected: the request is a shell pipeline, so string matching cannot tell a
+   harmless one from `…; rm -rf ~`. Live keybindings already reach the agent
+   through `nixi-context` when a question mentions keys; that is the route to
+   widen if Guide's answers need more live facts.
 
 10. **Trust modes.** `trust` in `nixi.json` (default Guide); a pure
     `trust-policy.js` returning `{ modeId, permission }` per agent and trust,

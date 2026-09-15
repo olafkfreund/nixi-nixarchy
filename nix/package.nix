@@ -168,7 +168,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     patchShebangs $plugin/bridge
 
     # nodejs-slim: the runtime needs node, not npm or corepack (~25 MB less).
-    makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags}
+    # NIXI_CONTEXT_COMMAND: the Omarchy shell's PATH does not include this
+    # package, so the bridge is told where its grounding CLI is.
+    makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags} \
+      --set-default NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
 
     # Programs the plugin starts BY NAME resolve from the Omarchy shell's PATH,
     # not from this package. On p620 gjs is not installed at all and node, fd
@@ -212,7 +215,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
-    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml bridge/bridge.js bridge/nixi-node; do
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml bridge/bridge.js bridge/grounding.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
@@ -227,6 +230,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       ! test -e "$plugin/bridge/node_modules/$bundled" \
         || { echo "bundled adapter code leaked into the plugin: $bundled"; exit 1; }
     done
+    # Test fixtures never ship.
+    ! test -e $plugin/bridge/testing || { echo "bridge/testing leaked into the plugin"; exit 1; }
+    grep -q 'NIXI_CONTEXT_COMMAND' $plugin/bridge/nixi-node \
+      || { echo "the bridge is not told where nixi-context is"; exit 1; }
     # Every program launched by name was pinned.
     ! grep -nE '"(node|gjs)"' $plugin/*.qml \
       || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }
