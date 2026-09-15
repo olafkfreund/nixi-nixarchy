@@ -28,7 +28,9 @@ Item {
   readonly property bool active: state.active === true
   property bool defaultAgentSet: false
 
+  // /tour: resume a running tour where it is, otherwise start one.
   function start() {
+    if (active) { show(); return }
     if (!tourData.steps || tourData.steps.length === 0) {
       stepShown("The tour data is missing from this install.")
       return
@@ -51,12 +53,11 @@ Item {
     return "**Tour " + (state.step + 1) + "/" + total + "**\n"
   }
 
-  // The card was summoned: complete a step that waits for it, then show where
-  // the tour is now, so closing and reopening never loses the thread.
+  // The card was summoned: complete a step that waits for it. Nothing is shown
+  // just because the card opened -- it opens empty; /tour shows the step.
   function opened() {
     if (!active) return
-    advanceTo(TourModel.onOpened(state, tourData))
-    show()
+    if (advanceTo(TourModel.onOpened(state, tourData))) show()
   }
 
   function applyChecks() {

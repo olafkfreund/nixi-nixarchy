@@ -419,6 +419,19 @@ summoned by key; a question typed into the card streams visibly; typing
     `test_port_is_configurable` no longer lists `bin/nixi`, which has no port.
     Checked on screen: compact overlay, "Tour 2/11" once, "Bonus:" on its own
     paragraph. `SUPER+H` and the Help row still need a person at the keyboard.
+    **Follow-up, same step: the card opens empty.** The user wants no text
+    before they ask anything. Opening the card no longer re-shows the running
+    tour step; `/tour` (or `nixi --tour`) resumes it where it is, and a step
+    that completes on summon still reports. The ACP-adapter error on open was
+    the test install, not the code: plain `nix build .#nixi` has no adapter by
+    design, because nixpkgs' `claude-agent-acp` depends on the unfree
+    `claude-code` (pinning it by default was tried and fails without
+    `allowUnfree`). Built as step 17's module will build it
+    (`claudeAcp = pkgs.claude-agent-acp`, `codexAcp = pkgs.codex-acp`), the
+    bridge reaches `ready`. **Test-install gotcha:** the shell kept the cached
+    `Conversation.qml`, which embeds the previous build's `nixi-node` store path,
+    across rsync + `rescanPlugins`; only `omarchy-restart-shell` loaded the new
+    one. After replacing a build, restart the shell, not just rescan.
 
 16. **Remove the old widget and voice.** Delete everything under *Removed*.
     → verify: `git grep -nIE '/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token'`
