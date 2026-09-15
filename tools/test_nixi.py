@@ -69,7 +69,8 @@ def test_local_search():
     try:
         shutil.copy(os.path.join(ROOT, "share/KNOWLEDGE.md"), conf)
         os.environ["NIXI_DATA"], os.environ["NIXI_DIR"] = data, conf
-        srv = load("srv", "bin/nixi-server")
+        # The overlay's grounding CLI; nixi-server's copy is removed in step 16.
+        srv = load("srv", "bin/nixi-context")
         srv._keybinds = lambda: ""          # no subprocesses in a test
 
         hit = srv.local_answer("how do I install an app")

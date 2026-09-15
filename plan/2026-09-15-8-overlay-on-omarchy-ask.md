@@ -280,6 +280,14 @@ summoned by key; a question typed into the card streams visibly; typing
    helpers from `bin/nixi-server` into a stdlib CLI that prints the excerpt.
    → verify: `nixi-context "how do I install an app"` prints text containing
    `nixarchy apply`; `test_local_search` runs against it.
+   **Found during implementation, not covered by this plan:** nixi-server also
+   runs the *learned-fact broker* (`absorb_learned()`): the agent ends a reply
+   with `LEARNED:` lines, the server strips them from what the user sees and
+   appends them privately to `~/.local/share/nixi/LEARNED.md`, which
+   `nixi-context` then searches. Step 16 deletes nixi-server, so without a
+   decision this feature disappears silently and raw `LEARNED:` lines start
+   appearing in the card. It must be either moved into the bridge's reply
+   handling or dropped on purpose, decided before step 16.
 
 9. **Grounding in the bridge.** `NIXI_CWD` default `~/.config/nixi`; run
    `nixi-context` before each prompt; prepend its output.

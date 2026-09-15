@@ -87,7 +87,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     # The four programs. Python ones get a real interpreter; the launcher
     # needs curl and a shell.
-    for p in nixi-server nixi-watch nixi-update-manual; do
+    for p in nixi-server nixi-watch nixi-update-manual nixi-context; do
       install -Dm755 bin/$p $out/bin/$p
       substituteInPlace $out/bin/$p \
         --replace-fail '#!/usr/bin/env python3' '#!${python3}/bin/python3'
@@ -96,6 +96,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # of it), so it must find the bundled assets on its own rather than only
     # when the launcher exported them.
     wrapProgram $out/bin/nixi-server \
+      --set-default NIXI_FALLBACK_DIR $out/share/nixi
+    # The overlay's bridge runs nixi-context before every prompt; with nothing
+    # in ~/.config/nixi it must still find the bundled knowledge.
+    wrapProgram $out/bin/nixi-context \
       --set-default NIXI_FALLBACK_DIR $out/share/nixi
 
     install -Dm755 bin/nixi $out/bin/nixi
@@ -190,7 +194,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # Every Python program must at least import-compile with the pinned
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
-      $out/bin/.nixi-server-wrapped $out/bin/nixi-watch $out/bin/nixi-update-manual
+      $out/bin/.nixi-server-wrapped $out/bin/nixi-watch $out/bin/nixi-update-manual \
+      $out/bin/.nixi-context-wrapped
     # py_compile drops __pycache__ beside the source; it must not ship.
     rm -rf $out/bin/__pycache__
     ${bash}/bin/bash -n $out/bin/.nixi-wrapped
