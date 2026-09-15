@@ -447,6 +447,53 @@ summoned by key; a question typed into the card streams visibly; typing
     adapter store paths; the same module with `services.nixi.agents = []`
     builds without `allowUnfree`.
 
+17a. **Antigravity as a third agent — PROPOSED, awaiting approval (added
+    2026-09-15 at the user's request; not part of the approved spec).**
+    Probed on p620 over real ACP (findings, all measured):
+    - Google's official server is `agy_acp_server` 1.1.1 from the ACP Registry
+      (`antigravity-acp`, Google LLC, license *proprietary*):
+      `https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-agy_acp_server_1.1.1-linux-x86_64.zip`
+      (682 MB, sha256 `38f62d01b32deb0907b3d39a71ec301fd36369f6ffd1cf262d4af385177f79df`),
+      launched `agy_acp_server.par --uid=`. Two ELF binaries needing only glibc
+      (`localharness_external` is static), so `fetchzip` + `autoPatchelfHook`,
+      `meta.license = lib.licenses.unfree`. Not in nixpkgs.
+    - Auth methods `oauth-personal`, `oauth-business`, `gemini-api-key`,
+      `agent-platform`. `oauth-personal` via ACP `authenticate` succeeded with
+      no browser, even in a fresh home. The server writes `settings.json` and
+      `acp_token.json` under `$GEMINI_HOME/antigravity-acp/`.
+    - Session modes: `default` ("Default permission prompt flow"),
+      `auto_edit`, `yolo`. **No read-only or plan mode.**
+    - It loads the user's shared `~/.gemini/config/mcp_config.json`; on p620 an
+      IDE-only `notebooks` MCP server made every session refuse to run. Nixi
+      must set `GEMINI_HOME` to its own directory (e.g.
+      `~/.local/share/nixi/antigravity`), which also keeps desktop MCP servers
+      out of a beginner's guide.
+    - **Blocked:** every prompt returned `502 Bad Gateway: Failed to connect to
+      backend API` over OAuth (3 tries) while `agy -p` answered normally; the
+      environment's `GEMINI_API_KEY` is rejected as invalid. No tool call has
+      run, so Guide's safety is **unverified**.
+    Proposed steps, in order, each gated on the one before:
+    1. **Safety gate.** With a working backend, the scratchpad probe in
+       `default` mode must show a file write *and* a shell command each arrive
+       as `requestPermission`, and cancelling must leave no file. If either
+       runs without asking, Antigravity is not offered (Guide has no second
+       layer: there is no read-only mode) and this step ends here.
+    2. `bridge/harness-policy.js`: accept `antigravity` (Omarchy's name, also
+       `agy`); the adapter is `NIXI_ANTIGRAVITY_ACP_COMMAND`, no CLI executable
+       check; spawn with `GEMINI_HOME` set as above and `--uid=`.
+    3. `bridge/trust-policy.js`: `antigravity: { guide: "default", mechanic:
+       "default" }` — Guide cancels every request (as for all agents); `yolo`
+       stays Mechanic-only. `auto_edit` is never used.
+    4. `bridge/bridge.js`: if `newSession` fails with *Authentication required*,
+       call `authenticate("oauth-personal")` once, then show a one-line card
+       message on failure ("Log in to Antigravity with `agy` first").
+    5. `HarnessSelector.qml`: add `antigravity`.
+    6. `nix/antigravity-acp.nix` + `package.nix` `antigravityAcp ? null`; the
+       Home Manager module offers it in `services.nixi.agents` but not by
+       default (682 MB, proprietary).
+    → verify: node tests for the policy table and auth fallback; the probe's
+    safety gate on p620; the card answers a question with Antigravity selected.
+
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report
     which adapters and whether file search are available.
