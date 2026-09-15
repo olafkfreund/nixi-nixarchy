@@ -622,6 +622,23 @@ summoned by key; a question typed into the card streams visibly; typing
     runs proved nothing. The claim itself stands: GitHub CI (no such variable)
     built the `agents = [ ]` configuration green on PR #9. Unset the variable
     for any local unfree test.
+    **A3 done:** `nix/enable-card.py` + `services.nixi.autoEnable` (default
+    true) + `home.activation.nixiEnableCard` after `linkGeneration`. Measured
+    first in Omarchy's source: a valid user `shell.json` REPLACES the defaults
+    (`shell.qml` `applyShellConfig`, no deep merge, needs `version: 1`), and
+    the shell watches the file and reloads it. So the step extends an existing
+    file, and **creates a missing one from Omarchy's defaults** (the stable
+    profile path `/run/current-system/sw/share/omarchy/config/omarchy/shell.json`,
+    byte-identical to the shell's own defaults) -- a deviation from the
+    approved spec's "a missing file is left alone": nixarchy seeds no
+    `shell.json`, so leaving it alone would not enable the card on exactly the
+    fresh desktops the decision was for. Without a defaults file, a missing
+    file is still left alone. Broken, unversioned or symlinked files are never
+    edited. Tested on fixtures for every branch; five mutations (ignore the
+    marker, create a bare file, skip the bar-slot move, rewrite an unchanged
+    file, replace a symlink) each fail a named assertion; the generated
+    activation script orders it after `linkGeneration` and keeps argument
+    positions with the button off.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report

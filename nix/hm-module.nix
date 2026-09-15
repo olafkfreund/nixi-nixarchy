@@ -84,6 +84,18 @@ in
       '';
     };
 
+    autoEnable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Turn the Nixi card (and the bar button) on in the Omarchy shell on the
+        first activation, so `nixi`, SUPER+H and the Help row work without a
+        visit to Setup > Plugins. Happens once per home: turning the card off
+        later is respected. A missing `shell.json` is created from Omarchy's
+        defaults, as the shell itself would.
+      '';
+    };
+
     barWidget.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -189,6 +201,19 @@ in
           DRY_RUN=''${DRY_RUN:+1} ${pkgs.bash}/bin/bash ${./migrate-plugin-dir.sh} \
             "${config.xdg.configHome}/omarchy/plugins/${pluginId}"
         '';
+
+      # Enable the card once (nixarchy#709); see the script for the rules.
+      home.activation.nixiEnableCard = lib.mkIf cfg.autoEnable
+        (lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+          if [[ -z "''${DRY_RUN:-}" ]]; then
+            ${pkgs.python3}/bin/python3 ${./enable-card.py} \
+              "${config.xdg.configHome}/omarchy/shell.json" \
+              "${config.xdg.stateHome}/nixi/enabled-once" \
+              ${pluginId} "${lib.optionalString cfg.barWidget.enable "${pluginId}-button"}" \
+              /run/current-system/sw/share/omarchy/config/omarchy/shell.json \
+              /etc/profiles/per-user/${config.home.username}/share/omarchy/config/omarchy/shell.json
+          fi
+        '');
 
       # The mutable state directory is created up front with a private mode,
       # so the first run never has to widen anything.

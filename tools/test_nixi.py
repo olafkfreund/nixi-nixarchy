@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -301,6 +302,78 @@ def test_old_plugin_dir_migration():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_enable_card():
+    """The card is enabled once per home (nixarchy#709), without ever costing
+    the user their bar: a user shell.json REPLACES Omarchy's defaults, so the
+    file is only ever extended, or created whole from the defaults."""
+    script = os.path.join(ROOT, "nix", "enable-card.py")
+    card, button = "io.github.olafkfreund.nixi", "io.github.olafkfreund.nixi-button"
+    root = tempfile.mkdtemp()
+    try:
+        defaults = os.path.join(root, "defaults.json")
+        json.dump({"version": 1, "idle": {"x": 1}, "bar": {"layout": {"left": [{"id": "a"}], "center": [{"id": "b"}], "right": []}}, "plugins": []},
+                  open(defaults, "w"))
+
+        def case(name, config=None, raw=None, marker=False, with_defaults=True):
+            d = os.path.join(root, name)
+            os.makedirs(d)
+            path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "enabled-once")
+            if raw is not None:
+                open(path, "w").write(raw)
+            elif config is not None:
+                json.dump(config, open(path, "w"), indent=2)
+            if marker:
+                os.makedirs(os.path.dirname(mark))
+                open(mark, "w").write("x")
+            before = open(path).read() if os.path.exists(path) else None
+            out = subprocess.run([sys.executable, script, path, mark, card, button]
+                                 + ([defaults] if with_defaults else []),
+                                 capture_output=True, text=True, check=True).stdout
+            after = json.load(open(path)) if os.path.exists(path) and raw is None or (raw is not None and before != open(path).read()) else None
+            return path, mark, before, after, out
+
+        user = {"version": 1, "idle": {"keep": True}, "bar": {"layout": {"left": [], "center": [{"id": "clock"}], "right": []}}, "plugins": [{"id": "vimarchy"}]}
+
+        path, mark, _, after, _ = case("nowhere", json.loads(json.dumps(user)))
+        assert {"id": card} in after["plugins"] and {"id": "vimarchy"} in after["plugins"], after
+        assert after["idle"] == {"keep": True} and {"id": "clock"} in after["bar"]["layout"]["center"], "other keys lost"
+        assert {"id": button} in after["bar"]["layout"]["center"] and os.path.exists(mark)
+
+        old = json.loads(json.dumps(user)); old["bar"]["layout"]["right"] = [{"id": card}]
+        _, _, _, after, out = case("in-bar", old)
+        assert {"id": card} in after["plugins"] and {"id": card} not in after["bar"]["layout"]["right"], "0.9 bar slot not moved"
+        assert "moved" in out
+
+        done = json.loads(json.dumps(user)); done["plugins"].append({"id": card}); done["bar"]["layout"]["center"].append({"id": button})
+        path, mark, before, _, _ = case("already", done)
+        assert open(path).read() == before and os.path.exists(mark), "an enabled card was rewritten"
+
+        turned_off = json.loads(json.dumps(user))
+        path, mark, before, _, _ = case("marker", turned_off, marker=True)
+        assert open(path).read() == before, "a card the user turned off was re-enabled"
+
+        path, mark, _, after, _ = case("missing")
+        assert after["idle"] == {"x": 1} and after["bar"]["layout"]["left"] == [{"id": "a"}], "not created from the defaults"
+        assert {"id": card} in after["plugins"] and after["version"] == 1
+
+        path, mark, _, _, out = case("missing-no-defaults", with_defaults=False)
+        assert not os.path.exists(path) and not os.path.exists(mark) and "Setup > Plugins" in out, "a bare shell.json would replace the whole bar"
+
+        for name, raw in (("broken", "{not json"), ("unversioned", json.dumps({"plugins": []}))):
+            path, mark, before, _, out = case(name, raw=raw)
+            assert open(path).read() == before and not os.path.exists(mark), name + " file was edited"
+
+        d = os.path.join(root, "linked"); os.makedirs(d)
+        real = os.path.join(root, "real.json"); json.dump(user, open(real, "w"))
+        os.symlink(real, os.path.join(d, "shell.json"))
+        subprocess.run([sys.executable, script, os.path.join(d, "shell.json"), os.path.join(d, "m"), card, button], check=True, capture_output=True)
+        assert json.load(open(real)) == user, "wrote through a symlinked shell.json"
+        assert os.path.islink(os.path.join(d, "shell.json")), "replaced a symlinked (dotfile-managed) shell.json with a file"
+        print("  ok  the card is enabled once, and shell.json is only ever extended")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_nixi_rows_are_searchable():
     """The FAQ, the tour and the learning path are reachable from the card's
     search, not only as typed commands -- and an FAQ answer is shown in the
@@ -319,7 +392,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_enable_card,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")
