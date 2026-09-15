@@ -629,6 +629,22 @@ summoned by key; a question typed into the card streams visibly; typing
     `test_no_runtime_rename`. Bridge tests run with `node --test`.
     → verify: `python3 tools/test_nixi.py` and `node --test bridge/*.test.js`
     pass; each new check fails when its bug is reintroduced.
+    **Result:** the HTTP-server and voice checks went with steps 16-17. Added
+    `test_rebrand_is_complete` (step 3's pattern; FORK.md, LICENSE and the
+    intent/spec/plan documents allowed), `test_qml_is_portable` (no
+    `/usr/share/omarchy`, no bridge path under one plugin id, menu data from
+    `OMARCHY_PATH`), `test_lock_bundles_no_adapter`; `test_no_runtime_rename`
+    now also requires the overlay's integration points and that `bin/nixi`
+    (toggle, summon) and `button/BarWidget.qml` (toggle) each still make their
+    own call -- planning documents no longer count towards the tokens. The
+    tour-data schema test already existed (step 11); "adapters are not a
+    node_modules path" is the existing node test. Each new check was
+    mutation-tested in a scratch copy: branding, an Arch path, a hard-coded
+    bridge path, dropping OMARCHY_PATH, an adapter in the lock, and each
+    entry point losing its call all fail. The first version of the token
+    check missed a broken `bin/nixi` (the plan and the button still named the
+    call), which is why it is per file. Python passes; node 39/39. The
+    old-widget grep from step 16 becomes a test in step 21, once it can pass.
 
 20. **CI.** Replace the server smoke test and the `nix run` browser job with:
     `nix build .#nixi` (no unfree), `node --test` on the bridge, Home Manager

@@ -93,7 +93,7 @@ def test_no_runtime_rename():
     # docs/FORK.md is the one file whose JOB is to name the old identifiers.
     # docs/FORK.md records the old names on purpose; this file spells them
     # out as search needles. Neither is shipped branding.
-    SKIP = ("docs/FORK.md", "flake.lock", "tools/test_nixi.py")
+    SKIP = ("docs/FORK.md", "flake.lock", "tools/test_nixi.py", "intent/", "spec/", "plan/")
     blob = ""
     for f in files:
         if f.endswith((".png", ".gif", ".jpg")) or f.startswith(SKIP):
@@ -107,9 +107,20 @@ def test_no_runtime_rename():
     # Omarchy's theme through qs.Commons instead.
     for token in ("omarchy menu keybindings --print", "omarchy-launch-webapp",
                   "omarchy-launch-or-focus",
+                  # the overlay's own: how nixi and the button reach the card,
+                  # and where the menu model and data live
+                  "omarchy-shell shell toggle", "omarchy-shell shell summon",
+                  "share/omarchy/shell/plugins/menu/MenuModel.js", "OMARCHY_PATH",
                   "omarchy-notification-send", ".config/omarchy/defaults/agent",
                   ".config/omarchy/extensions/omarchy-menu.jsonc"):
         assert token in blob, "runtime integration point lost in the rename: " + token
+    # Each entry point reaches the card itself; one file mentioning the call
+    # must not cover for another that lost it.
+    for f, calls in (("bin/nixi", ("omarchy-shell shell toggle", "omarchy-shell shell summon")),
+                     ("button/BarWidget.qml", ("omarchy-shell shell toggle",))):
+        text = open(os.path.join(ROOT, f)).read()
+        for call in calls:
+            assert call in text, "%s no longer calls %s" % (f, call)
     # ...and none of the old branding survived
     for stale in ("omarchy-help", "OMARCHY_HELP", "X-Archy-Token"):
         assert stale not in blob, "stale branding still present: " + stale
@@ -184,6 +195,48 @@ def test_tour_and_learning_data():
     print("  ok  tour and learning data are valid and never wait for the old widget")
 
 
+def _tracked():
+    return subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
+                          text=True, check=True).stdout.split()
+
+
+def test_rebrand_is_complete():
+    """omarchy-ask's own names must not survive the rebrand (plan step 3).
+    docs/FORK.md and LICENSE record the origin; intent/spec/plan discuss it."""
+    allowed = ("docs/FORK.md", "LICENSE", "intent/", "spec/", "plan/", "tools/test_nixi.py")
+    pattern = re.compile(r"[Oo]marchy [Aa]sk|clickety-clacks\.ask|ask\.json|\bASK_")
+    for f in _tracked():
+        if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
+            continue
+        text = open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
+        m = pattern.search(text)
+        assert not m, "omarchy-ask branding survives in %s: %r" % (f, m.group(0))
+    print("  ok  no omarchy-ask branding outside the fork record")
+
+
+def test_qml_is_portable():
+    """The card must run from any plugin directory -- a store path, a test id
+    -- and on NixOS (plan step 4)."""
+    for f in [f for f in _tracked() if f.endswith(".qml")]:
+        text = open(os.path.join(ROOT, f)).read()
+        assert "/usr/share/omarchy" not in text, f + " reads Arch's /usr/share/omarchy"
+        assert not re.search(r"plugins/io\.github\.olafkfreund\.nixi[^\"]*/bridge", text), \
+            f + " hard-codes the bridge under one plugin id; use bridgeScript()"
+    menu = open(os.path.join(ROOT, "MenuSearch.qml")).read()
+    assert 'Quickshell.env("OMARCHY_PATH")' in menu, "menu data no longer comes from OMARCHY_PATH"
+    print("  ok  QML has no Arch paths and no hard-coded plugin location")
+
+
+def test_lock_bundles_no_adapter():
+    """Adapters come from the user's system, never node_modules: upstream's
+    npm copies ship non-free SDK binaries past Nix's license check (step 5)."""
+    lock = json.load(open(os.path.join(ROOT, "bridge", "package-lock.json")))
+    for name in lock.get("packages", {}):
+        for banned in ("@anthropic-ai/", "@openai/", "claude-agent-acp", "codex-acp"):
+            assert banned not in name, "bridge lock bundles %s (%s)" % (banned, name)
+    print("  ok  the bridge lock bundles no agent adapter")
+
+
 def test_nixi_rows_are_searchable():
     """The FAQ, the tour and the learning path are reachable from the card's
     search, not only as typed commands -- and an FAQ answer is shown in the
@@ -202,6 +255,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")
