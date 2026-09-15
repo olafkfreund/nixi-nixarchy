@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "matchers": {
+    "check": "defaultAgent: an Omarchy default agent is configured",
+    "event": "a Hyprland socket2 event name; counts every occurrence",
+    "classAny": "with event: one comma-separated field of the event data equals one of these, case-insensitive",
+    "dataContainsAny": "with event: the lowercased event data contains one of these",
+    "self": "opened: the card is summoned after this step began"
+  },
+  "steps": [
+    {
+      "text": "**SUPER** is the Windows key (⊞, next to ALT — ⌘ on a Mac).\nIt runs this whole OS. First: connect your AI.\n- Press **SUPER+SPACE**\n- Go to **Setup → Default agent**\n- Pick one (Claude Code, Codex…)",
+      "count": 1,
+      "match": {
+        "check": "defaultAgent"
+      }
+    },
+    {
+      "text": "Now the essentials.\n- **SUPER+RETURN** opens a terminal — try it\nBonus: **SUPER+C / SUPER+V** copy-paste works everywhere, even in there.",
+      "count": 1,
+      "match": {
+        "event": "openwindow",
+        "classAny": [
+          "foot",
+          "alacritty",
+          "kitty",
+          "com.mitchellh.ghostty",
+          "ghostty"
+        ]
+      }
+    },
+    {
+      "text": "Your browser has its own key.\n- Press **SUPER+SHIFT+RETURN**",
+      "count": 1,
+      "match": {
+        "event": "openwindow",
+        "dataContainsAny": [
+          "brave",
+          "chromium",
+          "chrome",
+          "firefox",
+          "helium",
+          "microsoft-edge",
+          "opera",
+          "vivaldi"
+        ]
+      }
+    },
+    {
+      "text": "One more terminal: **SUPER+RETURN**.\nWatch the windows share the screen evenly — no overlap, no dragging.\nThat’s tiling.",
+      "count": 1,
+      "match": {
+        "event": "openwindow",
+        "classAny": [
+          "foot",
+          "alacritty",
+          "kitty",
+          "com.mitchellh.ghostty",
+          "ghostty"
+        ]
+      }
+    },
+    {
+      "text": "The move that kills the mouse:\n- **SUPER+arrows** jump focus between panes\nBounce around a few times — watch the highlight travel.",
+      "count": 4,
+      "match": {
+        "event": "activewindow"
+      }
+    },
+    {
+      "text": "Time to tidy up:\n- Steer onto a window with **SUPER+arrows**\n- **SUPER+W** closes it — no titlebar needed\nClose TWO of them.",
+      "count": 2,
+      "match": {
+        "event": "closewindow"
+      }
+    },
+    {
+      "text": "The front door of the whole OS:\n- **SUPER+SPACE** opens the menu — apps, install, themes, setup\n- Type any app’s name and launch it from there",
+      "count": 1,
+      "match": {
+        "event": "openwindow"
+      }
+    },
+    {
+      "text": "Fresh desk:\n- Press **SUPER+2** — or any number — for another workspace\n(I’ll come along — I’m pinned.)",
+      "count": 1,
+      "match": {
+        "event": "workspace"
+      }
+    },
+    {
+      "text": "A clean context for anything — one project per desk works great.\n- Hop back to the desk you came from (**SUPER+1**, or wherever)",
+      "count": 1,
+      "match": {
+        "event": "workspace"
+      }
+    },
+    {
+      "text": "The float trick:\n- Arrow onto a window (leave me out of it 😅)\n- **SUPER+T** pops it out to float\n- **SUPER+T** again tiles it back",
+      "count": 2,
+      "match": {
+        "event": "changefloatingmode"
+      }
+    },
+    {
+      "text": "Last one — about me.\n- Dismiss me any time: **Escape**\n- Summon me back: **SUPER+H**\nGo on — close me and call me back!",
+      "count": 1,
+      "match": {
+        "self": "opened"
+      }
+    }
+  ]
+}

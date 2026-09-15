@@ -189,6 +189,52 @@ def test_faq_schema():
     print("  ok  faq schema + NixOS-correct install answer")
 
 
+def test_tour_and_learning_data():
+    """The overlay reads the tour and learning path from share/*.json. Every
+    step must be a matcher Tour.qml understands, and none may wait for the old
+    browser widget -- the overlay has no 127.0.0.1 window, so such a step would
+    never complete."""
+    tour = json.load(open(os.path.join(ROOT, "share", "tour.json")))
+    learn = json.load(open(os.path.join(ROOT, "share", "learn.json")))
+    raw = open(os.path.join(ROOT, "share", "tour.json")).read()
+    assert "127.0.0.1" not in raw, "a tour step still waits for the browser widget"
+
+    known = {"event", "check", "self", "classAny", "dataContainsAny"}
+    for i, step in enumerate(tour["steps"]):
+        assert isinstance(step.get("text"), str) and step["text"].strip(), f"step {i} has no text"
+        assert isinstance(step.get("count"), int) and step["count"] >= 1, f"step {i} count"
+        m = step.get("match") or {}
+        assert set(m) <= known, f"step {i} uses an unknown matcher key: {set(m) - known}"
+        assert len({"event", "check", "self"} & set(m)) == 1, f"step {i} needs exactly one of event/check/self"
+        if "classAny" in m or "dataContainsAny" in m:
+            assert "event" in m, f"step {i}: classAny/dataContainsAny only qualify an event"
+        if "check" in m:
+            assert m["check"] == "defaultAgent", f"step {i}: unknown check {m['check']}"
+        if "self" in m:
+            assert m["self"] == "opened", f"step {i}: unknown self matcher {m['self']}"
+    assert tour["steps"][-1]["match"] == {"self": "opened"}, "the last step must complete on summon"
+
+    # Google Chrome is p620's default browser; the old matcher missed it.
+    browser = next(s["match"] for s in tour["steps"] if "dataContainsAny" in s["match"])
+    assert "chrome" in browser["dataContainsAny"], "the browser step cannot complete in Chrome"
+
+    # While nixi-server still exists, the data must say what it said.
+    server = os.path.join(ROOT, "bin", "nixi-server")
+    if os.path.exists(server):
+        srv = load("srv_tour", "bin/nixi-server")
+        assert len(tour["steps"]) == len(srv.TOUR), "tour.json and TOUR differ in length"
+        for i, ((text, _kind, _fn, count), step) in enumerate(zip(srv.TOUR, tour["steps"])):
+            assert step["count"] == count, f"step {i} count drifted"
+            if i < len(srv.TOUR) - 1:
+                assert step["text"] == text, f"step {i} text drifted"
+        assert [(t["id"], t["title"], t["question"], t["observe"]) for t in learn["topics"]] \
+            == [tuple(c) for c in srv.CURRICULUM], "learn.json and CURRICULUM differ"
+
+    ids = [t["id"] for t in learn["topics"]]
+    assert len(ids) == len(set(ids)), "duplicate learning topic ids"
+    print("  ok  tour and learning data are valid and never wait for the old widget")
+
+
 def test_voice_stays_local():
     """The browser SpeechRecognition API would ship the microphone to Google,
     and is a silent no-op on any Chromium without Google API keys (nixpkgs'
@@ -395,7 +441,7 @@ if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_learned_broker,
                test_no_runtime_rename, test_port_is_configurable,
                test_units_have_a_nixos_path, test_window_rule_is_valid_lua,
-               test_faq_schema, test_voice_stays_local,
+               test_faq_schema, test_tour_and_learning_data, test_voice_stays_local,
                test_transcript_is_never_auto_sent, test_whisper_flags_exist,
                test_both_install_paths_know_about_voice,
                test_mic_button_describes_what_it_does,
