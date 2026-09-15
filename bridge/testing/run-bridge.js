@@ -93,11 +93,13 @@ export async function runBridge(options = {}) {
     if (permissionFailure) throw permissionFailure;
     const contextArgsPath = join(home, "context-args");
     const settingsPath = join(home, ".config", "omarchy", "nixi.json");
+    const learnedPath = join(home, ".local", "share", "nixi", "LEARNED.md");
     return {
       home,
       events,
       agent,
       contextArgs: existsSync(contextArgsPath) ? readFileSync(contextArgsPath, "utf8").trim() : null,
+      learnedAfter: existsSync(learnedPath) ? readFileSync(learnedPath, "utf8") : null,
       settingsAfter: existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : null,
     };
   } finally {

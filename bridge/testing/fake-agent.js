@@ -61,10 +61,13 @@ new AgentSideConnection((conn) => ({
       });
       log({ method: "permissionOutcome", outcome: outcome.outcome });
     }
-    await conn.sessionUpdate({
-      sessionId: params.sessionId,
-      update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } },
-    });
+    // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
+    const chunks = text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
+    for (const chunk of chunks)
+      await conn.sessionUpdate({
+        sessionId: params.sessionId,
+        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: chunk } },
+      });
     return { stopReason: "end_turn" };
   },
 }), ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

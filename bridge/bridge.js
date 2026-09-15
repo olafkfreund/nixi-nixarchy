@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
+import { createLearnedFilter, appendLearned } from "./learned.js";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
 import {
   ClientSideConnection,
@@ -193,7 +194,8 @@ const client = {
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
-        const text = messageText(update.content);
+        const text = learned.push(messageText(update.content) || "");
+        lastMessageId = update.messageId || lastMessageId;
         if (text) emit({ type: "text", text, messageId: update.messageId || "" });
         break;
       }
@@ -281,6 +283,18 @@ async function start() {
   });
 }
 
+// One filter per turn: a LEARNED line split across chunks is still caught.
+let learned = createLearnedFilter();
+let lastMessageId = "";
+const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd(), ".local", "share", "nixi");
+
+async function finishLearned() {
+  const { visible, facts } = learned.flush();
+  if (visible) emit({ type: "text", text: visible, messageId: lastMessageId });
+  try { await appendLearned(facts, learnedDir); }
+  catch (error) { emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` }); }
+}
+
 async function prompt(text) {
   if (!connection || !sessionId) throw new Error("ACP session is not ready");
   if (turnRunning) throw new Error("The agent is already handling a prompt");
@@ -289,10 +303,12 @@ async function prompt(text) {
   try {
     const grounding = await groundPrompt(text);
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
+    learned = createLearnedFilter();
     const response = await connection.prompt({
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
     });
+    await finishLearned();
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;

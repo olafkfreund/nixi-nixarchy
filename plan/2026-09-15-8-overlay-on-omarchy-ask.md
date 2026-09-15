@@ -288,6 +288,17 @@ summoned by key; a question typed into the card streams visibly; typing
    decision this feature disappears silently and raw `LEARNED:` lines start
    appearing in the card. It must be either moved into the bridge's reply
    handling or dropped on purpose, decided before step 16.
+   **Decided (2026-09-15, before step 16): moved into the bridge.** The user
+   asked to keep nixi's features, and only the bridge can do it safely: in
+   Guide every agent write is cancelled, so the agent could never append to
+   LEARNED.md itself. `bridge/learned.js` streams text through, holding back
+   only a line that could still be `LEARNED:`, and at the end of the turn
+   appends the facts with nixi-server's limits (5 facts, 300 chars, 256 KiB
+   file trimmed to the newest 200 KiB, 0600, atomic, symlink refused).
+   → verified: `bridge/learned.test.js` -- every split point of a streamed
+   answer, a final line with no newline, a mid-line mention left alone, the
+   limits, and through the real bridge the card never sees the line while
+   LEARNED.md gets the fact (mutation: bypassing the filter fails it).
 
 9. **Grounding in the bridge.** `NIXI_CWD` default `~/.config/nixi`; run
    `nixi-context` before each prompt; prepend its output.
