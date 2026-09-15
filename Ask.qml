@@ -23,12 +23,12 @@ Item {
   // window — reads one value and a single writer persists it.
   readonly property real minFontScale: 0.7
   readonly property real maxFontScale: 2
-  readonly property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/ask.json"
+  readonly property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/nixi.json"
   property real fontScale: 1
   // How long typing has to pause before the menu search recomputes. Matching
   // is cheap; the resize it triggers is not, so this is really a tolerance
   // for how much the card is allowed to move while you type. Settable in
-  // ask.json, which is watched, so an edit applies without a restart.
+  // nixi.json, which is watched, so an edit applies without a restart.
   readonly property int minSearchDebounceMs: 0
   readonly property int maxSearchDebounceMs: 2000
   property int searchDebounceMs: 270
@@ -67,7 +67,7 @@ Item {
     shortcutSubmapTarget = shortcutSubmapDesired
     shortcutSubmapProc.command = [
       "hyprctl", "dispatch",
-      "hl.dsp.submap(\"" + (shortcutSubmapTarget ? "omarchy-ask" : "reset") + "\")"
+      "hl.dsp.submap(\"" + (shortcutSubmapTarget ? "nixi" : "reset") + "\")"
     ]
     shortcutSubmapProc.running = true
   }
@@ -79,7 +79,7 @@ Item {
     Component.onCompleted: running = true
     onExited: function(exitCode) {
       var current = String(stdout.text || "").trim()
-      root.shortcutSubmapOwned = current === "omarchy-ask"
+      root.shortcutSubmapOwned = current === "nixi"
       root.shortcutSubmapInitialized = true
       root.reconcileShortcutSubmap()
     }
@@ -262,7 +262,7 @@ Item {
     visible: root.copyToastVisible
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omarchy-ask-copied"
+    WlrLayershell.namespace: "nixi-copied"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
@@ -328,7 +328,7 @@ Item {
     var conversation = conversationComponent.createObject(root)
     if (!conversation) return null
     conversationSequence++
-    conversation.windowTitle = "Omarchy Ask #" + conversationSequence
+    conversation.windowTitle = "Nixi #" + conversationSequence
     conversations = conversations.concat([conversation])
     activeOverlay = conversation
     conversation.fontScale = Qt.binding(function() { return root.fontScale })

@@ -31,22 +31,22 @@ const bundledAgentBinary = join(
 );
 function configuredAgentCommand() {
   const specificName = agentName === "codex"
-    ? "ASK_CODEX_ACP_COMMAND" : "ASK_CLAUDE_ACP_COMMAND";
+    ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
   const raw = String(process.env[specificName]
-    || process.env.ASK_ACP_COMMAND || "").trim();
+    || process.env.NIXI_ACP_COMMAND || "").trim();
   if (!raw) return [bundledAgentBinary];
   let command;
   try { command = JSON.parse(raw); }
-  catch { throw new Error("ASK_ACP_COMMAND must be a JSON array of arguments"); }
+  catch { throw new Error("NIXI_ACP_COMMAND must be a JSON array of arguments"); }
   if (!Array.isArray(command) || command.length === 0
       || command.some((argument) => typeof argument !== "string" || argument === ""))
-    throw new Error("ASK_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
+    throw new Error("NIXI_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
-const cwd = process.env.ASK_CWD || process.env.HOME || process.cwd();
+const cwd = process.env.NIXI_CWD || process.env.HOME || process.cwd();
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
-const settingsPath = join(settingsDir, "ask.json");
+const settingsPath = join(settingsDir, "nixi.json");
 
 let permissionMode = "permission";
 
@@ -101,11 +101,11 @@ function matchingValue(config, wanted) {
 }
 
 async function applyRequestedModel(configOptions) {
-  if (process.env.ASK_INSPECT_CONFIG === "1")
+  if (process.env.NIXI_INSPECT_CONFIG === "1")
     emit({ type: "config_options", configOptions });
   const requests = [
-    { wanted: process.env.ASK_MODEL, ids: ["model"], categories: ["model"] },
-    { wanted: process.env.ASK_REASONING_EFFORT,
+    { wanted: process.env.NIXI_MODEL, ids: ["model"], categories: ["model"] },
+    { wanted: process.env.NIXI_REASONING_EFFORT,
       ids: ["reasoning_effort"], categories: ["thought_level"] },
   ];
   for (const request of requests) {
@@ -125,7 +125,7 @@ async function applyRequestedModel(configOptions) {
       value,
     });
     configOptions = response.configOptions || configOptions;
-    if (process.env.ASK_INSPECT_CONFIG === "1")
+    if (process.env.NIXI_INSPECT_CONFIG === "1")
       emit({ type: "config_options", configOptions });
   }
 }
@@ -141,9 +141,9 @@ else
 if (agentName === "codex") {
   let codexConfig = {};
   try { codexConfig = JSON.parse(process.env.CODEX_CONFIG || "{}"); } catch {}
-  if (process.env.ASK_MODEL) codexConfig.model = process.env.ASK_MODEL;
-  if (process.env.ASK_REASONING_EFFORT)
-    codexConfig.model_reasoning_effort = process.env.ASK_REASONING_EFFORT;
+  if (process.env.NIXI_MODEL) codexConfig.model = process.env.NIXI_MODEL;
+  if (process.env.NIXI_REASONING_EFFORT)
+    codexConfig.model_reasoning_effort = process.env.NIXI_REASONING_EFFORT;
   childEnvironment.CODEX_CONFIG = JSON.stringify(codexConfig);
 }
 
@@ -233,10 +233,10 @@ async function start() {
   });
   steeringSupported = initialized?._meta?.steering?.supported === true;
   const session = await connection.newSession({ cwd, mcpServers: [],
-    ...(agentName === "claude" && process.env.ASK_MODEL ? {
+    ...(agentName === "claude" && process.env.NIXI_MODEL ? {
       _meta: { claudeCode: { options: {
-        model: process.env.ASK_MODEL,
-        settings: { model: process.env.ASK_MODEL, availableModels: [process.env.ASK_MODEL] },
+        model: process.env.NIXI_MODEL,
+        settings: { model: process.env.NIXI_MODEL, availableModels: [process.env.NIXI_MODEL] },
       } } },
     } : {}),
   });

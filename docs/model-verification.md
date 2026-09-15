@@ -5,7 +5,7 @@ error requiring a newer CLI even though ACP reported readiness and end_turn.
 Upgraded codex-acp to 1.10.0 and claude-agent-acp to 0.74.0. The lockfile
 installs Codex 0.153.4 and Claude SDK 0.3.257.
 
-Real prompts requested `ASK_MODEL_OK`, with tools forbidden in the prompt.
+Real prompts requested `NIXI_MODEL_OK`, with tools forbidden in the prompt.
 Verified response text as well as completion; readiness alone is insufficient.
 The medium/high/xhigh/max sweep used the installed plugin bridge; initial low
 tests used the identical source bridge and upgraded dependencies.
@@ -21,7 +21,7 @@ substring matching was removed to prevent Fable 5 selecting Fable 5.1.
 UI checks: Hyprland send_shortcut opened the selector in overlay and pinned
 windows. Home selected Luna, Return persisted it, and a shell restart retained
 the selection. End/Return restored Astra. Super+comma is registered only in
-the temporary omarchy-ask submap; the global notification binding is unchanged.
+the temporary nixi submap; the global notification binding is unchanged.
 wtype did not reliably deliver the chord on this machine.
 
 No release was published as part of this repair.
@@ -35,15 +35,15 @@ With no saved Ask override, the bridge reads Omarchy’s Default Agent.
 
 `node bridge/model-smoke.js --full` passed all 41 live cases: the system
 default and eight explicit models at low/medium/high/xhigh/max. Every explicit
-case checked final ACP model/effort metadata and an exact `ASK_SYSTEM_OK`
+case checked final ACP model/effort metadata and an exact `NIXI_SYSTEM_OK`
 response, not merely readiness. System versions were Codex 0.153.3 and Claude
 Code 2.1.259. Tests did not alter credentials or default settings.
 
 An isolated Quickshell popup rendered an unsupported-harness error, restarted
-with system Codex, and rendered `ASK_RECOVERY_OK`. The installed popup was
+with system Codex, and rendered `NIXI_RECOVERY_OK`. The installed popup was
 then reloaded with no existing Ask conversations open: its selector showed
-“Omarchy default” and its real Astra/low prompt rendered `ASK_INSTALLED_OK`.
-The live ask.json and defaults/agent SHA-256 hashes remained unchanged.
+“Omarchy default” and its real Astra/low prompt rendered `NIXI_INSTALLED_OK`.
+The live nixi.json and defaults/agent SHA-256 hashes remained unchanged.
 
 The automated policy tests also cover missing defaults, changed defaults,
 saved/explicit overrides, unsupported agents, missing binaries, executable

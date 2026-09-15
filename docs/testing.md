@@ -1,6 +1,6 @@
 # Regression testing
 
-Omarchy Ask currently uses a focused manual integration suite because its most
+Nixi currently uses a focused manual integration suite because its most
 important behavior crosses Quickshell, Hyprland, Node, and a real ACP adapter.
 Run this checklist on Omarchy Quattro before a release.
 
@@ -13,7 +13,7 @@ node --check bridge/bridge.js
 node --test bridge/harness-policy.test.js bridge/harness-errors.test.js
 git diff --check
 
-check_dir=$(mktemp -d /tmp/omarchy-ask-check.XXXXXX)
+check_dir=$(mktemp -d /tmp/nixi-check.XXXXXX)
 rsync -a --exclude .git --exclude node_modules ./ "$check_dir/"
 omarchy plugin validate "$check_dir"
 ```
@@ -30,8 +30,8 @@ using existing logins and verifies model/effort metadata and response text.
 Omit `--full` for the default plus eight models at low effort.
 
 ```sh
-omarchy plugin add https://github.com/clickety-clacks/omarchy-ask.git --enable --yes
-cd ~/.config/omarchy/plugins/clickety-clacks.ask/bridge
+omarchy plugin add https://github.com/olafkfreund/nixi-nixarchy.git --enable --yes
+cd ~/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge
 npm ci
 omarchy restart shell
 ```
@@ -39,7 +39,7 @@ omarchy restart shell
 Confirm the configured shortcut opens a centered overlay with an input caret,
 square marker, Ask/YOLO label, and bottom-right pin icon. With
 `useHyprlandShortcutSubmap` enabled, confirm `hyprctl submap` reports
-`omarchy-ask` while the overlay is mapped and `default` after close or pin.
+`nixi` while the overlay is mapped and `default` after close or pin.
 Confirm a main-map chord such as Ctrl+Return reaches Ask inside the overlay and
 its original global binding still exists and works after dismissal.
 
@@ -121,7 +121,7 @@ its original global binding still exists and works after dismissal.
 
 1. Start a conversation and note its bridge PID.
 2. Click the pin icon. Confirm Hyprland maps a normal window titled
-   `Omarchy Ask` and the bridge PID does not change.
+   `Nixi` and the bridge PID does not change.
 3. Repeat with `Ctrl+P`, from a focused prompt and from a clicked transcript
    selection, and confirm both pin the conversation the same way.
 4. Continue the conversation in that window and confirm prior context remains.
@@ -140,8 +140,8 @@ its original global binding still exists and works after dismissal.
 Useful observations:
 
 ```sh
-pgrep -af '/clickety-clacks.ask/bridge/bridge.js'
-hyprctl clients -j | jq '.[] | select(.title == "Omarchy Ask")'
+pgrep -af '/io.github.olafkfreund.nixi/bridge/bridge.js'
+hyprctl clients -j | jq '.[] | select(.title == "Nixi")'
 journalctl --user --since '5 minutes ago' --no-pager \
   | rg 'Ask.qml|Conversation.qml|ReferenceError|TypeError|qml.*error'
 ```

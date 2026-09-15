@@ -23,7 +23,7 @@ Item {
   property bool outsideDismissArmed: false
   property bool sessionLost: false
   property bool pinned: false
-  property string windowTitle: "Omarchy Ask"
+  property string windowTitle: "Nixi"
   property string statusText: ""
   property int activeReply: -1
   property string activeReplyMessageId: ""
@@ -174,7 +174,7 @@ Item {
   }
 
   readonly property var bridgeCommand: {
-    var raw = String(Quickshell.env("ASK_BRIDGE_COMMAND") || "").trim()
+    var raw = String(Quickshell.env("NIXI_BRIDGE_COMMAND") || "").trim()
     var prefix = []
     if (raw !== "") {
       try { prefix = JSON.parse(raw) } catch (error) { prefix = [] }
@@ -182,10 +182,10 @@ Item {
     // Preserve the historical PATH lookup when no platform command is
     // supplied. Omarchy deployments can provide any argv prefix explicitly.
     if (!Array.isArray(prefix) || prefix.length === 0) prefix = ["node"]
-    return ["env", "HUGINN_INTERNAL=1", "ASK_AGENT=" + agentName,
-      "ASK_MODEL=" + modelName,
-      "ASK_REASONING_EFFORT=" + reasoningEffort].concat(prefix).concat([
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/bridge.js"
+    return ["env", "HUGINN_INTERNAL=1", "NIXI_AGENT=" + agentName,
+      "NIXI_MODEL=" + modelName,
+      "NIXI_REASONING_EFFORT=" + reasoningEffort].concat(prefix).concat([
+      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/bridge.js"
     ])
   }
 
@@ -784,7 +784,7 @@ Item {
     Quickshell.execDetached([
       "node",
       Quickshell.env("HOME")
-        + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/reveal.js",
+        + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/reveal.js",
       String(path || "")
     ])
   }
@@ -1305,7 +1305,7 @@ Item {
     visible: root.opened && !root.pinned
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omarchy-ask"
+    WlrLayershell.namespace: "nixi"
     WlrLayershell.layer: WlrLayer.Overlay
     // Let the auxiliary motion window become active without dismissing this
     // layer popup, then reclaim exclusive prompt focus when it closes.
@@ -2472,7 +2472,7 @@ Item {
               filePreviewProc.command = [
                 "gjs",
                 Quickshell.env("HOME")
-                  + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/preview.js",
+                  + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/preview.js",
                 String(root.filePreviewRequestId), root.hoverPreviewPath
               ]
               filePreviewProc.running = true

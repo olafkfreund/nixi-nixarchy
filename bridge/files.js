@@ -9,22 +9,22 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 const home = process.env.HOME || process.cwd();
 // `@` is a general file finder, so its default scope is the whole home
-// directory. ASK_FILE_ROOT is an explicit opt-in for users who want a
+// directory. NIXI_FILE_ROOT is an explicit opt-in for users who want a
 // narrower index. Keep the fd fallback and repository discovery on exactly
 // the same root so results do not change scope while the primary index warms.
-const basePath = resolve(process.env.ASK_FILE_ROOT || home);
+const basePath = resolve(process.env.NIXI_FILE_ROOT || home);
 const searchRoots = [basePath].filter((path) => existsSync(path));
 const priorityFileRoots = ["Downloads", "Documents", "Desktop", "Projects", "Work"]
   .map((name) => join(basePath, name)).filter((path) => existsSync(path));
-const settingsPath = join(process.env.XDG_CONFIG_HOME || join(home, ".config"), "omarchy", "ask.json");
+const settingsPath = join(process.env.XDG_CONFIG_HOME || join(home, ".config"), "omarchy", "nixi.json");
 let configuredRepoDepth = 6;
 try {
   const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
   if (settings.repoSearchDepth !== undefined)
     configuredRepoDepth = Number(settings.repoSearchDepth);
 } catch {}
-if (process.env.ASK_REPO_SEARCH_DEPTH !== undefined)
-  configuredRepoDepth = Number(process.env.ASK_REPO_SEARCH_DEPTH);
+if (process.env.NIXI_REPO_SEARCH_DEPTH !== undefined)
+  configuredRepoDepth = Number(process.env.NIXI_REPO_SEARCH_DEPTH);
 // Zero means unlimited. Bound positive values to keep accidental settings
 // from generating nonsensical fd arguments.
 const repoSearchDepth = Number.isFinite(configuredRepoDepth)

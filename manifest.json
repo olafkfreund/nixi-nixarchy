@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "clickety-clacks.ask",
-  "name": "Ask",
-  "version": "0.7.0",
-  "author": "Clickety Clacks",
+  "id": "io.github.olafkfreund.nixi",
+  "name": "Nixi",
+  "version": "0.10.0",
+  "author": "Olaf K. Freund (overlay by Clickety Clacks, omarchy-ask)",
   "license": "MIT",
-  "description": "A transient conversation with the default local coding agent.",
+  "description": "Your nixarchy guide: ask anything about this machine, grounded in the local nixarchy manual.",
   "kinds": [
     "overlay"
   ],

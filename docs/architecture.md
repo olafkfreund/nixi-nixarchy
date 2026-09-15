@@ -54,7 +54,7 @@ Omarchy Shell
 ## Permission invariants
 
 The durable mode is `permission` or `yolo`, stored in
-`~/.config/omarchy/ask.json`. Missing, malformed, or unknown values resolve to
+`~/.config/omarchy/nixi.json`. Missing, malformed, or unknown values resolve to
 `permission`.
 
 - Ask mode queues every ACP permission request and requires an explicit button
@@ -97,10 +97,10 @@ The input's `>` is visual chrome and is never included in the submitted text.
 
 ## Durable state and privacy
 
-Omarchy Ask intentionally stores no transcript. QML holds rendered messages in
+Nixi intentionally stores no transcript. QML holds rendered messages in
 memory; closing the owning conversation clears them. The app-owned durable
 state includes permission, display, motion, search, optional file open/edit
-commands, and the selected harness, model, and reasoning effort in `ask.json`.
+commands, and the selected harness, model, and reasoning effort in `nixi.json`.
 Existing conversations retain their ACP session when these defaults change;
 new conversations receive a frozen copy. That file has two writers —
 `bridge.js` for the mode, `Ask.qml` for

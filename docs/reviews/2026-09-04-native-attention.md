@@ -7,7 +7,7 @@ Tested Conversation.qml SHA-256:
 Changes: pinned conversation and file-browser BorderSurfaces use Border.none()
 and plain square backgrounds; compositor owns outer rounding/clipping. Overlay
 frames remain themed. Completion uses contentItem.Window.window for both active
-and alert(0). Removed ASK_ATTENTION_COMMAND and title-based lookup.
+and alert(0). Removed NIXI_ATTENTION_COMMAND and title-based lookup.
 
 ## Live checks
 
@@ -54,14 +54,14 @@ was changed. Deployment waited until no existing Ask conversations remained.
 ## Installed real-prompt check
 
 After deployment and a shell restart, a newly opened/pinned Ask submitted
-`Reply exactly ASK_NATIVE_ATTENTION_OK. Do not use tools.` Focus was moved to
+`Reply exactly NIXI_NATIVE_ATTENTION_OK. Do not use tools.` Focus was moved to
 an existing terminal before completion. The socket2 observer returned:
 
 ```json
 {"result":"PASS installed real prompt completion urgency","target":"0x556ef7b483c0","focusUnchanged":true}
 ```
 
-Yoohoo listed that address as `Omarchy Ask #1`, count 1, source
+Yoohoo listed that address as `Nixi #1`, count 1, source
 `native-urgency`. The new shell log contained no Conversation alert TypeError.
 `cmp` confirmed the installed Conversation.qml exactly matches the tested
 source. `git diff --check` and `hyprctl configerrors` were clean.

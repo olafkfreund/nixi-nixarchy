@@ -15,8 +15,8 @@ const cases = [["", "", ""], ...Object.entries(models).flatMap(([agent, choices]
 async function check([agent, model, effort]) {
   const label = [agent || "Omarchy default", model, effort].filter(Boolean).join(" / ");
   const child = spawn(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
-    env: { ...process.env, ASK_AGENT: agent, ASK_MODEL: model, ASK_REASONING_EFFORT: effort,
-      ASK_INSPECT_CONFIG: "1", ASK_ACP_COMMAND: "", ASK_CODEX_ACP_COMMAND: "", ASK_CLAUDE_ACP_COMMAND: "" },
+    env: { ...process.env, NIXI_AGENT: agent, NIXI_MODEL: model, NIXI_REASONING_EFFORT: effort,
+      NIXI_INSPECT_CONFIG: "1", NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", NIXI_CLAUDE_ACP_COMMAND: "" },
     stdio: ["pipe", "pipe", "ignore"],
   });
   let text = "", options = [], completed = false;
@@ -34,13 +34,13 @@ async function check([agent, model, effort]) {
           const thought = options.find(option => option.category === "thought_level" || option.id === "reasoning_effort");
           assert.equal(thought?.currentValue, effort);
         }
-        child.stdin.write(JSON.stringify({ type: "prompt", text: "Reply exactly ASK_SYSTEM_OK. Do not use tools." }) + "\n");
+        child.stdin.write(JSON.stringify({ type: "prompt", text: "Reply exactly NIXI_SYSTEM_OK. Do not use tools." }) + "\n");
       }
       if (event.type === "text") text += event.text;
       if (event.type === "error" || event.type === "fatal") throw new Error(event.message);
       if (event.type === "permission") throw new Error("Unexpected tool request");
       if (event.type === "done") {
-        assert.equal(text.trim(), "ASK_SYSTEM_OK");
+        assert.equal(text.trim(), "NIXI_SYSTEM_OK");
         assert.equal(event.stopReason, "end_turn");
         completed = true;
         break;

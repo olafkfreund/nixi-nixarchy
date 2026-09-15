@@ -2,16 +2,16 @@ import { readFileSync, accessSync, statSync, constants } from "node:fs";
 import { join } from "node:path";
 
 export function resolveHarness(env = process.env) {
-  let agent = String(env.ASK_AGENT || "").trim();
+  let agent = String(env.NIXI_AGENT || "").trim();
   if (!agent) {
     try { agent = readFileSync(join(env.HOME, ".config/omarchy/defaults/agent"), "utf8").trim(); }
     catch (error) {
-      if (error.code !== "ENOENT") throw new Error("Ask could not read Omarchy’s default agent. Check its file permissions.");
+      if (error.code !== "ENOENT") throw new Error("Nixi could not read Omarchy’s default agent. Check its file permissions.");
     }
   }
-  if (!agent) throw new Error("No default agent is configured. Choose one in Omarchy’s Default Agent settings, or select a harness in Ask (Super+,).");
+  if (!agent) throw new Error("No default agent is configured. Choose one in Omarchy’s Default Agent settings, or select a harness in Nixi (Super+,).");
   if (!["codex", "claude"].includes(agent))
-    throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Ask yet. Choose Codex or Claude in Ask (Super+,).`);
+    throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Nixi yet. Choose Codex or Claude in Nixi (Super+,).`);
   return agent;
 }
 
@@ -26,5 +26,5 @@ export function resolveExecutable(agent, env = process.env) {
       if (statSync(candidate).isFile()) return candidate;
     } catch {}
   }
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Ask (Super+,).`);
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"} could not be launched: ${override ? "the configured executable is missing or not executable" : "it is not on the system PATH"}. Repair the system installation or choose another harness in Nixi (Super+,).`);
 }

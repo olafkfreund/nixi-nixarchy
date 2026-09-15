@@ -1,5 +1,5 @@
 {
-  "name": "omarchy-ask-acp-bridge",
+  "name": "nixi-acp-bridge",
   "private": true,
   "type": "module",
   "dependencies": {

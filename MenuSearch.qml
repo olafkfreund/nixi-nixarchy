@@ -299,7 +299,7 @@ Item {
     } else if (row.isWindow) {
       Quickshell.execDetached([
         "node",
-        Quickshell.env("HOME") + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/windows.js",
+        Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/windows.js",
         "--focus", String(row.stableId || "")
       ])
     } else if (row.route) {
@@ -434,7 +434,7 @@ Item {
     id: mathProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/math.js"
+      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/math.js"
     ]
     running: true
     stdinEnabled: true
@@ -445,7 +445,7 @@ Item {
     id: fileProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/files.js"
+      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/files.js"
     ]
     running: true
     stdinEnabled: true
@@ -456,7 +456,7 @@ Item {
     id: windowProc
     command: [
       "node",
-      Quickshell.env("HOME") + "/.config/omarchy/plugins/clickety-clacks.ask/bridge/windows.js"
+      Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.olafkfreund.nixi/bridge/windows.js"
     ]
     running: true
     stdinEnabled: true

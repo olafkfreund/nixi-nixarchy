@@ -162,8 +162,10 @@ check passes.
    → verify: `grep -c 'Clickety Clacks' LICENSE` = 1 and `docs/FORK.md` names `a6351b0`.
 
 3. **Rebrand** per the table, as a scripted rename followed by a reviewed diff.
-   → verify: `git grep -nIiE 'omarchy ask|clickety-clacks\.ask|ask\.json|\bASK_'`
-   matches only `LICENSE` and `docs/FORK.md`;
+   → verify: `git grep -nIE '[Oo]marchy [Aa]sk|clickety-clacks\.ask|ask\.json|\bASK_'`
+   matches only `LICENSE` and `docs/FORK.md` (case-sensitive for `ASK_`: with
+   `-i` it also matches nixi's own lowercase `ask_agent()`-style Python
+   functions, which are not branding and are deleted in step 16);
    `node --test bridge/harness-policy.test.js bridge/harness-errors.test.js` passes.
 
 4. **Menu logic import.** `MenuSearch.qml:18` → the profile path.
@@ -307,7 +309,7 @@ python3 tools/test_nixi.py                      # all checks pass
 node --test bridge/*.test.js                    # upstream + trust-policy + launch tests
 nix build .#nixi                                # with allowUnfree unset
 omarchy plugin validate result/share/omarchy/plugins/io.github.olafkfreund.nixi
-git grep -nIiE 'omarchy ask|clickety-clacks\.ask|ask\.json|\bASK_'   # only LICENSE, docs/FORK.md
+git grep -nIE '[Oo]marchy [Aa]sk|clickety-clacks\.ask|ask\.json|\bASK_'   # only LICENSE, docs/FORK.md
 nix path-info -r ./result | grep -E 'claude-agent-sdk|codex'         # empty
 ```
 
