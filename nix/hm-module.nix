@@ -1,51 +1,26 @@
 # Home Manager module for Nixi.
 #
-# The split that matters: everything Nix owns is STATIC (the programs, the UI,
-# the bundled knowledge) and lives in the store; everything Nixi writes at
-# runtime (the session token, the learning state, the fetched manual) stays a
-# plain mutable directory under ~/.local/share/nixi. That is the same boundary
-# the server already enforces with its descriptor-bound private-state code, so
-# nothing here weakens it.
+# The split that matters: everything Nix owns is STATIC (the overlay plugin, the
+# bridge, the bundled knowledge) and lives in the store; everything Nixi writes
+# at runtime (the learning state, LEARNED.md, the fetched manual) stays a plain
+# mutable directory under ~/.local/share/nixi.
 self:
 { config, lib, pkgs, ... }:
 
 let
   cfg = config.services.nixi;
   pluginId = "io.github.olafkfreund.nixi";
-  share = "${cfg.package}/share/nixi";
 
-  # Voice dependencies belong to the PROGRAMS, not to one systemd unit.
-  # `nixi` starts its own server whenever the health check fails, and that
-  # copy inherits the user's interactive PATH -- so putting whisper only on
-  # the unit gives voice that works from the service and silently does not
-  # work from the launcher. Wrapping both binaries makes every entry point
-  # carry what it needs, and pulls the packages into the user's closure so
-  # enabling the option is genuinely all that is required.
-  #
-  # --set-default, not --set: NIXI_* from the environment still wins, so the
-  # options stay overridable for testing without rebuilding.
-  nixiPkg =
-    if !cfg.voice.enable then cfg.package
-    else
-      pkgs.symlinkJoin {
-        name = "${cfg.package.name}-voice";
-        paths = [ cfg.package ];
-        nativeBuildInputs = [ pkgs.makeWrapper ];
-        postBuild = ''
-          for p in nixi nixi-server; do
-            rm -f "$out/bin/$p"
-            makeWrapper ${cfg.package}/bin/"$p" "$out/bin/$p" \
-              --prefix PATH : ${lib.makeBinPath [ cfg.voice.package pkgs.pipewire ]} \
-              --set-default NIXI_WHISPER_MODEL ${lib.escapeShellArg "${cfg.voice.model}"} \
-              --set-default NIXI_WHISPER_LANG ${lib.escapeShellArg cfg.voice.language} \
-              --set-default NIXI_VOICE_SILENCE_RMS ${toString cfg.voice.silenceThreshold} \
-              ${lib.optionalString (cfg.voice.vadModel != null)
-                "--set-default NIXI_VAD_MODEL ${lib.escapeShellArg "${cfg.voice.vadModel}"} \\"}
-              ${lib.optionalString (cfg.voice.prompt != "")
-                "--set-default NIXI_WHISPER_PROMPT ${lib.escapeShellArg cfg.voice.prompt}"}
-          done
-        '';
-      };
+  # The agents' ACP adapters come from the USER's pkgs, so the unfree decision
+  # (claude-agent-acp pulls in claude-code) stays in the user's own config.
+  # An agent left out of the list resolves from PATH at runtime instead.
+  nixiPkg = cfg.package.override {
+    claudeAcp = if lib.elem "claude" cfg.agents then pkgs.claude-agent-acp else null;
+    codexAcp = if lib.elem "codex" cfg.agents then pkgs.codex-acp else null;
+    opencodeAcp = if lib.elem "opencode" cfg.agents then pkgs.opencode else null;
+  };
+  share = "${nixiPkg}/share/nixi";
+  plugins = "${nixiPkg}/share/omarchy/plugins";
 
   # Units run with a bare PATH; give them the user profile and the system
   # profile so `omarchy`, `nixarchy` and the chosen agent binary resolve.
@@ -64,10 +39,7 @@ let
     };
     Service = {
       Type = "exec";
-      Environment = [
-        "PATH=${unitPath}"
-        "NIXI_PORT=${toString cfg.port}"
-      ];
+      Environment = [ "PATH=${unitPath}" ];
       ExecStart = exec;
       Restart = "on-failure";
       RestartSec = 2;
@@ -76,8 +48,15 @@ let
   };
 in
 {
+  imports = [
+    (lib.mkRemovedOptionModule [ "services" "nixi" "port" ]
+      "Nixi no longer runs a local server: the card is an Omarchy overlay.")
+    (lib.mkRemovedOptionModule [ "services" "nixi" "voice" ]
+      "Nixi's voice input was removed; use Omarchy's built-in dictation.")
+  ];
+
   options.services.nixi = {
-    enable = lib.mkEnableOption "Nixi, the nixarchy guide widget";
+    enable = lib.mkEnableOption "Nixi, the nixarchy guide (an Omarchy overlay card)";
 
     package = lib.mkOption {
       type = lib.types.package;
@@ -86,13 +65,16 @@ in
       description = "The Nixi package to use.";
     };
 
-    port = lib.mkOption {
-      type = lib.types.port;
-      default = 8642;
+    agents = lib.mkOption {
+      type = lib.types.listOf (lib.types.enum [ "claude" "codex" "opencode" ]);
+      default = [ "claude" "codex" ];
+      example = [ "claude" "codex" "opencode" ];
       description = ''
-        Loopback port for the widget server. Only reachable from this machine,
-        and every state-touching request additionally needs the per-session
-        token, so this is a convenience knob, not a security boundary.
+        Agents whose ACP adapters are pinned into Nixi from your `pkgs`:
+        `claude-agent-acp`, `codex-acp`, or `opencode` (which speaks ACP itself).
+        `claude-agent-acp` depends on the unfree `claude-code`, so the default
+        needs `allowUnfree`; set `[ ]` or `[ "codex" "opencode" ]` to avoid it.
+        An agent not listed is still usable if its adapter is on `PATH`.
       '';
     };
 
@@ -100,9 +82,10 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Install the Quickshell bar widget into
-        `~/.config/omarchy/plugins/${pluginId}` so Nixi gets a snowflake button
-        in the top bar.
+        Install the snowflake bar button, a separate plugin
+        `${pluginId}-button` (Omarchy gives a third-party plugin a bar widget or
+        an overlay, never both). Installed is not enabled: turn it on once in
+        Setup > Plugins, like the card itself.
       '';
     };
 
@@ -164,100 +147,6 @@ in
       };
     };
 
-    voice = {
-      enable = lib.mkEnableOption ''
-        push-to-talk voice input. The desktop records through PipeWire and
-        whisper.cpp transcribes locally, so it behaves the same whichever
-        browser opens the widget. The text only ever lands in the input box
-        for you to check -- nothing is auto-sent, no audio leaves the machine
-      '';
-
-      package = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.whisper-cpp;
-        defaultText = lib.literalExpression "pkgs.whisper-cpp";
-        description = "Speech-to-text engine providing `whisper-cli`.";
-      };
-
-      model = lib.mkOption {
-        type = lib.types.path;
-        default = pkgs.fetchurl {
-          url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
-          hash = "sha256-oDd5yG3zMjB19eeWyyzlAp8A7Ihp7uP9+4l6/jbG0AI=";
-        };
-        defaultText = lib.literalExpression "fetchurl { ... ggml-base.en.bin }";
-        description = ''
-          ggml speech model. The default is `base.en` (148 MB, English) --
-          a good accuracy/latency trade for short spoken questions. Swap in
-          `ggml-small.en.bin` for better accuracy at roughly 3x the time, or
-          `ggml-tiny.en.bin` on a slow machine. Models are not in nixpkgs, so
-          this is a pinned `fetchurl`; set `language` too if you replace it
-          with a multilingual model.
-        '';
-      };
-
-      vadModel = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = pkgs.fetchurl {
-          url = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
-          hash = "sha256-KZQNmNQrkfvQXOSJ8+z3xy8KQvAn5IdZGaKPtMBOos8=";
-        };
-        defaultText = lib.literalExpression "fetchurl { ... ggml-silero-v5.1.2.bin }";
-        description = ''
-          Silero voice-activity model (885 KB). This is what stops whisper
-          inventing text: given a clip with no speech in it, whisper does not
-          return nothing, it returns something plausible -- digital silence
-          decodes as "You" and a quiet room as "(wind howling)". VAD empties
-          both while still transcribing quiet speech correctly.
-
-          `null` disables it, at the cost of having to discard more.
-        '';
-      };
-
-      language = lib.mkOption {
-        type = lib.types.str;
-        default = "en";
-        example = "auto";
-        description = ''
-          Spoken language passed to whisper, or "auto" to detect. Only
-          meaningful with a multilingual model -- the default `.en` model
-          understands English alone.
-        '';
-      };
-
-      silenceThreshold = lib.mkOption {
-        type = lib.types.ints.between 0 32767;
-        default = 15;
-        description = ''
-          RMS level below which a recording is treated as a DEAD MICROPHONE
-          and never sent to the model, out of a 32767 full scale.
-
-          Deliberately far below speech, and not a quality gate. This shipped
-          at 1100 on the theory that quiet audio transcribes badly; measured,
-          it does not -- whisper normalises internally and returns the same
-          sentence correctly at RMS 576, 288, 138, 69 and 34. All the high
-          threshold did was discard speech it could have understood, silently.
-          Clips with no speech in them are handled by {option}`voice.vadModel`
-          instead, which is the right tool for it.
-
-          Raise this only to catch a noisy-but-empty input device; anything
-          near speech level will start eating real questions again.
-        '';
-      };
-
-      prompt = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        example = "Words used here: nixarchy, kubectl, Grafana, my-project.";
-        description = ''
-          Initial prompt biasing the decoder's vocabulary. Empty keeps Nixi's
-          built-in nixarchy word list, which matters more than it sounds:
-          without it `base.en` transcribes "nixarchy" as "Nixaki". Set this to
-          add jargon or names of your own.
-        '';
-      };
-    };
-
     omarchyHooks.enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -272,25 +161,23 @@ in
     {
       home.packages = [ nixiPkg ];
 
-      # Static assets, linked read-only out of the store. The server reads
-      # these with bounded_read, which follows symlinks on purpose.
       xdg.configFile = {
-        "nixi/ui.html".source = "${share}/ui.html";
+        # The card: the whole plugin directory as one store symlink, the way
+        # nixarchy installs its own plugins. Installed, not enabled -- that
+        # lives in the shell's own shell.json, which nothing here writes.
+        "omarchy/plugins/${pluginId}".source = "${plugins}/${pluginId}";
+
+        # Knowledge the agent is grounded in. The bridge starts the agent in
+        # ~/.config/nixi, so CLAUDE.md/AGENTS.md there are its tutor brief.
         "nixi/faq.json".source = "${share}/faq.json";
         "nixi/KNOWLEDGE.md".source = "${share}/KNOWLEDGE.md";
         "nixi/CLAUDE.md".source = "${share}/CLAUDE.md";
         "nixi/AGENTS.md".source = "${share}/AGENTS.md";
         "nixi/SKILL.md".source = "${share}/skills/SKILL.md";
-        "nixi/vendor".source = "${share}/vendor";
       };
 
-      systemd.user.services.nixi = mkService {
-        description = "Nixi widget server (offline manual answers + agent relay)";
-        exec = "${nixiPkg}/bin/nixi-server";
-      };
-
-      # The mutable state directory is created up front with the private mode
-      # the server insists on, so the first run never has to widen anything.
+      # The mutable state directory is created up front with a private mode,
+      # so the first run never has to widen anything.
       home.activation.nixiStateDir =
         lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           run mkdir -p -m 700 "$HOME/.local/share/nixi"
@@ -299,14 +186,7 @@ in
     }
 
     (lib.mkIf cfg.barWidget.enable {
-      xdg.configFile = {
-        "omarchy/plugins/${pluginId}/manifest.json".source =
-          "${share}/plugin/manifest.json";
-        "omarchy/plugins/${pluginId}/BarWidget.qml".source =
-          "${share}/plugin/BarWidget.qml";
-        "omarchy/plugins/${pluginId}/nixi-launch".source =
-          "${share}/plugin/nixi-launch";
-      };
+      xdg.configFile."omarchy/plugins/${pluginId}-button".source = "${plugins}/${pluginId}-button";
     })
 
     (lib.mkIf cfg.menuEntry.enable {

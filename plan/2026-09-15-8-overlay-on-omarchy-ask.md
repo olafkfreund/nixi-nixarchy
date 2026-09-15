@@ -457,6 +457,25 @@ summoned by key; a question typed into the card streams visibly; typing
     `allowUnfree = true` has the plugin link and a bridge wrapper naming the
     adapter store paths; the same module with `services.nixi.agents = []`
     builds without `allowUnfree`.
+    **Done before step 16 (order swapped):** the old module linked
+    `share/nixi/plugin`, `ui.html`, `nixi-launch` and `nixi-server`, so
+    deleting those first would have broken the module for a commit.
+    **Result:** `agents` is `listOf (enum [ claude codex opencode ])`, default
+    `[ claude codex ]`, taken from the user's `pkgs` via `package.override`;
+    `port` and `voice` are `mkRemovedOptionModule`s (a leftover definition
+    stops evaluation with "no longer has any effect; please remove it" instead
+    of an unknown-option error). The button is its own whole-directory link
+    under `barWidget.enable`. Neither plugin is enabled by the module --
+    enablement stays in the shell's `shell.json`, as nixarchy requires.
+    nixarchy sets only `services.nixi.enable`, so nothing it sets was removed.
+    Verified with Home Manager `cda90fd` (the rev `/etc/nixos` locks) building
+    real activation packages: default agents with `allowUnfree` -- both
+    plugin links, wrapper pins claude-agent-acp 0.70.0 and codex-acp 0.13.0,
+    no `nixi.service`, no `ui.html`, only the manual timer; `agents = [ ]`
+    without `allowUnfree` -- builds, no adapter pinned; `[ "opencode" ]`
+    without `allowUnfree` -- builds, pins opencode 1.18.25 only; a leftover
+    `services.nixi.port` -- the removal message. Four Python tests that
+    asserted the module's voice wiring were removed with it.
 
 17a. **Antigravity as a third agent — PROPOSED, awaiting approval (added
     2026-09-15 at the user's request; not part of the approved spec).**
