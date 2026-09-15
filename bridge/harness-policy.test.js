@@ -10,7 +10,7 @@ test("system default, explicit override, and missing/unsupported defaults", () =
   const home = mkdtempSync(join(tmpdir(), "ask-policy-"));
   try {
     const env = { HOME: home };
-    assert.throws(() => resolveHarness(env), /No default agent/);
+    assert.equal(resolveHarness(env), "claude", "no Omarchy default agent must fall back to Claude Code");
     assert.equal(resolveHarness({ ...env, NIXI_AGENT: "claude" }), "claude");
     mkdirSync(join(home, ".config/omarchy/defaults"), { recursive: true });
     const path = join(home, ".config/omarchy/defaults/agent");
@@ -50,7 +50,6 @@ test("startup failures reach the popup as structured fatal events", () => {
   writeFileSync(join(adapters, "codex-acp"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   try {
     for (const [overrides, expected] of [
-      [{ NIXI_AGENT: "" }, /No default agent/],
       [{ NIXI_AGENT: "gemini" }, /not supported/],
       [{ NIXI_AGENT: "codex", CODEX_PATH: "/nonexistent/ask-test", PATH: adapters }, /configured executable/],
       [{ NIXI_AGENT: "codex", NIXI_CODEX_ACP_COMMAND: "invalid" }, /JSON array/],

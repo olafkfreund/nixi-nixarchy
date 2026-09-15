@@ -598,6 +598,18 @@ summoned by key; a question typed into the card streams visibly; typing
     probe above and the fake-agent test. The card with OpenCode selected in
     Super+, needs a person at the keyboard.
 
+17c. **Claude default and the card enabled once — APPROVED 2026-09-15 as
+    part of olafkfreund/nixarchy#709** (intent, spec and plan approved there;
+    its plan's part A is this work, steps A1-A7). Carried decisions: with no
+    Omarchy default agent the bridge uses `claude`; `agents` defaults to
+    `lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ]`;
+    `services.nixi.autoEnable` (default true) adds the card to `shell.json`
+    `plugins[]` once, behind a marker; `bin/nixi` notifies when the card is off.
+    **A1 done:** `resolveHarness` returns `claude` when nothing is configured
+    (unsupported agents still throw). Node 39/39; restoring the throw fails the
+    new expectation; the real bridge with a HOME holding no default-agent file
+    reached `ready` with `agent: "claude"`.
+
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report
     which adapters and whether file search are available.

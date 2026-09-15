@@ -15,7 +15,9 @@ export function resolveHarness(env = process.env) {
       if (error.code !== "ENOENT") throw new Error("Nixi could not read Omarchy’s default agent. Check its file permissions.");
     }
   }
-  if (!agent) throw new Error("No default agent is configured. Choose one in Omarchy’s Default Agent settings, or select a harness in Nixi (Super+,).");
+  // Claude Code is Nixi's default agent: a fresh desktop with no Omarchy
+  // default agent gets a working card rather than an error (nixarchy#709).
+  if (!agent) return "claude";
   if (!AGENTS.includes(agent))
     throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Nixi yet. Choose Claude, Codex or OpenCode in Nixi (Super+,).`);
   return agent;
