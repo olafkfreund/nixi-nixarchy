@@ -67,14 +67,20 @@ in
 
     agents = lib.mkOption {
       type = lib.types.listOf (lib.types.enum [ "claude" "codex" "opencode" ]);
-      default = [ "claude" "codex" ];
+      # Claude Code is the default agent. Its adapter depends on the unfree
+      # claude-code, so it is pinned only where unfree is allowed; elsewhere
+      # it is still the default agent, found on PATH (nixarchy#709).
+      default = lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ];
+      defaultText = lib.literalExpression
+        ''lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ]'';
       example = [ "claude" "codex" "opencode" ];
       description = ''
         Agents whose ACP adapters are pinned into Nixi from your `pkgs`:
         `claude-agent-acp`, `codex-acp`, or `opencode` (which speaks ACP itself).
-        `claude-agent-acp` depends on the unfree `claude-code`, so the default
-        needs `allowUnfree`; set `[ ]` or `[ "codex" "opencode" ]` to avoid it.
-        An agent not listed is still usable if its adapter is on `PATH`.
+        Claude Code is Nixi's default agent; `claude-agent-acp` depends on the
+        unfree `claude-code`, so it is in the default only when
+        `nixpkgs.config.allowUnfree` is true. An agent not listed is still
+        usable if its adapter is on `PATH`.
       '';
     };
 

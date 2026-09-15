@@ -609,6 +609,19 @@ summoned by key; a question typed into the card streams visibly; typing
     (unsupported agents still throw). Node 39/39; restoring the throw fails the
     new expectation; the real bridge with a HOME holding no default-agent file
     reached `ready` with `agent: "claude"`.
+    **A2 done:** `agents` defaults to
+    `lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ]`.
+    With `NIXPKGS_ALLOW_UNFREE` unset: unfree on pins claude + codex; unfree off
+    builds and pins codex only; the old `[ "claude" "codex" ]` default with
+    unfree off fails ("Refusing to evaluate package 'claude-code'"). CI's
+    `free` Home Manager configuration now uses the default instead of
+    `agents = [ ]`, so CI covers it.
+    **Correction to step 17's result:** its local "builds without
+    `allowUnfree`" runs used `nix build --impure` in a shell with
+    `NIXPKGS_ALLOW_UNFREE=1` set, which `--impure` honours, so those local
+    runs proved nothing. The claim itself stands: GitHub CI (no such variable)
+    built the `agents = [ ]` configuration green on PR #9. Unset the variable
+    for any local unfree test.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report

@@ -124,7 +124,8 @@ jobs:
                   omarchyHooks.enable = true;
                   menuEntry.enable = true;
                 };
-                homeConfigurations.free = mk false { agents = [ ]; };
+                # No agents set: the default must still evaluate without unfree.
+                homeConfigurations.free = mk false { };
               };
           }
           NIX
