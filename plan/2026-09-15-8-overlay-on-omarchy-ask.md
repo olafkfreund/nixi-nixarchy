@@ -191,10 +191,27 @@ check passes.
    bridge tests pass; a new bridge test asserts the default command is
    `claude-agent-acp` / `codex-acp`, not a `node_modules` path.
 
-6. **Package.** Rewrite `nix/package.nix`: `buildNpmPackage` bridge,
+6. **Package.** Extend `nix/package.nix`: `buildNpmPackage` bridge,
    `autoPatchelfHook`, `patchShebangs` (with `gjs`), optional
    `claudeAcp`/`codexAcp` wrapper, plugin directory in `$out`; keep
-   `nixi-update-manual` and `nixi-watch`.
+   `nixi-update-manual` and `nixi-watch`. **Changed during implementation:**
+   - *Additive, not a rewrite.* The Home Manager module still reads the old
+     layout (`ui.html`, `vendor/`, `plugin/BarWidget.qml`, `nixi-server`); a
+     rewrite would leave it unable to evaluate until step 17. The old contents
+     stay until step 16 removes them.
+   - *Programs launched by name are pinned in the built copy.* The plugin runs
+     `node`, `gjs`, `fd` and `gdbus` by bare name, which resolve from the
+     Omarchy shell's `PATH`. On p620 `gjs` is not installed and `node`/`fd`
+     are only in one user's profile. Each is substituted with its store path
+     (`--replace-fail`); the repository copy stays upstream-comparable.
+     `xdg-open` is left to the desktop.
+   - *No symlinks.* `omarchy plugin validate` rejects any symlink inside a
+     plugin folder; npm's `node_modules/.bin` is removed (CLI entry points the
+     bridge never runs).
+   - *Runtime node is `nodejs-slim`*, and dependency shebangs that
+     `buildNpmPackage` pointed at full `nodejs` are repointed, so `npm` and
+     `corepack` stay out of the closure. The closure is 545 MB, most of it
+     `python3` (already there), `gjs` and `node`.
    → verify: `nix build .#nixi` with `allowUnfree` unset;
    `omarchy plugin validate $result/share/omarchy/plugins/io.github.olafkfreund.nixi` passes;
    `node -e "require('$bridge/node_modules/@ff-labs/fff-node')"` loads (or file

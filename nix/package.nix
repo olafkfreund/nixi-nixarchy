@@ -1,15 +1,68 @@
 { lib
+, stdenv
 , stdenvNoCC
+, buildNpmPackage
+, autoPatchelfHook
+, nodejs-slim
+, gjs
+, fd
+, glib
 , python3
 , bash
 , curl
 , coreutils
 , makeWrapper
+  # Agent adapters are NOT bundled (see bridge/harness-policy.js resolveAdapter).
+  # Pass nixpkgs' claude-agent-acp / codex-acp here to pin them; left null, the
+  # bridge resolves them from PATH at runtime. The Home Manager module passes the
+  # user's own packages in, so the unfree decision stays in the user's config and
+  # `nix build .#nixi` never needs allowUnfree.
+, claudeAcp ? null
+, codexAcp ? null
 }:
 
+let
+  pluginId = "io.github.olafkfreund.nixi";
+  version = (builtins.fromJSON (builtins.readFile ../manifest.json)).version;
+
+  # The bridge's node_modules, built from the lockfile alone so that editing the
+  # bridge's JavaScript does not invalidate npmDepsHash. After the adapters were
+  # dropped every dependency is MIT or Apache-2.0.
+  bridgeModules = buildNpmPackage {
+    pname = "nixi-bridge-modules";
+    inherit version;
+    src = lib.fileset.toSource {
+      root = ../bridge;
+      fileset = lib.fileset.unions [ ../bridge/package.json ../bridge/package-lock.json ];
+    };
+    npmDepsHash = "sha256-mP8ZEQrwoNK2+OzSyDUJlWsXBKdN9eKF9BHdcR3Sm/U=";
+    dontNpmBuild = true;
+    # @ff-labs/fff-node and @yuuang/ffi-rs ship prebuilt shared objects. They
+    # happen to load on a machine with nix-ld; autoPatchelf makes them load from
+    # the store without depending on that.
+    nativeBuildInputs = [ autoPatchelfHook ];
+    buildInputs = [ stdenv.cc.cc.lib ];
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out
+      cp -r node_modules $out/node_modules
+      runHook postInstall
+    '';
+  };
+
+  # The node the plugin runs everything with. When adapters are given, their
+  # store paths become the bridge's defaults; --set-default keeps NIXI_* from the
+  # environment in charge.
+  adapterFlags = lib.concatStringsSep " " (
+    lib.optional (claudeAcp != null)
+      "--set-default NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
+    ++ lib.optional (codexAcp != null)
+      "--set-default NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
+  );
+in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "nixi";
-  version = (builtins.fromJSON (builtins.readFile ../manifest.json)).version;
+  inherit version;
 
   src = lib.cleanSourceWith {
     src = ../.;
@@ -20,6 +73,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   };
 
   nativeBuildInputs = [ makeWrapper ];
+  # patchShebangs resolves interpreters (node, gjs) from these.
+  buildInputs = [ nodejs-slim gjs ];
 
   # Nothing to compile: this is stdlib Python plus a bash launcher. The build
   # only places files and pins the interpreters, so the closure stays tiny.
@@ -80,6 +135,53 @@ stdenvNoCC.mkDerivation (finalAttrs: {
         --replace-fail '#!/usr/bin/env bash' '#!${bash}/bin/bash'
     done
 
+    # ---- the native overlay plugin (omarchy-ask based, issue #8) ------------
+    # Additive for now: the old widget above stays until the overlay replaces it
+    # (plan step 16), so the Home Manager module keeps evaluating meanwhile.
+    plugin=$out/share/omarchy/plugins/${pluginId}
+    install -Dm644 manifest.json $plugin/manifest.json
+    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml; do
+      install -Dm644 "$q" "$plugin/$q"
+    done
+    for js in bridge/*.js; do
+      case "$js" in *.test.js|*/model-smoke.js) ;; *) install -Dm644 "$js" "$plugin/$js" ;; esac
+    done
+    install -Dm644 bridge/package.json $plugin/bridge/package.json
+    cp -r ${bridgeModules}/node_modules $plugin/bridge/node_modules
+    chmod -R u+w $plugin/bridge/node_modules
+    # Omarchy refuses symlinks inside a plugin folder (`omarchy plugin validate`),
+    # and npm's .bin links are CLI entry points the bridge never runs -- it
+    # imports these packages as modules.
+    rm -rf $plugin/bridge/node_modules/.bin
+    # buildNpmPackage patches dependency shebangs (e.g. mathjs/bin/cli.js) to the
+    # full nodejs it builds with, which drags npm and corepack into the closure
+    # for CLIs the bridge never runs. Point every one at the runtime node instead,
+    # so the next dependency that ships a CLI cannot reintroduce it.
+    grep -rlE '^#!/nix/store/[a-z0-9]+-nodejs-[0-9]' $plugin/bridge/node_modules \
+      | while read -r f; do
+          sed -i "1s|^#!/nix/store/[a-z0-9]*-nodejs-[0-9][^/]*/bin/node|#!${nodejs-slim}/bin/node|" "$f"
+        done
+    patchShebangs $plugin/bridge
+
+    # nodejs-slim: the runtime needs node, not npm or corepack (~25 MB less).
+    makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags}
+
+    # Programs the plugin starts BY NAME resolve from the Omarchy shell's PATH,
+    # not from this package. On p620 gjs is not installed at all and node, fd
+    # live only in one user's profile, so each is pinned here -- in the built
+    # copy only, so the repository stays line-comparable with upstream.
+    # --replace-fail stops the build if upstream ever moves one of these calls.
+    # xdg-open is deliberately left to the desktop's own handler configuration.
+    substituteInPlace $plugin/Conversation.qml \
+      --replace-fail '"node"' "\"$plugin/bridge/nixi-node\"" \
+      --replace-fail '"gjs"' '"${gjs}/bin/gjs"'
+    substituteInPlace $plugin/MenuSearch.qml \
+      --replace-fail '"node"' "\"$plugin/bridge/nixi-node\""
+    substituteInPlace $plugin/bridge/files.js \
+      --replace-fail 'execFileAsync("fd"' 'execFileAsync("${fd}/bin/fd"'
+    substituteInPlace $plugin/bridge/reveal.js \
+      --replace-fail 'execFile("gdbus"' 'execFile("${glib.bin}/bin/gdbus"'
+
     runHook postInstall
   '';
 
@@ -102,6 +204,33 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       || { echo "\$out/bin is not on the wrapped PATH; nix run cannot find nixi-server"; exit 1; }
     grep -q "NIXI_FALLBACK_DIR" $out/bin/nixi \
       || { echo "wrapper does not point at the bundled assets"; exit 1; }
+
+    # ---- overlay plugin ----
+    plugin=$out/share/omarchy/plugins/${pluginId}
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml bridge/bridge.js bridge/nixi-node; do
+      test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
+    done
+    ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
+    # Omarchy's validator rejects any symlink inside a plugin folder.
+    links=$(find $plugin -type l)
+    test -z "$links" || { echo "symlinks inside the plugin folder: $links"; exit 1; }
+    # Only the slim runtime node may be referenced (see the shebang rewrite).
+    ! grep -rlE '^#!/nix/store/[a-z0-9]+-nodejs-[0-9]' $plugin \
+      || { echo "a shebang still points at full nodejs (npm/corepack in the closure)"; exit 1; }
+    # No bundled adapters, and nothing that brings their SDK binaries along.
+    for bundled in @anthropic-ai @openai @agentclientprotocol/claude-agent-acp @agentclientprotocol/codex-acp; do
+      ! test -e "$plugin/bridge/node_modules/$bundled" \
+        || { echo "bundled adapter code leaked into the plugin: $bundled"; exit 1; }
+    done
+    # Every program launched by name was pinned.
+    ! grep -nE '"(node|gjs)"' $plugin/*.qml \
+      || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }
+    ! grep -nE 'execFile(Async)?\("(fd|gdbus)"' $plugin/bridge/*.js \
+      || { echo "a bare fd/gdbus call is left in the bridge"; exit 1; }
+    # The native file finder must actually load from the store, not just exist.
+    ( cd $plugin/bridge && ${nodejs-slim}/bin/node --input-type=module -e \
+        "const m = await import('@ff-labs/fff-node'); if (!m.binaryExists()) { console.error('fff native library not found'); process.exit(1) }" ) \
+      || { echo "@ff-labs/fff-node does not load from the store"; exit 1; }
   '';
 
   meta = {
