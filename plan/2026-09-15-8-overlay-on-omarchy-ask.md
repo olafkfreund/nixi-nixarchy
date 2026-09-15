@@ -639,6 +639,15 @@ summoned by key; a question typed into the card streams visibly; typing
     file, replace a symlink) each fail a named assertion; the generated
     activation script orders it after `linkGeneration` and keeps argument
     positions with the button off.
+    **A4 done:** `bin/nixi` (toggle and `--tour`) reads `omarchy-shell shell
+    listPlugins` first; a card that is disabled or missing gets an
+    `omarchy-notification-send` "Nixi is turned off" and a stderr hint, exit
+    1; a shell that does not answer is named as such. `test_nixi_launcher`
+    with stub `omarchy-shell` / `omarchy-notification-send`: enabled (toggle,
+    summon), disabled, missing, no answer. Mutations -- skip the check, treat
+    no answer as ready, loosen the id match so an enabled `-button` counts --
+    each fail. The match checked against p620's live `listPlugins`: card and
+    button ready, a missing id and the disabled `omarchy.active-window` off.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report

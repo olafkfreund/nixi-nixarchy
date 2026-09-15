@@ -374,6 +374,51 @@ def test_enable_card():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_nixi_launcher():
+    """`nixi` must never silently do nothing: the shell accepts a toggle for a
+    plugin that is not enabled and returns 0 (nixarchy#709)."""
+    card = "io.github.olafkfreund.nixi"
+    root = tempfile.mkdtemp()
+    try:
+        def run(plugins_json, answers=True, args=()):
+            d = tempfile.mkdtemp(dir=root)
+            log = os.path.join(d, "calls")
+            open(os.path.join(d, "omarchy-shell"), "w").write(
+                "#!/bin/sh\n"
+                'echo "shell $*" >> "%s"\n' % log
+                + ('[ "$2" = listPlugins ] && { cat <<\'EOF\'\n%s\nEOF\n exit 0; }\n' % plugins_json if answers
+                   else '[ "$2" = listPlugins ] && { echo "omarchy-shell is not responding" >&2; exit 1; }\n')
+                + "exit 0\n")
+            open(os.path.join(d, "omarchy-notification-send"), "w").write(
+                '#!/bin/sh\necho "notify $*" >> "%s"\n' % log)
+            for f in ("omarchy-shell", "omarchy-notification-send"):
+                os.chmod(os.path.join(d, f), 0o755)
+            r = subprocess.run(["bash", os.path.join(ROOT, "bin", "nixi"), *args], capture_output=True, text=True,
+                               env={"PATH": d + ":/run/current-system/sw/bin:/usr/bin:/bin", "HOME": d})
+            calls = open(log).read() if os.path.exists(log) else ""
+            return r, calls
+
+        on = '[{"id":"%s","name":"Nixi","kinds":["overlay"],"enabled":true,"active":false}]' % card
+        off = '[{"id":"%s","name":"Nixi","kinds":["overlay"],"enabled":false,"active":false},' \
+              '{"id":"%s-button","name":"Nixi button","kinds":["bar-widget"],"enabled":true}]' % (card, card)
+        missing = '[{"id":"vimarchy","enabled":true}]'
+
+        r, calls = run(on)
+        assert r.returncode == 0 and "shell toggle %s" % card in calls and "notify" not in calls, (r, calls)
+        r, calls = run(on, args=("--tour",))
+        assert r.returncode == 0 and "shell summon %s" % card in calls, calls
+        for name, payload in (("disabled", off), ("missing", missing)):
+            r, calls = run(payload)
+            assert r.returncode == 1, name
+            assert "toggle" not in calls, name + ": toggled a card that is off"
+            assert "notify" in calls and "Setup > Plugins" in r.stderr, name + ": failed silently"
+        r, calls = run(on, answers=False)
+        assert r.returncode == 1 and "toggle" not in calls and "not answering" in r.stderr, (r.stderr, calls)
+        print("  ok  nixi explains a card that is off instead of doing nothing")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_nixi_rows_are_searchable():
     """The FAQ, the tour and the learning path are reachable from the card's
     search, not only as typed commands -- and an FAQ answer is shown in the
@@ -392,7 +437,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_enable_card,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_enable_card, test_nixi_launcher,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")

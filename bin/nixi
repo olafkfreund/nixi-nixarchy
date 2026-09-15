@@ -10,6 +10,23 @@ set -euo pipefail
 
 PLUGIN="${NIXI_PLUGIN_ID:-io.github.olafkfreund.nixi}"
 
+# The shell accepts a toggle for a plugin that is not enabled and does nothing,
+# with exit status 0 -- so SUPER+H would silently do nothing. Ask first, and
+# say how to fix it (nixarchy#709).
+card_ready() {
+  local plugins
+  if ! plugins=$(omarchy-shell shell listPlugins 2>/dev/null) || [[ -z "$plugins" ]]; then
+    echo "nixi: the Omarchy shell is not answering; is the desktop session running?" >&2
+    return 1
+  fi
+  local enabled='"id":"'"$PLUGIN"'"[^}]*"enabled":true'
+  [[ "$plugins" =~ $enabled ]] && return 0
+  local message="Nixi is turned off — enable Nixi in Setup > Plugins"
+  omarchy-notification-send --glyph $'\U0001f4a1' "Nixi is turned off" "Enable Nixi in Setup > Plugins" >/dev/null 2>&1 || true
+  echo "nixi: $message" >&2
+  return 1
+}
+
 case "${1:-}" in
   --tui)
     # A plain terminal session with the same grounding the card uses: the agent
@@ -22,9 +39,11 @@ case "${1:-}" in
   --tour)
     # summon, not toggle: the first-boot welcome hook must open the card, never
     # close one the user already has open.
+    card_ready || exit 1
     exec omarchy-shell shell summon "$PLUGIN" '{"action":"tour"}'
     ;;
   "")
+    card_ready || exit 1
     exec omarchy-shell shell toggle "$PLUGIN" '{}'
     ;;
   *)
