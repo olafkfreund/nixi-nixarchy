@@ -659,6 +659,9 @@ summoned by key; a question typed into the card streams visibly; typing
     ran and left the card off; `nixi` exited 1 with the "turned off" message;
     re-enabled. Found: for a few seconds after the file changes, the shell
     reloads plugins and `omarchy plugin list` prints nothing.
+    **A7:** CI green on fd73fea (after fixing the launcher test for the Nix
+    sandbox). The `docs/testing.md` Nixi checklist was run on p620 by the user
+    on 2026-09-15: all items pass.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report
@@ -791,6 +794,9 @@ summoned by key; a question typed into the card streams visibly; typing
 
 23. **PR** linking `intent/`, `spec/` and `plan/` files; review compares the
     diff against this plan.
+    **Result:** PR #9. CI green; the user ran the Nixi checklist on p620 and
+    reported everything working; merged with a merge commit so nixarchy can
+    pin it (nixarchy#709 plan B8).
 
 ## Tests
 
