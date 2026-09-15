@@ -758,9 +758,18 @@ Runtime, on p620 (milestones 1 and 2) and razer (migration):
   branch. On p620 the test plugin is removed with
   `omarchy plugin disable io.github.olafkfreund.nixi-next` and deleting its
   symlink; the Home Manager-managed nixi is never touched.
-- **After migration on a host (step 22):** p620 — revert the `services.nixi`
-  module input to the previous nixi revision and rebuild, which restores the
-  old plugin files and `nixi.service`. razer — check out `master` in the
-  plugin directory and run `install.py --refresh`.
-- **Repository:** the branch is unmerged until step 23; abandoning it leaves
-  `master` unchanged. After merge, `git revert` the merge commit.
+- **After migration on a host (step 22):** both hosts run 0.10 through
+  nixos_config #1828. Revert that merge (or drop its `nixi` input and the
+  `nixarchy.inputs.nixi.follows` line) and deploy: nixarchy's pinned 0.9.7
+  comes back, with `nixi.service`, per-file plugin links and `ui.html`.
+  Before that switch remove the link
+  `~/.config/omarchy/plugins/io.github.olafkfreund.nixi` (and `-button`):
+  0.9 links files inside that path, which is now a symlink into the
+  read-only store, so Home Manager's collision check is expected to fail
+  otherwise (not tested -- no rollback was run). The 0.9 files moved aside
+  during migration are in `~/.cache/nixi-0.9-backup-20260915/` on each host
+  (razer's old plugin-manager checkout, stale `~/.local/bin/nixi*`).
+- **Repository:** the branch is unmerged until step 23 (draft PR #9);
+  abandoning it leaves `master` unchanged. After merge, `git revert` the merge
+  commit. Note nixos_config currently tracks the branch by name, so a force
+  push or deleted branch breaks its next `nix flake update nixi`.
