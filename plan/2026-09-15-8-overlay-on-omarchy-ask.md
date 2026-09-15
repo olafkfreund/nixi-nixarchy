@@ -648,6 +648,17 @@ summoned by key; a question typed into the card streams visibly; typing
     no answer as ready, loosen the id match so an enabled `-button` counts --
     each fail. The match checked against p620's live `listPlugins`: card and
     button ready, a missing id and the disabled `omarchy.active-window` off.
+    **A5 done:** README, architecture and testing docs.
+    **A6 done on p620:** activated a Home Manager generation built from
+    nixos_config main with `--override-input nixi` = 4f1c851 (not a system
+    switch; its only difference from the running generation was the new
+    step). Result: "moved io.github.olafkfreund.nixi from bar.layout.right to
+    plugins", marker written, `shell.json` otherwise identical to the backup,
+    the running shell reloaded it by itself (same pid, card and button
+    enabled, 3 bars). Then `omarchy plugin disable`, activate again: the step
+    ran and left the card off; `nixi` exited 1 with the "turned off" message;
+    re-enabled. Found: for a few seconds after the file changes, the shell
+    reloads plugins and `omarchy plugin list` prints nothing.
 
 18. **`install.py`.** Drop the server unit and voice; `npm ci` in `bridge/`
     when `npm` is present (the plugin-manager path cannot use Nix); report
