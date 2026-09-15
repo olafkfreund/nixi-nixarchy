@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Nixi installer — every mutation descriptor-bound, atomic, rollback-safe.
 
-    install.py                 core only: widget files, server service, menu entry
+    install.py                 core: knowledge, programs, bar button, bridge deps, menu entry
     install.py --with-watcher  | --without-watcher   coaching watcher service
     install.py --with-skill    | --without-skill     agent skill (~/.claude/skills)
     install.py --with-hooks    | --without-hooks     boot/update hooks + weekly timer
-    install.py --with-voice    | --without-voice     speech models for voice input
-    install.py --all           core + every integration except voice (which
-                               downloads 149 MB of models; ask for it by name)
+    install.py --all           core + every integration
     install.py --refresh       re-place core + whatever is already installed
     install.py --status        JSON: which integrations are installed
     install.py --no-systemd    (tests) place files only
@@ -18,7 +16,12 @@ written to an O_EXCL random temp in that directory, fsync'd, renamed over a
 target that must be a regular file or absent (never through a symlink —
 dotfile-managed installs are left alone with a message), then the directory
 is fsync'd. Every replaced file's previous bytes are kept so a failure
-restores everything placed so far. Primitives mirror nixi-server.
+restores everything placed so far.
+
+This is the plugin-manager path: `omarchy plugin add` has already put this
+repository in ~/.config/omarchy/plugins/, which IS the overlay card. What it
+cannot do is fetch the bridge's npm dependencies or install the bar button,
+which Omarchy requires to be a second plugin.
 """
 import json
 import os
@@ -38,7 +41,8 @@ HOOKS_BOOT = os.path.join(HOME, ".config", "omarchy", "hooks", "post-boot.d")
 HOOKS_UPD = os.path.join(HOME, ".config", "omarchy", "hooks", "post-update.d")
 EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
 NO_SYSTEMD = "--no-systemd" in sys.argv
-FEATURES = ("watcher", "skill", "hooks", "voice")
+PLUGINS = os.path.join(HOME, ".config", "omarchy", "plugins")
+FEATURES = ("watcher", "skill", "hooks")
 _LOG = []
 
 
@@ -291,20 +295,80 @@ def src(*parts):
 
 
 def install_core(j, svc):
-    for f in ("CLAUDE.md", "KNOWLEDGE.md", "ui.html", "faq.json", "AGENTS.md"):
+    remove_old_widget(j, svc)
+    for f in ("CLAUDE.md", "KNOWLEDGE.md", "faq.json", "AGENTS.md"):
         j.place(DIR, f, read_src(src("share", f)), dir_mode=0o700)
-    vendor = os.path.join(DIR, "vendor")
-    for f in sorted(os.listdir(src("share", "vendor"))):
-        if f.endswith(".js"):
-            j.place(vendor, f, read_src(src("share", "vendor", f)))
-    for b in ("nixi", "nixi-server", "nixi-update-manual"):
+    for b in ("nixi", "nixi-context", "nixi-update-manual"):
         j.place(BIN, b, read_src(src("bin", b)), mode=0o755)
-    j.place(UNITS, "nixi.service", read_src(src("systemd", "nixi.service")))
+    # The bar button is its own plugin: Omarchy gives a third-party plugin a
+    # bar widget or an overlay, never both.
+    button = os.path.join(PLUGINS, json.loads(read_src(src("button", "manifest.json")))["id"])
+    for f in ("manifest.json", "BarWidget.qml"):
+        j.place(button, f, read_src(src("button", f)))
     version = json.loads(read_src(src("manifest.json")))["version"]
     j.place(DATA, "source_root", (ROOT + "\n").encode(), mode=0o600, dir_mode=0o700)
     j.place(DATA, ".installed-version", (version + "\n").encode(), mode=0o600, dir_mode=0o700)
     merge_menu(j)
-    svc.enable_now("nixi.service")
+    install_bridge_deps()
+    if not os.path.realpath(ROOT).startswith(os.path.realpath(PLUGINS) + os.sep):
+        log("card: this checkout is not in %s, so the shell will not load it; "
+            "install it with `omarchy plugin add` (or use the Home Manager module)" % PLUGINS)
+
+
+# What a 0.9.x install placed and the overlay no longer uses. The server unit
+# must be stopped before its program disappears, or it restart-loops.
+OLD_FILES = ((BIN, "nixi-server"), (UNITS, "nixi.service"), (DIR, "ui.html"),
+             (os.path.join(DIR, "vendor"), "marked.min.js"),
+             (os.path.join(DIR, "vendor"), "purify.min.js"),
+             (os.path.join(DATA, "models"), "ggml-base.en.bin"),
+             (os.path.join(DATA, "models"), "ggml-silero-v5.1.2.bin"))
+
+
+def remove_old_widget(j, svc):
+    if os.path.exists(os.path.join(UNITS, "nixi.service")) and is_enabled("nixi.service"):
+        svc.disable_now("nixi.service")
+    removed = [n for d, n in OLD_FILES if os.path.lexists(os.path.join(d, n))]
+    for d, n in OLD_FILES:
+        j.remove(d, n)
+    for d in (os.path.join(DIR, "vendor"), os.path.join(DATA, "models")):
+        try:
+            os.rmdir(d)
+        except OSError:
+            pass
+    if removed:
+        must(systemctl("daemon-reload"), "daemon-reload")
+        log("removed the old widget: " + ", ".join(removed))
+
+
+def install_bridge_deps():
+    """`npm ci` for the bridge. Not journalled: node_modules is a build
+    artefact inside this checkout, and a failed run leaves the card saying
+    what is missing rather than a half-installed desktop."""
+    bridge = src("bridge")
+    if os.environ.get("NIXI_SKIP_NPM") in ("1", "true", "yes"):
+        return
+    if not _shutil_which("npm"):
+        log("bridge: npm is not on PATH, so the card cannot start an agent; "
+            "add pkgs.nodejs, then run install.py --refresh")
+        return
+    r = subprocess.run(["npm", "ci", "--omit=dev", "--no-audit", "--no-fund"], cwd=bridge,
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError("npm ci in bridge/ failed: "
+                           + r.stderr.decode("utf-8", "replace").strip()[-300:])
+    log("bridge: dependencies installed")
+
+
+# The card finds each agent's ACP adapter on PATH at runtime (the Home Manager
+# module pins them instead), and file search needs fd.
+ADAPTERS = (("claude", "claude-agent-acp"), ("codex", "codex-acp"), ("opencode", "opencode"))
+
+
+def requirements():
+    found = {agent: bool(_shutil_which(cmd)) for agent, cmd in ADAPTERS}
+    return {"agents": found, "fileSearch": bool(_shutil_which("fd")),
+            "node": bool(_shutil_which("node"))}
 
 
 def merge_menu(j):
@@ -396,51 +460,6 @@ def disable_hooks(j, svc):
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
-# Voice needs two models, and only the Nix module knows where to get them --
-# the URLs live in nix/hm-module.nix, so a plugin-manager install leaves voice
-# inert until someone fetches them by hand. Same pins, same hashes.
-MODELS = (
-    ("ggml-base.en.bin",
-     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
-     "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"),
-    ("ggml-silero-v5.1.2.bin",
-     "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
-     "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"),
-)
-
-
-def enable_voice(j, svc):
-    """Fetch the speech and VAD models, hash-verified. Everything else voice
-    needs (whisper-cli, pw-record) is a package, which this installer does not
-    manage -- the server names whatever is missing rather than failing."""
-    import hashlib
-    import urllib.request
-    mdir = os.path.join(DATA, "models")
-    for name, url, want in MODELS:
-        dest = os.path.join(mdir, name)
-        if os.path.exists(dest):
-            log("voice: %s already present" % name)
-            continue
-        log("voice: fetching %s ..." % name)
-        req = urllib.request.Request(url, headers={"User-Agent": "nixi-installer"})
-        with urllib.request.urlopen(req, timeout=600) as r:
-            blob = r.read()
-        got = hashlib.sha256(blob).hexdigest()
-        if got != want:
-            raise RuntimeError("%s failed its hash check (got %s)" % (name, got[:16]))
-        j.place(mdir, name, blob, mode=0o644, dir_mode=0o700)
-        log("voice: %s verified (%d MB)" % (name, len(blob) // (1024 * 1024)))
-    if not _shutil_which("whisper-cli"):
-        log("voice: models are in place, but whisper-cli is not on PATH. "
-            "Add pkgs.whisper-cpp to your config; until then the mic button "
-            "stays hidden and /voice says what is missing.")
-
-
-def disable_voice(j, svc):
-    for name, _url, _h in MODELS:
-        j.remove(os.path.join(DATA, "models"), name)
-
-
 def _shutil_which(b):
     import shutil
     return shutil.which(b)
@@ -452,15 +471,11 @@ def status():
                    and is_enabled("nixi-watch.service"),
         "skill": os.path.exists(os.path.join(SKILLS, "SKILL.md")),
         "hooks": os.path.exists(os.path.join(HOOKS_UPD, "nixi-manual-refresh.hook")),
-        "voice": all(os.path.exists(os.path.join(DATA, "models", n))
-                     for n, _u, _h in MODELS),
     }
 
 
-ENABLE = {"watcher": enable_watcher, "skill": enable_skill,
-          "hooks": enable_hooks, "voice": enable_voice}
-DISABLE = {"watcher": disable_watcher, "skill": disable_skill,
-           "hooks": disable_hooks, "voice": disable_voice}
+ENABLE = {"watcher": enable_watcher, "skill": enable_skill, "hooks": enable_hooks}
+DISABLE = {"watcher": disable_watcher, "skill": disable_skill, "hooks": disable_hooks}
 
 
 def main(argv):
@@ -471,11 +486,7 @@ def main(argv):
     want_on, want_off, core = [], [], True
     for a in args:
         if a == "--all":
-            # NOT voice: it is the only feature that downloads anything (149 MB
-            # of models), and a flag meaning "everything" should not quietly
-            # pull that over someone's connection. It also keeps this
-            # installable offline, which CI depends on.
-            want_on = [f for f in FEATURES if f != "voice"]
+            want_on = list(FEATURES)
         elif a == "--refresh":
             want_on = [f for f, on in status().items() if on]
         elif a.startswith("--with-") and a[7:] in FEATURES:
@@ -522,9 +533,16 @@ def main(argv):
                        or "exit %d" % r.returncode))
         except Exception as e:
             log("manual: not fetched (%s); retry with nixi-update-manual" % e)
-        log("Installed. Run nixi for the chat widget; find Help in the Omarchy "
-            "menu (SUPER+SPACE); optional key: o.bind(\"SUPER + H\", \"Nixi (nixarchy help)\", "
-            "\"nixi\") in ~/.config/hypr/bindings.lua")
+    if core:
+        need = requirements()
+        agents = [a for a, ok in need["agents"].items() if ok]
+        log("agents with an ACP adapter on PATH: %s" % (", ".join(agents) or
+            "none -- add pkgs.claude-agent-acp, pkgs.codex-acp or pkgs.opencode"))
+        if not need["fileSearch"]:
+            log("file search: fd is not on PATH, so @-mentioning files is off; add pkgs.fd")
+        log("Installed. Turn on Nixi and Nixi button once in Setup > Plugins, then run "
+            "nixi (or SUPER+SPACE > Help); optional key: o.bind(\"SUPER + H\", "
+            "\"Nixi (nixarchy help)\", \"nixi\") in ~/.config/hypr/bindings.lua")
     for f in want_on:
         log("enabled: " + f)
     for f in want_off:
@@ -537,14 +555,8 @@ def main(argv):
     if core:
         off = [f for f, on in status().items() if not on]
         if off:
-            msg = ("not enabled: %s — add with %s"
-                   % (", ".join(off), " ".join("--with-" + f for f in off)))
-            # Only offer --all when it would actually turn these on; voice is
-            # deliberately excluded from it, and saying otherwise is the kind
-            # of true-sounding message this change exists to stop.
-            if [f for f in off if f != "voice"]:
-                msg += ", or --all for everything but voice"
-            log(msg)
+            log("not enabled: %s — add with %s, or --all"
+                % (", ".join(off), " ".join("--with-" + f for f in off)))
         else:
             log("all optional features are enabled")
     write_log()

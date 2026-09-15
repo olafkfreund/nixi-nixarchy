@@ -603,6 +603,25 @@ summoned by key; a question typed into the card streams visibly; typing
     which adapters and whether file search are available.
     → verify: `install.py --no-systemd --all` into a throwaway `HOME` places
     the plugin and reports adapters; `--status` has no `voice` key.
+    **Result:** core places the knowledge files, `nixi`, `nixi-context`,
+    `nixi-update-manual`, the button plugin (copied to its own id under
+    `~/.config/omarchy/plugins/`), runs `npm ci --omit=dev` in `bridge/`
+    (skippable with `NIXI_SKIP_NPM=1`; a missing `npm` is reported, a failing
+    one rolls back), and reports which of `claude-agent-acp`, `codex-acp`,
+    `opencode` and `fd` are on `PATH`. Added, not in the step as written: an
+    existing 0.9.x install is migrated -- `nixi.service` disabled before its
+    program goes, then `nixi-server`, the unit, `ui.html`, `vendor/` and the
+    voice models removed through the journal -- because razer has exactly
+    that. `voice` is gone from flags, `--all` and `--status`.
+    Verified into a throwaway `HOME` holding a repo copy in its plugins
+    folder and a seeded 0.9.x install: the old files were removed and
+    reported, the button plugin, programs and knowledge placed, `npm ci`
+    produced `@agentclientprotocol/sdk`, `--status` is
+    `{"watcher", "skill", "hooks"}`; the report named `opencode` with p620's
+    PATH and "none -- add pkgs.claude-agent-acp, ..." with a bare PATH.
+    **For step 22:** razer, if it stays on `install.py`, needs
+    `pkgs.claude-agent-acp` (and `codex-acp`/`opencode` as wanted) in its
+    NixOS config, because nothing pins them on that path.
 
 19. **Tests.** `tools/test_nixi.py`: remove HTTP-server and voice checks; add
     the rebrand guard (step 3), the portability checks (steps 4–5, including
