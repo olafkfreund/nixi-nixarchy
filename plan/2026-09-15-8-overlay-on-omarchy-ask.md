@@ -652,6 +652,23 @@ summoned by key; a question typed into the card streams visibly; typing
     `npm ci` skipped, and lint (ruff, shellcheck, actionlint, plus
     `omarchy plugin validate` where available).
     → verify: `actionlint` clean; all jobs green on the PR.
+    **Result:** jobs are `nix` (flake check; the package ships both plugins and
+    the four programs, the old widget files are absent, no symlink inside a
+    plugin folder, no bytecode), `bridge` (`npm ci` + `node --test` with the
+    flake's own nodejs through `nix shell --inputs-from .`, rather than an
+    unpinned setup-node), `home-manager` (a `full` configuration with all
+    three agents under `allowUnfree` checks both plugin links and all three
+    pinned adapters and no `nixi.service`; a `free` one with `agents = [ ]`
+    builds without `allowUnfree`), `lint` (ruff on the remaining programs,
+    shellcheck, actionlint), `installer` (offline, `NIXI_SKIP_NPM=1`, over a
+    seeded 0.9.x install that must be removed) and the non-blocking `manual`.
+    The server job and `nix run` browser job are gone. `omarchy plugin
+    validate` is not available on a runner, so it is not a job. Run locally
+    before pushing: actionlint clean; `nix flake check` passes; the bridge
+    job's command 39/39 on Node 24.19; the installer steps; shellcheck and
+    ruff clean; the home-manager job's own flake (unpinned home-manager main)
+    builds both configurations and passes its assertions. "Green on the PR"
+    is checked at step 23.
 
 21. **Docs.** Rewrite `README.md`, `CONTRIBUTING.md`, `SECURITY.md` for the
     overlay; keep upstream's `docs/architecture.md` rebranded with a nixi
