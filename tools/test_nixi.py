@@ -393,8 +393,10 @@ def test_nixi_launcher():
                 '#!/bin/sh\necho "notify $*" >> "%s"\n' % log)
             for f in ("omarchy-shell", "omarchy-notification-send"):
                 os.chmod(os.path.join(d, f), 0o755)
+            # Stubs first, then the inherited PATH: a fixed host PATH has no bash
+            # inside the Nix build sandbox (flake check).
             r = subprocess.run(["bash", os.path.join(ROOT, "bin", "nixi"), *args], capture_output=True, text=True,
-                               env={"PATH": d + ":/run/current-system/sw/bin:/usr/bin:/bin", "HOME": d})
+                               env={"PATH": d + ":" + os.environ.get("PATH", ""), "HOME": d})
             calls = open(log).read() if os.path.exists(log) else ""
             return r, calls
 
