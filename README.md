@@ -22,9 +22,10 @@ an agent and the same card becomes a tutor.
 
 ### nixarchy
 
-Nothing to do: nixarchy ships Nixi on (`services.nixi.enable = true`). Turn on
-**Nixi** and **Nixi button** once in **Setup > Plugins** — nixarchy installs
-plugins but never enables them for you.
+Nothing to do: nixarchy ships Nixi on (`services.nixi.enable = true`), and the
+first switch turns the card and its bar button on for you. That happens once:
+if you turn Nixi off in **Setup > Plugins**, it stays off, and SUPER+H tells
+you where to turn it back on.
 
 ### Any NixOS / Home Manager setup — the flake
 
@@ -42,12 +43,14 @@ plugins but never enables them for you.
 }
 ```
 
-Rebuild, then enable the two plugins in Setup > Plugins.
+Rebuild. The card and the bar button are turned on for you on the first switch
+(`services.nixi.autoEnable`).
 
 | option | default | what it does |
 |---|---|---|
 | `services.nixi.enable` | `false` | The card, the grounding knowledge, the state directory |
-| `services.nixi.agents` | `[ "claude" "codex" ]` | Agents whose ACP adapter is pinned from your `pkgs`: `claude`, `codex`, `opencode` |
+| `services.nixi.agents` | `[ "claude" "codex" ]`, `claude` only with `allowUnfree` | Agents whose ACP adapter is pinned from your `pkgs`: `claude`, `codex`, `opencode` |
+| `services.nixi.autoEnable` | `true` | Turn the card and button on in the Omarchy shell on the first switch (once) |
 | `services.nixi.barWidget.enable` | `true` | The snowflake button (a second plugin) |
 | `services.nixi.skill.enable` | `true` | Tutor skill into `~/.claude/skills/nixi` |
 | `services.nixi.manual.autoUpdate` | `true` | Weekly refresh of the local manuals |
@@ -57,9 +60,11 @@ Rebuild, then enable the two plugins in Setup > Plugins.
 | `services.nixi.menuEntry.enable` | `false` | Adds "Help" to the Omarchy menu (SUPER+SPACE) |
 | `services.nixi.menuEntry.extraEntries` | `{}` | Your own menu entries, merged alongside Nixi's |
 
-`claude-agent-acp` depends on the unfree `claude-code`, so the default `agents`
-needs `allowUnfree`. `agents = [ "codex" "opencode" ]` or `[ ]` does not. An agent
-left out of the list still works if its adapter is on `PATH`.
+Claude Code is Nixi's default agent: it is used whenever Omarchy has no default
+agent and you have not picked one with SUPER+,. Its adapter, `claude-agent-acp`,
+depends on the unfree `claude-code`, so it is pinned only when
+`nixpkgs.config.allowUnfree` is true; otherwise it works if the adapter is on
+`PATH`. The same goes for any agent left out of the list.
 
 `menuEntry.enable` makes Nix the owner of
 `~/.config/omarchy/extensions/omarchy-menu.jsonc`; move any entries you wrote
@@ -97,7 +102,7 @@ journalled, so a failure restores exactly what was there before.
 | **Search first** | While you type, FAQ answers, the Tour, the Learning path, Omarchy menu entries and apps appear as rows. `@` searches files, `^` repositories, `%` windows |
 | **Tour** | `/tour`, or `nixi --tour`. Eleven steps that watch Hyprland events, so a step completes when you actually did it. Close the card mid-tour; `/tour` resumes where you were |
 | **Learning path** | `/learn` teaches the next of 16 topics you have not covered |
-| **Agent** | SUPER+, picks Claude, Codex or OpenCode (and Claude's or Codex's model) |
+| **Agent** | Claude Code by default. SUPER+, picks Claude, Codex or OpenCode (and Claude's or Codex's model) |
 | **Trust** | `/guide` and `/mechanic`. The corner shows which; see below |
 | **Pin** | Ctrl+P turns the card into a normal window that stays open |
 | **Dictation** | Use Omarchy's built-in dictation; Nixi has no voice input of its own |

@@ -153,6 +153,15 @@ card opens empty: a step is shown when `/tour` starts or resumes it, or when it
 advances while a card is open -- never merely because the card opened.
 `TourModel.js` is Qt-free and exported for `node --test`.
 
+**Default agent and enabling** (`bridge/harness-policy.js`,
+`nix/enable-card.py`). With no Omarchy default agent and no selection, the
+bridge uses Claude Code. The Home Manager module adds the card to `shell.json`
+`plugins[]` once, behind `~/.local/state/nixi/enabled-once`, because the shell
+accepts a toggle for a plugin that is not enabled and does nothing. A user
+`shell.json` replaces Omarchy's defaults rather than merging, so the step only
+extends an existing file or creates one whole from the defaults; `bin/nixi`
+checks `listPlugins` and says when the card is off.
+
 **Learned facts** (`bridge/learned.js`). A reply line starting `LEARNED:` is
 withheld from the card, even when split across chunks, and appended to
 `~/.local/share/nixi/LEARNED.md` at the end of the turn. The bridge writes

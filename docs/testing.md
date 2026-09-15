@@ -125,7 +125,9 @@ opposed to YOLO.
 ## Nixi checklist
 
 1. Open the card with `nixi`, the bar button and SUPER+SPACE → Help. Each opens
-   an empty card.
+   an empty card. On a home that never had Nixi, the first switch has already
+   enabled it; turn it off in Setup > Plugins, switch again, and confirm it stays
+   off and SUPER+H shows "Nixi is turned off".
 2. Type `install`. Confirm the FAQ answer row and nixarchy's Install row appear
    and the Install action has no `pacman`. Type `tour` and `learn`; confirm the
    Tour and Learning rows.
