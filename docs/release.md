@@ -1,28 +1,48 @@
 # Release process
 
-Releases are immutable tags cut from the current `main` tip. GitHub Actions
-creates the tag and GitHub release; maintainers do not create release tags by
-hand.
+A release is an immutable `v<version>` tag on the `master` tip, with a GitHub
+release beside it. Nixi has no release workflow: upstream omarchy-ask publishes
+through one, this fork does not, and the doc used to describe theirs.
 
 ## Prepare
 
-1. Update `manifest.json` to the intended semantic version without a leading
-   `v`.
-2. Run the complete checklist in `docs/testing.md`.
-3. Commit the release-ready tree and push it to `main`.
-4. Confirm the local and remote `main` tips are identical and CI is green.
+1. Set `manifest.json` and `button/manifest.json` to the intended semantic
+   version, without a leading `v`. They move together: Omarchy reads each
+   plugin's own manifest, and a version skew between the card and its bar
+   button is invisible until someone reads one of them.
+2. Run the checklist in [`docs/testing.md`](testing.md), including the Nixi
+   section — the compositor-facing half is the part CI cannot reach.
+3. Commit and push to `master`; confirm CI is green on that exact commit.
 
 ## Publish
 
-Run the **Release main tip** workflow from GitHub Actions and provide the same
-version as `manifest.json`, for example `0.6.0`.
+```sh
+git fetch origin master
+gh release create "v$VERSION" \
+  --target "$(git rev-parse origin/master)" \
+  --title "Nixi $VERSION — <what it is>" \
+  --generate-notes --notes "…what changed, and what upgrading costs…"
+```
 
-The workflow refuses to publish unless:
+Check before running it, because none of this is enforced for you:
 
-- it is running on `main`;
-- the requested version is valid semantic version syntax;
-- `manifest.json` contains that exact version; and
-- the corresponding `v<version>` tag does not already exist.
+- `manifest.json` holds exactly `$VERSION`;
+- `v$VERSION` does not exist yet (`git ls-remote --tags origin`);
+- the target commit is the `master` tip and its CI is green.
 
-It validates the Node bridge syntax and plugin manifest, tags the workflow's
-checked-out `main` commit, and publishes a GitHub release with generated notes.
+Afterwards, confirm the release points where you meant:
+
+```sh
+gh release view "v$VERSION" --json tagName,targetCommitish,isDraft
+```
+
+Write the notes for somebody upgrading: what changed, what was removed, and
+what an existing install has to do about it. `--generate-notes` adds the commit
+list underneath; it does not say what any of it means.
+
+## Who consumes a release
+
+Nothing does, today. nixarchy pins nixi by **commit**, not by tag (its
+`flake.nix` says so, and checks it), so a release is a marker for people rather
+than an input to a build. Bumping nixarchy's pin is a separate pull request
+there, and is what actually ships a new nixi to a desktop.
