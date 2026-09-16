@@ -8,8 +8,15 @@ import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-pol
 
 test("system default, explicit override, and missing/unsupported defaults", () => {
   const home = mkdtempSync(join(tmpdir(), "ask-policy-"));
+  const bin = mkdtempSync(join(tmpdir(), "ask-policy-bin-"));
   try {
-    const env = { HOME: home };
+    // A PATH carrying claude's adapter, because "no default agent falls back to
+    // Claude Code" is a claim about a machine that can START Claude Code. It
+    // used to hold with no PATH at all -- resolveHarness returned the name and
+    // resolveAdapter threw one frame later -- which asserted the hardcoded name
+    // rather than the promise behind it (#12).
+    writeFileSync(join(bin, "claude-agent-acp"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+    const env = { HOME: home, PATH: bin };
     assert.equal(resolveHarness(env), "claude", "no Omarchy default agent must fall back to Claude Code");
     assert.equal(resolveHarness({ ...env, NIXI_AGENT: "claude" }), "claude");
     mkdirSync(join(home, ".config/omarchy/defaults"), { recursive: true });
@@ -21,6 +28,51 @@ test("system default, explicit override, and missing/unsupported defaults", () =
     assert.equal(resolveHarness({ ...env, NIXI_AGENT: "codex" }), "codex");
     writeFileSync(path, "gemini\n");
     assert.throws(() => resolveHarness(env), /not supported/);
+  } finally { rmSync(home, { recursive: true }); rmSync(bin, { recursive: true }); }
+});
+
+test("the fallback picks an agent that can actually be started (#12)", () => {
+  const home = mkdtempSync(join(tmpdir(), "nixi-fallback-home-"));
+  const bin = mkdtempSync(join(tmpdir(), "nixi-fallback-bin-"));
+  const adapter = (name) => writeFileSync(join(bin, name), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  try {
+    const env = { HOME: home, PATH: bin };
+
+    // Nothing installed: the old code answered "claude" and left the failure to
+    // resolveAdapter, which named only Claude. Now it says so up front, and
+    // names every agent that would work.
+    assert.throws(() => resolveHarness(env), /No ACP adapter is installed/);
+    assert.throws(() => resolveHarness(env), /OpenCode/);
+
+    // A machine that pins opencode and codex but not claude -- which is what
+    // nixarchy#731 makes the default -- gets a working card instead of an error
+    // about an adapter it deliberately does not ship.
+    adapter("opencode");
+    assert.equal(resolveHarness(env), "opencode");
+
+    // Claude first wherever it IS startable, so every machine that has its
+    // adapter behaves exactly as it did before.
+    adapter("claude-agent-acp");
+    assert.equal(resolveHarness(env), "claude");
+
+    // An explicit choice is still honoured and still fails loudly: silently
+    // starting a different agent than the one asked for would be worse than
+    // saying the adapter is missing.
+    assert.equal(resolveHarness({ ...env, NIXI_AGENT: "codex" }), "codex");
+    assert.throws(() => resolveAdapter("codex", env), /codex-acp\) is not on the system PATH/);
+  } finally { rmSync(home, { recursive: true }); rmSync(bin, { recursive: true }); }
+});
+
+test("a pinned adapter counts as startable even when it is not on PATH (#12)", () => {
+  const home = mkdtempSync(join(tmpdir(), "nixi-pinned-"));
+  try {
+    // nix/package.nix sets these for the agents a build pins, and bridge.js
+    // reads them in preference to PATH. A probe that only looked at PATH would
+    // call a pinned agent unavailable and fall past a harness that works.
+    const env = { HOME: home, PATH: "" };
+    assert.equal(resolveHarness({ ...env, NIXI_CODEX_ACP_COMMAND: '["/nix/store/x/bin/codex-acp"]' }), "codex");
+    assert.equal(resolveHarness({ ...env, NIXI_OPENCODE_COMMAND: '["/nix/store/x/bin/opencode","acp"]' }), "opencode");
+    assert.equal(resolveHarness({ ...env, NIXI_CLAUDE_ACP_COMMAND: '["/nix/store/x/bin/claude-agent-acp"]' }), "claude");
   } finally { rmSync(home, { recursive: true }); }
 });
 

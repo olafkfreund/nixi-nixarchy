@@ -17,7 +17,27 @@ export function resolveHarness(env = process.env) {
   }
   // Claude Code is Nixi's default agent: a fresh desktop with no Omarchy
   // default agent gets a working card rather than an error (nixarchy#709).
-  if (!agent) return "claude";
+  //
+  // But "claude" only keeps that promise where claude's adapter is installed,
+  // and it is not always. nixarchy pins adapters through `services.nixi.agents`,
+  // whose upstream default carries claude only when `allowUnfree` is set -- so a
+  // machine that says no to unfree, or one that pins opencode and codex
+  // deliberately (nixarchy#731, where claude-agent-acp and the unfree
+  // claude-code are 651 MiB of a public 5 GB cache for two packages that are
+  // fetched rather than built), lands on the one agent it cannot start. The
+  // fallback that exists to prevent an error produces one.
+  //
+  // So fall back to an agent that can actually be STARTED, claude first, which
+  // leaves every machine that has claude's adapter behaving exactly as before.
+  // An agent somebody explicitly chose is still honoured below and still fails
+  // loudly if its adapter is missing: an explicit choice deserves an explicit
+  // error, and silently starting a different agent than the one asked for would
+  // be worse than saying so.
+  if (!agent) {
+    const startable = AGENTS.find((candidate) => adapterAvailable(candidate, env));
+    if (startable) return startable;
+    throw new Error(`No ACP adapter is installed for any agent Nixi supports. Install one of ${AGENTS.map(agentLabel).join(", ")} and its adapter (claude-agent-acp, codex-acp, or opencode, which needs none), or choose an agent in Nixi (Super+,).`);
+  }
   if (!AGENTS.includes(agent))
     throw new Error(`Omarchy’s selected agent (${agent}) is not supported by Nixi yet. Choose Claude, Codex or OpenCode in Nixi (Super+,).`);
   return agent;
@@ -54,6 +74,21 @@ function firstExecutable(candidates) {
 // message that says what to install -- not as a bare spawn ENOENT.
 //
 // OpenCode needs no adapter: it speaks ACP itself as `opencode acp`.
+// Can this agent be started at all? Not "is its adapter on PATH": bridge.js
+// also accepts NIXI_CLAUDE_ACP_COMMAND / NIXI_CODEX_ACP_COMMAND /
+// NIXI_OPENCODE_COMMAND (and NIXI_ACP_COMMAND for any of them), and
+// nix/package.nix sets exactly those for the agents a build pins. A probe that
+// only looked at PATH would call a pinned agent unavailable and fall past a
+// harness that works. Kept beside resolveAdapter so the two stay in step; the
+// variable names are also read in bridge.js's configuredAgentCommand.
+function adapterAvailable(agent, env = process.env) {
+  const override = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agent]
+    || "NIXI_CLAUDE_ACP_COMMAND";
+  if (String(env[override] || env.NIXI_ACP_COMMAND || "").trim()) return true;
+  try { resolveAdapter(agent, env); return true; }
+  catch { return false; }
+}
+
 export function resolveAdapter(agent, env = process.env) {
   if (agent === "opencode") return [resolveExecutable(agent, env), "acp"];
   const name = agent === "codex" ? "codex-acp" : "claude-agent-acp";
