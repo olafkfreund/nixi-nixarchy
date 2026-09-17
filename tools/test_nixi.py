@@ -302,6 +302,57 @@ def test_old_plugin_dir_migration():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_menu_icon_migration():
+    """The icon change has to reach machines that already have a Help entry.
+    merge_menu leaves an existing entry alone, so it would otherwise only ever
+    land on fresh installs -- but nixi's own pre-0.11 icon is migrated, and a
+    matching glyph on somebody else's row is not."""
+    import importlib.util
+    OLD, NEW = "\U000f0625", "\U000f0674"
+    root = tempfile.mkdtemp()
+    home = os.environ.get("HOME")
+    try:
+        # install.py anchors every write at $HOME and refuses paths outside it,
+        # so the fake home has to be in place before the module is loaded.
+        os.environ["HOME"] = root
+        spec = importlib.util.spec_from_file_location(
+            "nixi_install", os.path.join(ROOT, "install.py"))
+        nixi_install = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(nixi_install)
+        ext = os.path.join(root, ".config", "omarchy", "extensions")
+        os.makedirs(ext, mode=0o700, exist_ok=True)
+
+        class Jail:
+            def __init__(self):
+                self.written = {}
+
+            def place(self, _d, name, data):
+                self.written[name] = data.decode()
+
+        def run(text):
+            open(os.path.join(ext, "omarchy-menu.jsonc"), "w").write(text)
+            j = Jail()
+            nixi_install.merge_menu(j)
+            return j.written.get("omarchy-menu.jsonc")
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Help", "action": "nixi"}\n}\n' % OLD)
+        assert out and NEW in out and OLD not in out, "an existing Help entry kept the old icon"
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Ayuda", "action": "nixi"}\n}\n' % OLD)
+        assert "Ayuda" in out, "a user's own label was discarded by the migration"
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Help"},\n  "docs": {"icon": "%s"}\n}\n' % (OLD, OLD))
+        assert out.count(NEW) == 1 and out.count(OLD) == 1, "a glyph outside the help entry was rewritten"
+
+        assert run('{\n  "help": {"icon": "X", "label": "Help"}\n}\n') is None, \
+            "an entry nixi did not write was rewritten"
+        print("  ok  an existing Help entry is migrated to sparkles, and only it")
+    finally:
+        if home is not None:
+            os.environ["HOME"] = home
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_enable_card():
     """The card is enabled once per home (nixarchy#709), without ever costing
     the user their bar: a user shell.json REPLACES Omarchy's defaults, so the
@@ -439,7 +490,7 @@ def test_nixi_rows_are_searchable():
 
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_enable_card, test_nixi_launcher,
+               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
                test_nixi_rows_are_searchable):
         fn()
     print("\nall checks passed")

@@ -64,13 +64,30 @@ Load-bearing facts:
 8. `README.md:54`: reword the option-table entry.
 9. `docs/FORK.md:60`: update the fork-divergence table row.
 
+10. `install.py` `merge_menu`: an existing Help entry returns early, so the
+    new icon would only ever reach fresh installs. Migrate nixi's own pre-0.11
+    icon in place, scoped to the help entry's braces so a matching glyph on a
+    neighbouring row is untouched, and leave every other field alone → verify
+    by `tools/test_nixi.py`.
+11. `tools/test_nixi.py`: add `test_menu_icon_migration` covering the migration,
+    a preserved user label, a neighbouring row, and an entry nixi did not
+    write. Register it in the `__main__` runner list → verify the suite passes.
+
 Steps 5 and 6 land in the same commit. All steps may land as one commit.
+
+Steps 10 and 11 were added during implementation, from a review finding on
+PR #15, and are recorded here per the deviation rule. They do not affect
+razer or p620, which install nixi through the Home Manager module rather than
+`install.py`; the module rewrites the menu entry declaratively on every
+rebuild.
 
 ## Tests
 
 ```bash
-# 1. old codepoint gone from every install path
-grep -rn "F0625\|000f0625" nix/ install.py button/       # expect: no output
+# 1. old codepoint gone from every install path EXCEPT install.py's
+#    migration, which must name the old icon to recognise and replace it
+grep -rn "F0625\|000f0625" nix/ button/                  # expect: no output
+grep -c "000f0625" install.py                            # expect: 2 (migration only)
 
 # 2. no stale user-facing prose
 grep -rniE "snowflake" --include="*.md" --include="*.nix" \
@@ -82,10 +99,13 @@ grep -c "Canvas" button/BarWidget.qml                    # expect: 0
 
 # 4. installer parses; menu row is valid JSON with a one-char icon
 python3 -c "import ast;ast.parse(open('install.py').read());print('parses')"
-grep -c 'U000f0674' install.py                           # expect: 1
+grep -c 'U000f0674' install.py                           # expect: 2 (new row + migration)
 
 # 5. plugin manifest still valid
 python3 -c "import json;json.load(open('button/manifest.json'));print('ok')"
+
+# 5b. the upgrade path reaches an existing Help entry
+python3 tools/test_nixi.py                               # expect: all checks passed
 
 # 6. package builds
 nix build .#nixi
