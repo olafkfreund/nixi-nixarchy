@@ -100,7 +100,7 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Install the snowflake bar button, a separate plugin
+        Install the sparkles bar button, a separate plugin
         `${pluginId}-button` (Omarchy gives a third-party plugin a bar widget or
         an overlay, never both). Installed is not enabled: turn it on once in
         Setup > Plugins, like the card itself.
@@ -232,7 +232,7 @@ in
       xdg.configFile."omarchy/extensions/omarchy-menu.jsonc".text =
         builtins.toJSON (cfg.menuEntry.extraEntries // {
           help = {
-            icon = "󰘥";
+            icon = "󰙴";
             label = "Help";
             description = "Ask anything about nixarchy";
             action = "nixi";

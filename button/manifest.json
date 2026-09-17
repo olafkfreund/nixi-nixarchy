@@ -5,7 +5,7 @@
   "version": "0.10.0",
   "author": "Olaf K. Freund (overlay by Clickety Clacks, omarchy-ask)",
   "license": "MIT",
-  "description": "One snowflake in the bar that summons Nixi. Separate from the overlay because Omarchy gives a third-party plugin either a bar widget or an overlay, not both.",
+  "description": "One sparkle in the bar that summons Nixi. Separate from the overlay because Omarchy gives a third-party plugin either a bar widget or an overlay, not both.",
   "kinds": [
     "bar-widget"
   ],

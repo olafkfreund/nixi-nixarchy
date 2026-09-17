@@ -57,7 +57,7 @@ branding moved.
 | `OMARCHY_HELP_*` | `NIXI_*` |
 | `X-Archy-Token` | `X-Nixi-Token` |
 | `io.github.respira-crece-lidera.archy` | `io.github.olafkfreund.nixi` |
-| arcade pixel-invader icon | ❄ snowflake (pixel grid in the bar, vector in the chat) |
+| arcade pixel-invader icon | 󰙴 sparkles (one mark everywhere: a Nerd Font glyph in the bar and the Omarchy menu) |
 
 ## Substance
 

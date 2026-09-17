@@ -387,7 +387,7 @@ def merge_menu(j):
     if '"help"' in s:
         return
     import re
-    row = ('"help": {"icon": "\U000f0625", "label": "Help", '
+    row = ('"help": {"icon": "\U000f0674", "label": "Help", '
            '"description": "Ask anything about nixarchy", "action": "nixi", '
            '"aliases": ["how", "nixi", "ayuda"]}')
     if s.strip():
