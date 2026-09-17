@@ -384,10 +384,31 @@ def merge_menu(j):
     finally:
         os.close(dfd)
     s = (cur or b"").decode("utf-8", "replace")
-    if '"help"' in s:
-        return
     import re
-    row = ('"help": {"icon": "\U000f0625", "label": "Help", '
+    if '"help"' in s:
+        # Upgrade path. The entry is the user's now, so it is left alone with
+        # one exception: the icon nixi itself wrote before 0.11 (help-circle,
+        # U+F0625) is swapped for sparkles in place. Scoped to the help entry's
+        # own braces so an identical glyph on a neighbouring row is not touched.
+        # Without this the new icon would only ever reach fresh installs.
+        b = s.find("{", s.index('"help"'))
+        depth, e = 0, b
+        while b != -1 and e < len(s):
+            if s[e] == "{":
+                depth += 1
+            elif s[e] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            e += 1
+        entry = s[b:e + 1] if b != -1 and e < len(s) else ""
+        if "\U000f0625" in entry:
+            j.place(EXT_DIR, "omarchy-menu.jsonc.bak-nixi", s.encode())
+            j.place(EXT_DIR, "omarchy-menu.jsonc",
+                    (s[:b] + entry.replace("\U000f0625", "\U000f0674") + s[e + 1:]).encode())
+            log("menu: the Help icon is now sparkles")
+        return
+    row = ('"help": {"icon": "\U000f0674", "label": "Help", '
            '"description": "Ask anything about nixarchy", "action": "nixi", '
            '"aliases": ["how", "nixi", "ayuda"]}')
     if s.strip():

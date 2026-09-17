@@ -51,7 +51,7 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 | `services.nixi.enable` | `false` | The card, the grounding knowledge, the state directory |
 | `services.nixi.agents` | `[ "claude" "codex" ]`, `claude` only with `allowUnfree` | Agents whose ACP adapter is pinned from your `pkgs`: `claude`, `codex`, `opencode` |
 | `services.nixi.autoEnable` | `true` | Turn the card and button on in the Omarchy shell on the first switch (once) |
-| `services.nixi.barWidget.enable` | `true` | The snowflake button (a second plugin) |
+| `services.nixi.barWidget.enable` | `true` | The sparkles button (a second plugin) |
 | `services.nixi.skill.enable` | `true` | Tutor skill into `~/.claude/skills/nixi` |
 | `services.nixi.manual.autoUpdate` | `true` | Weekly refresh of the local manuals |
 | `services.nixi.manual.onCalendar` | `"weekly"` | When that refresh runs |
