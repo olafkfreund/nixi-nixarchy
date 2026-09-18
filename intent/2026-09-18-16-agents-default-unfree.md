@@ -66,11 +66,16 @@ when something is already wrong.
 
 ## Proposed outcome
 
-- A machine that can build `claude-agent-acp` gets `claude` in the default,
-  regardless of how its Home Manager `pkgs` was wired.
+- The default names the agents Nixi wants unconditionally, so a machine that
+  can build `claude-agent-acp` gets it regardless of how its Home Manager `pkgs`
+  was wired.
 - A machine that genuinely cannot build it (unfree refused) still evaluates,
-  still installs, and still gets a working card with the agents it can have.
-  Refusing unfree must not become an eval error.
+  still installs, and still gets a working card with the agents it can have —
+  and is *told*, at rebuild time, which agent was left out and why. Refusing
+  unfree must not become an eval error.
+- No failure of this kind is silent again: the gap between what Nixi pinned and
+  what the machine believes its agent is becomes visible before the user
+  presses a key, not after.
 - The default and `defaultText` agree with each other, so
   `services.nixi.agents` documents what it actually does.
 - No change for anyone who sets `services.nixi.agents` explicitly.
@@ -100,27 +105,58 @@ when something is already wrong.
   evaluating an unfree derivation on such a machine is exactly what throws.
 - Must not make the default depend on impure evaluation or on anything read
   from outside the Nix store.
-- Must stay a `defaultText` that a human can read in the generated option docs;
-  a default nobody can describe is worse than one that is occasionally wrong.
+- The `defaultText` must be the literal default. An unconditional default makes
+  this free, and it is a reason to prefer one: the option docs stop describing a
+  rule and start showing a list.
+- The warning must be actionable — the agent, the reason, and the remedy — and
+  must not fire on a machine where everything pinned correctly.
 - Must not pin more than the machine consented to. Erring toward installing
   unfree software on a machine that refused it is the one failure mode worse
   than today's.
 - `nix flake check` must pass on both an unfree-allowing and an unfree-refusing
   evaluation.
 
+## Decisions
+
+Both of the questions this intent was opened to settle now have answers
+(2026-09-18). They are recorded here as decided, not open.
+
+**1. The default stops being conditional.** `services.nixi.agents` names the
+agents Nixi wants, full stop, and no longer inspects the evaluation it happens
+to be running in. A conditional default is what produced this bug: it made
+"which agents does Nixi want" and "which agents can this machine have" the same
+sentence, so when the second answer was wrong the first one silently changed.
+Separating them means the option states an intention that is always true, and
+the machine's capability is discovered and *reported* rather than folded
+invisibly into the answer.
+
+**2. A machine that cannot pin an agent says so at rebuild time.** When an agent
+in the list cannot be pinned, the build warns, naming the agent, the reason, and
+what the user can do about it. This is the half of the decision that makes the
+first half safe: with an unconditional default, the warning is the only thing
+between an unfree-refusing machine and a hard eval failure, and it is also the
+signal whose absence let the reported laptop fail silently for a day.
+
+The warning is about the list, not about the agents missing from it. A machine
+that deliberately pins `[ "codex" "opencode" ]` (nixarchy#731) never asked for
+claude and must stay silent — warning there would be nagging a correct
+configuration, which is how warnings get ignored.
+
+Accepted cost: a machine that *does* list an agent it cannot build — most
+plainly, one taking the new unconditional default while refusing unfree — warns
+on every rebuild, not once. That is repetitive by design. The condition is real
+and persists until the user resolves it, either by allowing unfree or by naming
+the agents they actually want, and both remedies belong in the warning text.
+
 ## Open questions
 
-1. **Is "can it build" the right question, or should the default stop being
-   conditional at all?** A conditional default is what produced this bug. The
-   alternative is a fixed default plus a loud, actionable message when an agent
-   in the list cannot be pinned. That is a larger behavioural change and may be
-   the better one; deciding it is the point of this intent.
-2. **Should a disagreement warn?** When the default resolves to fewer agents
-   than `defaults/agent` names, the system currently says nothing until the key
-   is pressed. A `lib.warn` at rebuild time would have surfaced this in
-   seconds. Worth it, or noise on the many machines that legitimately pin a
-   subset?
-3. **Does the 651 MiB matter here?** Fixing this means machines that allow
-   unfree start pulling an adapter they were silently spared. That is the
-   correct outcome, but it is a surprise on the next rebuild and may deserve a
-   release note rather than a silent fix.
+**3. Does the 651 MiB deserve a release note?** Unchanged from the original
+draft and still open. Fixing this means machines that allow unfree start pulling
+`claude-agent-acp` on the next rebuild — the correct outcome, but a surprise.
+This does not block the spec; it is a release-time decision.
+
+**A scoping point for the approver.** "Unconditional" is read here as dropping
+the condition from the set that already exists, giving `[ "claude" "codex" ]`.
+It is not read as adding `opencode`, which has never been in the default and
+whose inclusion would be a separate change with its own download. Say so if the
+intended reading was all three.
