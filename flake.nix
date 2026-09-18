@@ -57,9 +57,14 @@
           touch $out
         '';
 
-        # The agents default and its capability probe (#16). Nothing evaluated
-        # the Home Manager module before this check, which is how a default that
-        # silently pinned one agent fewer than asked for survived.
+        # The agents default and its capability probe (#16). CI already builds
+        # the module's activation package (.github/workflows/ci.yml), including
+        # one configuration that sets no `agents` and so uses the default -- but
+        # it only asserts that the default EVALUATES, never what it resolves to,
+        # and it evaluates it with allowUnfree = false, where the old expression
+        # happened to give the right answer. That is how a default that silently
+        # pinned one agent fewer than asked for survived. This check asserts the
+        # value, on both kinds of pkgs.
         #
         # legacyPackages cannot be reconfigured, so nixpkgs is imported twice
         # here to get a pkgs that allows unfree and one that refuses it. The

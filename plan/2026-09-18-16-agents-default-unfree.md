@@ -104,6 +104,16 @@ the check exercises the real expression.
    → verify by `nix flake check` passing, and by temporarily reverting step 3's
    default to confirm the check can actually fail.
 
+   **Correction to the spec's rationale.** Spec section 4 says nothing evaluated
+   the Home Manager module. That is true of `nix flake check`, but not of CI:
+   `.github/workflows/ci.yml:79-140` builds the module's activation package in
+   two configurations, one of which (`free`) sets no `agents` and so exercises
+   the default. It survived anyway because that job asserts only that the
+   default *evaluates*, never what it resolves to, and evaluates it with
+   `allowUnfree = false` -- the one setting where the old expression gives the
+   right answer. The new check asserts the resolved value, on both kinds of
+   `pkgs`, which is the gap that actually existed.
+
    **Deviation, applied during implementation.** As specified, the check passed
    `agents = [ "claude" "codex" ]` as a literal, so nothing in the suite
    verified the module's *actual* default — and step 3's own verification was
