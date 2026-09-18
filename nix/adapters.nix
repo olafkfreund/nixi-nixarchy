@@ -14,6 +14,10 @@
 #
 # tryEval catches the unfree refusal. It does NOT catch a missing attribute, so
 # the `?` guard has to come first or an older nixpkgs fails eval outright.
+#
+# Note for the message text: claude-agent-acp is itself Apache-2.0. It fails
+# only because claude-code is unfree, so an allowUnfreePredicate naming
+# claude-agent-acp does NOT help -- the predicate has to cover the dependency.
 { lib, pkgs, agents }:
 
 let
@@ -29,8 +33,12 @@ let
       lib.warn
         ("Nixi cannot pin ${attribute} for the ${agent} agent: it does not evaluate in this "
           + "configuration, most often because it is unfree or depends on something unfree. "
-          + "Allow it (nixpkgs.config.allowUnfree, or an allowUnfreePredicate for just this "
-          + "package), or set services.nixi.agents to the agents you want. "
+          + "Set nixpkgs.config.allowUnfree, or an allowUnfreePredicate covering whatever "
+          + "unfree DEPENDENCY it pulls in rather than ${attribute} itself."
+          + lib.optionalString (agent == "claude")
+            (" ${attribute} is Apache-2.0 and fails only through the unfree claude-code,"
+              + " so a predicate naming ${attribute} will not help.")
+          + " Or set services.nixi.agents to the agents you want. "
           + "${agent} still works if its adapter is on PATH.")
         null
     else pkgs.${attribute};
