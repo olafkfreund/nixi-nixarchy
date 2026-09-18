@@ -95,5 +95,19 @@ export function resolveAdapter(agent, env = process.env) {
   const found = firstExecutable(onPath(name, env));
   if (found) return [found];
   const variable = agent === "codex" ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On NixOS add pkgs.${name} to your configuration, or point ${variable} at it.`);
+  // Two routes, nixarchy's first: this fork ships on nixarchy machines, where
+  // `services.nixi.agents` is what pins an adapter and merges with the list
+  // nixarchy already sets. `pkgs.<name>` works anywhere and stays for a plain
+  // NixOS machine. Naming only the second sent nixarchy users around the
+  // mechanism built for them (nixarchy#741).
+  //
+  // Claude's route carries a prerequisite the message has to state, or it
+  // hands the user a configuration that cannot build: claude-agent-acp
+  // references the unfree claude-code, so it THROWS where allowUnfree is off.
+  // Measured with `env -u NIXPKGS_ALLOW_UNFREE`, because the variable in an
+  // interactive shell answers for the config otherwise: claude-agent-acp
+  // throws, codex-acp evaluates. So the clause is Claude's alone -- putting it
+  // on both would be a warning Codex users cannot act on.
+  const unfree = agent === "claude" ? " It needs unfree allowed, which nixarchy sets by default." : "";
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On nixarchy add services.nixi.agents = [ "${agent}" ] to your Home Manager configuration; on plain NixOS add pkgs.${name}.${unfree} Either way: rebuild, then run omarchy-restart-shell -- a rebuild alone does not reach a shell that is already running. Or point ${variable} at an adapter you already have.`);
 }
