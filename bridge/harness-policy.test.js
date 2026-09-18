@@ -113,7 +113,7 @@ test("startup failures reach the popup as structured fatal events", () => {
       // clause was added, so it would not have noticed the clause going away
       // again (nixarchy#741).
       [{ NIXI_AGENT: "claude", PATH: home },
-        /claude-agent-acp.*not on the system PATH.*services\.nixi\.agents.*pkgs\.claude-agent-acp.*omarchy-restart-shell/],
+        /claude-agent-acp.*not on the system PATH.*services\.nixi\.agents.*pkgs\.claude-agent-acp.*unfree.*omarchy-restart-shell/],
     ]) {
       const result = spawnSync(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
         env: { ...process.env, HOME: home, NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", ...overrides },
@@ -134,6 +134,15 @@ test("ACP adapters come from the system PATH, never a bundled node_modules copy"
     for (const [agent, name] of [["claude", "claude-agent-acp"], ["codex", "codex-acp"]]) {
       assert.throws(() => resolveAdapter(agent, env), new RegExp(`${name}\\) is not on the system PATH`));
       assert.throws(() => resolveAdapter(agent, env), new RegExp(`pkgs\\.${name}`));
+      // The unfree prerequisite is Claude's alone, and asserting only its
+      // presence would pass just as well if it were printed for both.
+      // claude-agent-acp references the unfree claude-code and throws where
+      // allowUnfree is off; codex-acp evaluates. Telling a Codex user about
+      // unfree would be a warning they cannot act on.
+      let message = "";
+      try { resolveAdapter(agent, env); } catch (error) { message = error.message; }
+      if (agent === "claude") assert.match(message, /unfree/);
+      else assert.doesNotMatch(message, /unfree/);
       const adapter = join(bin, name);
       writeFileSync(adapter, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
       const resolved = resolveAdapter(agent, env);
