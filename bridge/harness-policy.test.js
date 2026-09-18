@@ -107,10 +107,25 @@ test("startup failures reach the popup as structured fatal events", () => {
       [{ NIXI_AGENT: "codex", NIXI_CODEX_ACP_COMMAND: "invalid" }, /JSON array/],
       // No adapter anywhere: the card must say what to install, not surface a
       // bare spawn ENOENT from an adapter nobody told it was missing.
-      [{ NIXI_AGENT: "claude", PATH: home }, /claude-agent-acp.*not on the system PATH.*pkgs\.claude-agent-acp/],
+      // Both routes, the prerequisite, and the sequence that applies them.
+      //
+      // The ASSIGNMENT is matched literally, agent name included. A regex of
+      // `services\.nixi\.agents.*` passed while the message recommended
+      // `[ "codex" ]` to a Claude user, and passed again with "Home Manager"
+      // deleted -- it asserted that some words appeared in some order, which is
+      // not what this message has to get right (nixarchy#741).
+      [{ NIXI_AGENT: "claude", PATH: home },
+        /claude-agent-acp\) is not on the system PATH\. On nixarchy add services\.nixi\.agents = \[ "claude" \] to your Home Manager configuration; on plain NixOS add pkgs\.claude-agent-acp\..*unfree.*[Rr]ebuild.*omarchy-restart-shell/],
     ]) {
       const result = spawnSync(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
-        env: { ...process.env, HOME: home, NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", ...overrides },
+        // NIXI_CLAUDE_ACP_COMMAND cleared too: it was inherited from the
+        // developer's own environment, and a pinned adapter there would have
+        // satisfied the lookup and skipped the missing-adapter case entirely.
+        env: {
+          ...process.env, HOME: home,
+          NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", NIXI_CLAUDE_ACP_COMMAND: "",
+          ...overrides,
+        },
         encoding: "utf8", timeout: 10000,
       });
       assert.equal(result.status, 1, result.stderr);
@@ -128,6 +143,15 @@ test("ACP adapters come from the system PATH, never a bundled node_modules copy"
     for (const [agent, name] of [["claude", "claude-agent-acp"], ["codex", "codex-acp"]]) {
       assert.throws(() => resolveAdapter(agent, env), new RegExp(`${name}\\) is not on the system PATH`));
       assert.throws(() => resolveAdapter(agent, env), new RegExp(`pkgs\\.${name}`));
+      // The unfree prerequisite is Claude's alone, and asserting only its
+      // presence would pass just as well if it were printed for both.
+      // claude-agent-acp references the unfree claude-code and throws where
+      // allowUnfree is off; codex-acp evaluates. Telling a Codex user about
+      // unfree would be a warning they cannot act on.
+      let message = "";
+      try { resolveAdapter(agent, env); } catch (error) { message = error.message; }
+      if (agent === "claude") assert.match(message, /unfree/);
+      else assert.doesNotMatch(message, /unfree/);
       const adapter = join(bin, name);
       writeFileSync(adapter, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
       const resolved = resolveAdapter(agent, env);
