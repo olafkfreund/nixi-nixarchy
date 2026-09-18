@@ -13,12 +13,12 @@ let
 
   # The agents' ACP adapters come from the USER's pkgs, so the unfree decision
   # (claude-agent-acp pulls in claude-code) stays in the user's own config.
-  # An agent left out of the list resolves from PATH at runtime instead.
-  nixiPkg = cfg.package.override {
-    claudeAcp = if lib.elem "claude" cfg.agents then pkgs.claude-agent-acp else null;
-    codexAcp = if lib.elem "codex" cfg.agents then pkgs.codex-acp else null;
-    opencodeAcp = if lib.elem "opencode" cfg.agents then pkgs.opencode else null;
-  };
+  # An agent left out of the list -- or one this pkgs cannot build, which
+  # adapters.nix warns about -- resolves from PATH at runtime instead.
+  nixiPkg = cfg.package.override (import ./adapters.nix {
+    inherit lib pkgs;
+    agents = cfg.agents;
+  });
   share = "${nixiPkg}/share/nixi";
   plugins = "${nixiPkg}/share/omarchy/plugins";
 
@@ -67,20 +67,21 @@ in
 
     agents = lib.mkOption {
       type = lib.types.listOf (lib.types.enum [ "claude" "codex" "opencode" ]);
-      # Claude Code is the default agent. Its adapter depends on the unfree
-      # claude-code, so it is pinned only where unfree is allowed; elsewhere
-      # it is still the default agent, found on PATH (nixarchy#709).
-      default = lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ];
-      defaultText = lib.literalExpression
-        ''lib.optional (pkgs.config.allowUnfree or false) "claude" ++ [ "codex" ]'';
+      # The agents Nixi wants, stated unconditionally. Whether this machine can
+      # actually build each one is a separate question, asked and reported by
+      # nix/adapters.nix rather than folded invisibly into this list (#16).
+      default = [ "claude" "codex" ];
+      defaultText = lib.literalExpression ''[ "claude" "codex" ]'';
       example = [ "claude" "codex" "opencode" ];
       description = ''
         Agents whose ACP adapters are pinned into Nixi from your `pkgs`:
         `claude-agent-acp`, `codex-acp`, or `opencode` (which speaks ACP itself).
-        Claude Code is Nixi's default agent; `claude-agent-acp` depends on the
-        unfree `claude-code`, so it is in the default only when
-        `nixpkgs.config.allowUnfree` is true. An agent not listed is still
-        usable if its adapter is on `PATH`.
+        Claude Code is Nixi's default agent. An agent listed here whose adapter
+        this configuration cannot build -- `claude-agent-acp` depends on the
+        unfree `claude-code`, so it needs unfree to be allowed -- is skipped
+        with a warning at rebuild time rather than failing the build. An agent
+        not pinned, whether skipped or simply not listed, is still usable if its
+        adapter is on `PATH`.
       '';
     };
 

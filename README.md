@@ -49,7 +49,7 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 | option | default | what it does |
 |---|---|---|
 | `services.nixi.enable` | `false` | The card, the grounding knowledge, the state directory |
-| `services.nixi.agents` | `[ "claude" "codex" ]`, `claude` only with `allowUnfree` | Agents whose ACP adapter is pinned from your `pkgs`: `claude`, `codex`, `opencode` |
+| `services.nixi.agents` | `[ "claude" "codex" ]` | Agents whose ACP adapter is pinned from your `pkgs`: `claude`, `codex`, `opencode`. One that cannot be built here is skipped with a warning |
 | `services.nixi.autoEnable` | `true` | Turn the card and button on in the Omarchy shell on the first switch (once) |
 | `services.nixi.barWidget.enable` | `true` | The sparkles button (a second plugin) |
 | `services.nixi.skill.enable` | `true` | Tutor skill into `~/.claude/skills/nixi` |
@@ -62,9 +62,12 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 
 Claude Code is Nixi's default agent: it is used whenever Omarchy has no default
 agent and you have not picked one with SUPER+,. Its adapter, `claude-agent-acp`,
-depends on the unfree `claude-code`, so it is pinned only when
-`nixpkgs.config.allowUnfree` is true; otherwise it works if the adapter is on
-`PATH`. The same goes for any agent left out of the list.
+is Apache-2.0 but depends on the unfree `claude-code`, so pinning it needs
+unfree allowed. Nixi decides that by trying to build the adapter rather than by
+reading your config, and an agent it cannot build is skipped with a warning at
+rebuild time — naming the agent and what to do — instead of failing the build.
+A skipped agent still works if its adapter is on `PATH`, as does any agent left
+out of the list.
 
 `menuEntry.enable` makes Nix the owner of
 `~/.config/omarchy/extensions/omarchy-menu.jsonc`; move any entries you wrote

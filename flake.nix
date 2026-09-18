@@ -57,6 +57,44 @@
           touch $out
         '';
 
+        # The agents default and its capability probe (#16). CI already builds
+        # the module's activation package (.github/workflows/ci.yml), including
+        # one configuration that sets no `agents` and so uses the default -- but
+        # it only asserts that the default EVALUATES, never what it resolves to,
+        # and it evaluates it with allowUnfree = false, where the old expression
+        # happened to give the right answer. That is how a default that silently
+        # pinned one agent fewer than asked for survived. This check asserts the
+        # value, on both kinds of pkgs.
+        #
+        # legacyPackages cannot be reconfigured, so nixpkgs is imported twice
+        # here to get a pkgs that allows unfree and one that refuses it. The
+        # probe under test is the shipped nix/adapters.nix, not a copy.
+        hm-module-eval =
+          let
+            system = pkgs.stdenv.hostPlatform.system;
+            # The module's OWN default, not a copy of it: a check that asserts
+            # against a literal cannot notice the default drifting, which is the
+            # class of bug this is here to catch. Reading `options` needs no
+            # Home Manager evaluation, so no extra flake input.
+            agents = (self.homeModules.default {
+              config = { };
+              inherit (nixpkgs) lib;
+              inherit pkgs;
+            }).options.services.nixi.agents.default;
+            probe = allowUnfree: import ./nix/adapters.nix {
+              inherit (nixpkgs) lib;
+              inherit agents;
+              pkgs = import nixpkgs { inherit system; config = { inherit allowUnfree; }; };
+            };
+            refused = probe false;
+            allowed = probe true;
+          in
+          assert agents == [ "claude" "codex" ];  # the default is unconditional (#16)
+          assert refused.claudeAcp == null;      # unfree refused: skipped, not an eval error
+          assert refused.codexAcp != null;       # ... and the free adapter is still pinned
+          assert allowed.claudeAcp != null;      # unfree allowed: pinned, whatever config says
+          pkgs.runCommand "nixi-hm-module-eval" { } "touch $out";
+
       });
 
       formatter = forAllSystems (pkgs: pkgs.nixpkgs-fmt);
