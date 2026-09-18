@@ -107,16 +107,25 @@ test("startup failures reach the popup as structured fatal events", () => {
       [{ NIXI_AGENT: "codex", NIXI_CODEX_ACP_COMMAND: "invalid" }, /JSON array/],
       // No adapter anywhere: the card must say what to install, not surface a
       // bare spawn ENOENT from an adapter nobody told it was missing.
-      // Both routes, and the restart. nixarchy's comes first because this fork
-      // ships there; `pkgs.<name>` is the plain-NixOS answer. The old assertion
-      // named only pkgs.claude-agent-acp and still matched once the nixarchy
-      // clause was added, so it would not have noticed the clause going away
-      // again (nixarchy#741).
+      // Both routes, the prerequisite, and the sequence that applies them.
+      //
+      // The ASSIGNMENT is matched literally, agent name included. A regex of
+      // `services\.nixi\.agents.*` passed while the message recommended
+      // `[ "codex" ]` to a Claude user, and passed again with "Home Manager"
+      // deleted -- it asserted that some words appeared in some order, which is
+      // not what this message has to get right (nixarchy#741).
       [{ NIXI_AGENT: "claude", PATH: home },
-        /claude-agent-acp.*not on the system PATH.*services\.nixi\.agents.*pkgs\.claude-agent-acp.*unfree.*omarchy-restart-shell/],
+        /claude-agent-acp\) is not on the system PATH\. On nixarchy add services\.nixi\.agents = \[ "claude" \] to your Home Manager configuration; on plain NixOS add pkgs\.claude-agent-acp\..*unfree.*[Rr]ebuild.*omarchy-restart-shell/],
     ]) {
       const result = spawnSync(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
-        env: { ...process.env, HOME: home, NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", ...overrides },
+        // NIXI_CLAUDE_ACP_COMMAND cleared too: it was inherited from the
+        // developer's own environment, and a pinned adapter there would have
+        // satisfied the lookup and skipped the missing-adapter case entirely.
+        env: {
+          ...process.env, HOME: home,
+          NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", NIXI_CLAUDE_ACP_COMMAND: "",
+          ...overrides,
+        },
         encoding: "utf8", timeout: 10000,
       });
       assert.equal(result.status, 1, result.stderr);
