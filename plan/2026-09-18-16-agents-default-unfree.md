@@ -104,6 +104,22 @@ the check exercises the real expression.
    → verify by `nix flake check` passing, and by temporarily reverting step 3's
    default to confirm the check can actually fail.
 
+   **Deviation, applied during implementation.** As specified, the check passed
+   `agents = [ "claude" "codex" ]` as a literal, so nothing in the suite
+   verified the module's *actual* default — and step 3's own verification was
+   only "read the two lines back". A check asserting against a copy of the value
+   under test cannot notice that value drifting, which is precisely the class of
+   bug this issue is about, and it made this step's own failure test incoherent.
+   The check now reads `options.services.nixi.agents.default` from the module
+   and asserts it equals `[ "claude" "codex" ]`. Reading `options` needs no Home
+   Manager evaluation, so the spec's "no extra flake input" constraint holds.
+
+   Confirmed failing as required: with the old conditional default restored, the
+   check fails with `list of size '1' is not equal to list of size '2', left
+   hand side is '[ "codex" ]'` — i.e. it reproduces the reported bug exactly,
+   because `legacyPackages` reads `allowUnfree = false`. This check would have
+   caught the original defect.
+
 6. **Pre-merge, not a code change**: check whether any nixarchy host relies on
    the *default* to drop claude rather than setting `services.nixi.agents`
    explicitly. Such a host will now warn and start pinning 651 MiB and should
