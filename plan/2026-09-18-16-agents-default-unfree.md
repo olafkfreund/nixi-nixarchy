@@ -127,6 +127,36 @@ the check exercises the real expression.
    → verify by grepping the nixarchy config repo for `services.nixi.agents`;
    record the answer in the PR description.
 
+   **Answered, and it came out the opposite of the assumption.** No nixarchy
+   host is affected at all, because **nixarchy always defines the option
+   itself** — `nixarchy/modules/home.nix:615-619`:
+
+   ```nix
+   services.nixi.agents = [ "opencode" "codex" ]
+     ++ lib.optional (appEnabled "claude-code" || defaultAgent == "claude") "claude";
+   ```
+
+   An option's `default` applies only when nothing defines it, so nixi's default
+   is never consulted on a nixarchy machine. p620 gets claude through
+   `programs.nixarchy.defaultAgent = "claude"`
+   (`hosts/p620/nixos/nixarchy.nix:96`), and its installed `nixi-node` already
+   pins `claude-agent-acp-0.75.1`. It works today and this change does not touch
+   it — no new closure, no warning, no behaviour change. razer is likewise
+   unaffected; its `agents = [ "claude" ]` merges with nixarchy's list.
+
+   So the population this fix reaches is **users of nixi's Home Manager module
+   without nixarchy's module**, where the default is actually used. That matches
+   issue #16's own report, which is from "a nixarchy predating the release that
+   names the agents itself". The spec's 651 MiB risk stands as written — it is
+   about machines on the default — but no host we control is one of them, and
+   the open question about a release note is correspondingly smaller.
+
+   **Method note, because it caused a false claim in the PR.** The first check
+   used `which claude-agent-acp`, which proves nothing: the adapter is never on
+   `PATH` by design, it is baked into `nixi-node` as `NIXI_CLAUDE_ACP_COMMAND`
+   (as `hosts/p620/nixos/nixarchy.nix:91-92` says outright). The correct test is
+   grepping the installed `bridge/nixi-node` wrapper for the pinned store path.
+
 7. **`git commit`** each of steps 1-5 together as one change (they are not
    independently valid: step 3 without step 1 breaks eval on an unfree-refusing
    machine), citing the plan.
