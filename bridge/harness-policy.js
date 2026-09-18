@@ -109,5 +109,5 @@ export function resolveAdapter(agent, env = process.env) {
   // throws, codex-acp evaluates. So the clause is Claude's alone -- putting it
   // on both would be a warning Codex users cannot act on.
   const unfree = agent === "claude" ? " It needs unfree allowed, which nixarchy sets by default." : "";
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On nixarchy add services.nixi.agents = [ "${agent}" ]; on plain NixOS add pkgs.${name} to your configuration.${unfree} Either way the change reaches a running shell only after omarchy-restart-shell. Or point ${variable} at an adapter you already have.`);
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On nixarchy add services.nixi.agents = [ "${agent}" ] to your Home Manager configuration; on plain NixOS add pkgs.${name}.${unfree} Either way the change reaches a running shell only after omarchy-restart-shell. Or point ${variable} at an adapter you already have.`);
 }
