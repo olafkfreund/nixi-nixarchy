@@ -107,7 +107,13 @@ test("startup failures reach the popup as structured fatal events", () => {
       [{ NIXI_AGENT: "codex", NIXI_CODEX_ACP_COMMAND: "invalid" }, /JSON array/],
       // No adapter anywhere: the card must say what to install, not surface a
       // bare spawn ENOENT from an adapter nobody told it was missing.
-      [{ NIXI_AGENT: "claude", PATH: home }, /claude-agent-acp.*not on the system PATH.*pkgs\.claude-agent-acp/],
+      // Both routes, and the restart. nixarchy's comes first because this fork
+      // ships there; `pkgs.<name>` is the plain-NixOS answer. The old assertion
+      // named only pkgs.claude-agent-acp and still matched once the nixarchy
+      // clause was added, so it would not have noticed the clause going away
+      // again (nixarchy#741).
+      [{ NIXI_AGENT: "claude", PATH: home },
+        /claude-agent-acp.*not on the system PATH.*services\.nixi\.agents.*pkgs\.claude-agent-acp.*omarchy-restart-shell/],
     ]) {
       const result = spawnSync(process.execPath, [new URL("bridge.js", import.meta.url).pathname], {
         env: { ...process.env, HOME: home, NIXI_ACP_COMMAND: "", NIXI_CODEX_ACP_COMMAND: "", ...overrides },

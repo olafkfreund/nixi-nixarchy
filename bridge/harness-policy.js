@@ -95,5 +95,10 @@ export function resolveAdapter(agent, env = process.env) {
   const found = firstExecutable(onPath(name, env));
   if (found) return [found];
   const variable = agent === "codex" ? "NIXI_CODEX_ACP_COMMAND" : "NIXI_CLAUDE_ACP_COMMAND";
-  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On NixOS add pkgs.${name} to your configuration, or point ${variable} at it.`);
+  // Two routes, nixarchy's first: this fork ships on nixarchy machines, where
+  // `services.nixi.agents` is what pins an adapter and merges with the list
+  // nixarchy already sets. `pkgs.<name>` works anywhere and stays for a plain
+  // NixOS machine. Naming only the second sent nixarchy users around the
+  // mechanism built for them (nixarchy#741).
+  throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On nixarchy add services.nixi.agents = [ "${agent}" ]; on plain NixOS add pkgs.${name} to your configuration. Either way the change reaches a running shell only after omarchy-restart-shell. Or point ${variable} at an adapter you already have.`);
 }
