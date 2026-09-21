@@ -159,6 +159,13 @@ once it has passed its checks.
       "Nixi's panel — the one `SUPER + H` opens —" links to the new
       section's anchor.
     - PR linking nixi #22's intent, spec and plan.
+    *Deviation (implementation):* the section went just before `### If you
+    installed Claude some other way`, not after the opening paragraph. The
+    opening paragraph is followed by "Two things differ, and the second
+    matters more than it looks.", which introduces the next two sections, so
+    a section inserted there would have split that sentence from them. In the
+    new spot, the ACP subsection (which is about Nixi's panel) nests under
+    the Nixi section. Done as nixarchy #858, PR #859.
     → verify: `git diff --stat origin/main` shows exactly those two files;
     the repo's own checks pass on the PR (including the docs link checker if
     it has one).
