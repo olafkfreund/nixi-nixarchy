@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 26
 spec: spec/2026-09-21-26-refresh-showcase.md
 ---
