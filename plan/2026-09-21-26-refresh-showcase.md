@@ -142,3 +142,32 @@ Recorded before any #26 change, because the facts moved:
 - The pin: revert the nixarchy bump commit.
 - razer: nothing persists. The links are restored in step 6, and Home
   Manager restores them on the next switch in any case.
+
+## Result (implementation, 2026-09-22)
+
+- **Pin:** nixarchy #865 (`1c3fc7c`) merged; #869 (`1e25cb8`, with #31) is
+  open with CI running at the time of this commit.
+- **Media**, cut from `refresh/nixi26.mp4` plus the #31 scene-2 still
+  (source seconds in `cut26.py` terms):
+  - FAQ 106–120, `/mechanic` 128–140, the first prompt, the write prompt
+    held 180–186, the result held 240–246;
+  - the undo from **337.8** s: from 335 s the frames still showed a stray
+    "yy" left in the box by fast Y presses, so those 2.8 s were cut;
+  - the undo's removal prompt held 400–405, and the restored file held
+    448–456.
+- **Sizes:**
+  - MP4: 63.4 s, 2.07 MB;
+  - GIF: 34.0 s, 4.25 MB, at **6 fps and 600 px**. 8 fps / 640 px was
+    6.3 MB and 7 fps / 600 px was 5.07 MB, over the 5 MB budget;
+  - stills: 183 KB (scene 2), 87 KB (scene 5), 242 KB (FAQ);
+  - `docs/media`: 8.6 MB in total.
+- **Poster:** re-taken from the new MP4 (the undo's "back the way it was"),
+  since the old one came from the first recording.
+- **Privacy:** contact sheets of both videos and all three stills were
+  reviewed; only the card is visible.
+- **Docs:**
+  - scene 2 leads with Install ▸ Packages;
+  - scene 5 says Y/N or the buttons, and shows the whole command;
+  - "No AI needed" gains the FAQ figure, and its grid goes from 3 columns
+    to 2 (four figures);
+  - the #19–#21 notes are gone; #27's is kept.
