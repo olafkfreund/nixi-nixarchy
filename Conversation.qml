@@ -966,7 +966,7 @@ Item {
     onRowsChanged: root.revealIncomingResults()
     onBrowseRequested: function(mode, query) { root.enterSearchMode(mode, query) }
     onFaqAnswered: function(question, answer) {
-      root.messages.append({ role: "You", body: question })
+      messages.append({ role: "You", body: question })
       root.showNixiMessage(answer)
     }
     onNixiActionRequested: function(action) {
