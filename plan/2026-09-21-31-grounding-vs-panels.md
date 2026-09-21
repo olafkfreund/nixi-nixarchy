@@ -84,6 +84,15 @@ spec: spec/2026-09-21-31-grounding-vs-panels.md
 
    → verify: step 1's test passes; the existing `test_local_search` still
    passes.
+
+   *Deviation (implementation):* the tools part is capped at **900**
+   characters, not 600. At 600, rule 1 was cut mid-sentence and rule 2 ("menu
+   path, key only if bound, then terminal") never appeared. Rows plus both
+   rules measure 727–804 characters. Cells are kept as written (backticks
+   included): stripping only their edges left mismatched backticks inside the
+   terminal column. The threshold logic keeps today's behaviour exactly when
+   no tool matches, including the case where a keybinding question carries a
+   manual excerpt below 3.8.
 3. **`bridge/grounding.test.js`**: a test that the prompt contains "not the
    whole answer", "lead with it after checking it is on" and `omarchy menu
    keybindings --print`, and does not contain "answer directly from this".
@@ -92,17 +101,41 @@ spec: spec/2026-09-21-31-grounding-vs-panels.md
    Update the "Same wording nixi-server used" comment to say why it changed
    (#31).
    → verify: the step 3 test passes; all bridge tests pass (50 + 1).
+
+   *Deviation (implementation):* `CONTEXT_LIMIT` is **1800**, not 1600, to
+   fit the 900-character tools part and a 700-character manual excerpt. The
+   longest measured output (install-an-app) is 1,323 characters.
 5. **Repo checks**: `python3 tools/test_nixi.py`, `node --test
    bridge/*.test.js`, `nix flake check`, `git diff --check`, and `omarchy
    plugin validate` on a clean copy. Also check that the fixture directory
    stays out of the package: `nix/package.nix` installs from `bin/`, `share/`
    and named files, never from `tools/`.
    → verify: all pass; `find result/ -name 'manual-grounding'` is empty.
+
+   *Deviation (implementation):* `nix flake check`'s selfcheck failed at
+   first. The repo's branding checks (`test_no_runtime_rename`,
+   `test_rebrand_is_complete`) scan every tracked file, and the whole copied
+   nixarchy pages mention `omarchy-help` and "Omarchy ask". Each fixture is now
+   only the one section the test needs (scoring is per section, so the scores
+   are unchanged); none of those strings remain, and no check is loosened.
 6. **Measure the real ranking again** with the real 70-page manual (the
    spec's table), before and after, for the six questions and the five
    controls.
    → verify: the tools id comes first for the six; the controls are
    unchanged; recorded under this step.
+
+   *Result (implementation), against the real 70-page manual:*
+
+   | question | output vs before | leads with | manual excerpt kept |
+   | --- | --- | --- | --- |
+   | install btop | changed | `nixarchy.pkg` | none (dual boot dropped) |
+   | install an app | changed | `nixarchy.pkg` | install troubleshooter |
+   | Python env for one project | changed | `nixarchy.devenv` | Per-project environments |
+   | throwaway VM | changed | `nixarchy.microvm` | none (Windows VM dropped) |
+   | run a container | changed | `nixarchy.podman` | none (getting started dropped) |
+   | app only ships a .deb | changed | `nixarchy.distrobox` | none (troubleshooter dropped) |
+   | remove an app | changed | `nixarchy.pkg` | none (Web Apps dropped) |
+   | close an app / terminal app / scratchpad / theme | **identical** | — | as before |
 7. **razer, through the card**:
    1. Build with razer's adapters (`build-with-adapters.sh`) and `nix copy`
       it to razer.
@@ -122,6 +155,23 @@ spec: spec/2026-09-21-31-grounding-vs-panels.md
 
    Any miss: stop, record it here, and change the wording or triggers in
    the same commit. Stop after two failed rounds and ask.
+
+   *Result (implementation), razer 2026-09-21, the real card in Guide, a
+   fresh session per question:*
+
+   | question | leads with | keys stated |
+   | --- | --- | --- |
+   | install btop | btop already installed (true); for others Install ▸ Packages; checked it is on | "Super+Alt+N … I couldn't find that key", so it says use the menu |
+   | Python env | Dev environments not installed; `nixarchy-service-enable devenv`, then `nixarchy dev init python` | Super+Alt+E named as not working yet |
+   | throwaway VM | Trigger ▸ Sandbox, the MicroVMs panel | Super+Alt+V, checked as bound (true) |
+   | container | Apps ▸ Podman ("on for you") | Super+Alt+O: "your keybindings don't show it", so it says use the menu |
+   | .deb | Trigger ▸ Boxes, "turned on here" | "no keyboard shortcut right now" |
+   | install an app (#31's own case) | Install ▸ Packages | "Super+Alt+N isn't bound on this machine" |
+
+   6/6 lead with the right panel, and no unbound key is offered as working.
+   Podman now reads as *on*: `nixarchy-plugin --enabled nixarchy.podman`
+   returned 0 on razer (shell.json changed at 23:04, since the #23 run), so
+   the answer matches the machine.
 8. **Commit and PR**: `fix: the card's manual excerpt no longer overrides
    nixarchy's own tools (#31)`, with the template, the artifacts, the
    measurement table and the razer screenshots.

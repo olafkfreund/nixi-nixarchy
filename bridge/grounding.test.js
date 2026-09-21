@@ -38,3 +38,15 @@ test("without a nixi config directory the agent falls back to HOME", async () =>
   const { agent, home } = await runBridge({});
   assert.equal(agent.find((entry) => entry.method === "newSession").cwd, home);
 });
+
+test("the excerpt is background: lead with nixarchy's own tool, check a key before stating it (#31)", async () => {
+  const { agent } = await runBridge({
+    context: "From the notes — nixarchy's own tools: install · nixarchy.pkg · Install ▸ Packages",
+    messages: [{ type: "prompt", text: question }],
+  });
+  const sent = agent.find((entry) => entry.method === "prompt").text;
+  assert.match(sent, /not the whole answer/);
+  assert.match(sent, /lead with it after checking it is on/);
+  assert.match(sent, /omarchy menu keybindings --print/);
+  assert.doesNotMatch(sent, /answer directly from this/);
+});
