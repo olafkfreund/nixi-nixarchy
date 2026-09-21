@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 20
 intent: intent/2026-09-21-20-permission-keys.md
 ---
