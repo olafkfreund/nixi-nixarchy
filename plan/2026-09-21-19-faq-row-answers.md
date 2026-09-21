@@ -53,6 +53,16 @@ spec: spec/2026-09-21-19-faq-row-answers.md
 
    → verify: the question and the answer appear in the card; 0 TypeErrors;
    the link is back on its Home Manager target.
+
+   *Deviation (implementation):* a plain `nix build .#nixi` pins no ACP
+   adapter. Home Manager builds Nixi with `package.override` and the user's
+   adapters, so the swapped-in card reported "claude-agent-acp is not on the
+   system PATH". FAQ answers need no agent, so the fix still showed, but #20
+   and #21 need Claude. The test build is now
+   `nixi.override { claudeAcp; codexAcp; opencodeAcp }`, using the exact store
+   paths razer's Home Manager `nixi-node` already pins, read from that
+   wrapper. With that build on razer, the FAQ answer appeared, 0 TypeErrors
+   were logged, and the link was restored.
 6. **Commit and PR**: `fix: choosing a FAQ row shows its answer (#19)`,
    using the repo's PR template, linking intent, spec and plan, with the
    razer screenshot.
