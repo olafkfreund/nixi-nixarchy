@@ -33,7 +33,9 @@ from the ACP tool call's own fields (`@agentclientprotocol/sdk`
   `+ `. A missing `oldText` means a new file, so there are only `+` lines.
   This is deliberately not a computed unified diff: it shows exactly the
   strings the agent will write, with no algorithm in between to trust.
-- **`content` items of `type: "content"`** with text: that text.
+- **`content` items of `type: "content"`** whose content block is text
+  (`item.content.type === "text"`): `item.content.text`. Terminal items are
+  skipped, because they refer to output, not to what will run.
 - **The cap:** after 16 KB or 400 lines, whichever comes first, the detail
   is cut. `omitted` counts the characters left out, and one final line says:
   "… N more characters not shown. If you cannot see all of what you are
