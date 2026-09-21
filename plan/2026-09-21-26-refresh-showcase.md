@@ -31,6 +31,29 @@ spec: spec/2026-09-21-26-refresh-showcase.md
   - every still and every 2 s of video reviewed;
   - GIF < 5 MB, MP4 < 8 MB, stills < 250 KB.
 
+## Revision (2026-09-22, before implementation)
+
+Recorded before any #26 change, because the facts moved:
+
+- **Step 2 was done early** as nixarchy #865 (pin `1c3fc7c`). Recording then
+  exposed #31: in the card, the manual excerpt overrode "prefer nixarchy's
+  own tools", so scene 2 was wrong. #31 is fixed (nixi #32, `1e25cb8`), so
+  step 2 is **repeated** as a second bump, to `1e25cb8`.
+- **Step 5 was done in two sittings**, both against nixi builds from
+  `master`, through the reversible swap:
+  - the 2026-09-21 recording (`refresh/nixi26.mp4`): the FAQ still, scene 5
+    (the whole write command, answered with **Y**) and the undo;
+  - the #31 test run: scene 2 as **stills**
+    (`refresh/q31-scene2.png`, "how do I install an app?" leading with
+    Install ▸ Packages and saying Super+Alt+N is not bound).
+
+  The recording's own scene 2 used the pre-#31 build and is **not** used.
+  So the MP4 and GIF are re-cut from the recording without its scene 2, and
+  the scene 2 still is shown as a short held frame in its place. No new
+  recording session is needed.
+- **Everything else is unchanged:** same crop and size budget, the
+  privacy review, the docs edits, and the nixarchy GIF copy.
+
 ## Steps
 
 1. **Gate.** Check with `gh pr view` that #19, #20 and #21 are `MERGED`.
