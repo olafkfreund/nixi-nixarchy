@@ -147,6 +147,16 @@ spec: spec/2026-09-21-23-prefer-nixarchy-plugins.md
    plan in the same commit, and re-run. Stop after two failed rounds and ask.
    Remove `/tmp/nixi23-*` on razer afterwards.
 
+   *Result (implementation):* the branch passed 5/5. For btop it first said
+   the package is already installed (true on razer) and then led with the
+   panel for other apps. On `master`, 0/5 answers led with a panel. Q3
+   mentioned the MicroVMs panel second, so "no answer names a panel" was
+   slightly too strong, and the baseline is restated as "0/5 lead with a
+   panel". `master` also got razer's state wrong twice (Boxes "off"; Podman
+   never mentioned). The first run fed all five questions into one prompt,
+   because `claude -p` read the rest of the list from stdin. It was re-run
+   with `< /dev/null`, one question per call.
+
 9. **Commit and PR.** One commit, `feat: Nixi sends people to nixarchy's own
    tools first (#23)`, on `feat/23-prefer-nixarchy-plugins`. The PR follows
    `.github/pull_request_template.md`, links the intent, spec and plan, and
@@ -165,7 +175,7 @@ spec: spec/2026-09-21-23-prefer-nixarchy-plugins.md
 | `nix flake check` | passes |
 | `omarchy plugin validate <clean copy>` | passes |
 | razer behaviour, branch | 5/5 answers lead with the right panel and match razer's state |
-| razer behaviour, master | 0/5 name a panel (the baseline) |
+| razer behaviour, master | 0/5 lead with a panel (the baseline) |
 
 ## Rollback
 
