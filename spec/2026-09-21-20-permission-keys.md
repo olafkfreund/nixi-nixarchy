@@ -32,8 +32,8 @@ anything else while a prompt is showing (`root.pendingPermissionId !== ""`):
 **2. The two existing `Shortcut { sequence: "Y" / "N" }` pairs** (overlay
 and pinned window) get the same guard. Their `enabled` becomes
 `root.pendingPermissionId !== "" && prompt.text.length === 0`. They still
-matter when focus is not in the composer (the transcript, or a disabled
-composer for an agent without steering), and with the guard both paths
+matter when focus is not in the composer (the transcript, or a composer that is
+disabled because the agent does not advertise steering), and with the guard both paths
 follow one rule.
 
 The dialog's button labels stay `N  Deny` and `Y  Allow`. One line is added
@@ -54,9 +54,11 @@ remembered.
 
 ## Risks
 
-- **Codex and OpenCode** (no steering): their composer is disabled while
-  waiting, so only the `Shortcut` path runs. The guard is harmless there,
-  because a disabled composer is empty.
+- **Agents that do not advertise steering** (`_meta.steering.supported` at
+  initialize; the bridge decides this per agent, not by name): the composer
+  is disabled while waiting, so only the `Shortcut` path runs. The guard is
+  harmless there: a disabled composer holds whatever was typed before, and
+  Y/N then need a cleared box or a click, the same rule as everywhere.
 - **A search row selected when the prompt appears**: Return is ignored while
   a prompt is up, so it cannot run the row either. That is intended.
 
