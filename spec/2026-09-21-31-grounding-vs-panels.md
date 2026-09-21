@@ -51,8 +51,8 @@ to trigger words, matched against the question's tokens after the existing
 | `nixarchy.pkg` | install, uninstall, remove, package, apt, pacman, yay, flatpak |
 | `nixarchy.devenv` | environment, toolchain, venv, virtualenv, devenv, python, node, nodejs, go, rust, java, ruby, sdk, project |
 | `nixarchy.microvm` | vm, virtual, sandbox, throwaway, disposable, microvm |
-| `nixarchy.podman` | container, docker, podman, image, compose |
-| `nixarchy.distrobox` | deb, rpm, ubuntu, debian, fedora, arch, distro, distribution, box, distrobox, appimage |
+| `nixarchy.podman` | container, docker, podman, compose |
+| `nixarchy.distrobox` | deb, rpm, aur, ubuntu, debian, fedora, arch, distro, distribution, box, distrobox, appimage |
 
 The trigger words live in code, next to the ranking they steer. The facts
 stay in KNOWLEDGE.md, which is still the single source of truth:
@@ -126,8 +126,9 @@ fails, and the question-first order are unchanged.
   a package-manager row, and its right excerpt ("Apps & windows", 4.94) would
   be dropped by the 5.5 threshold; "open a terminal app" likewise. So the
   package manager triggers only on install and remove words, never on "app".
-  "aur" moved to Distrobox, which is where an AUR-only program goes. The
-  test set pins non-install "app" questions to today's output.
+  "aur" moved to Distrobox, which is where an AUR-only program goes, and
+  "image" was left out of Podman's triggers ("open an image"). The test set
+  pins non-install "app" questions to today's output.
 - **The 5.5 threshold drops a good manual excerpt** scoring between 3.8 and
   5.5 when a tools row is present. It is measured: none of the six questions
   loses a relevant excerpt. The CI table (below) pins it.
