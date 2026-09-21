@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 19
 intent: intent/2026-09-21-19-faq-row-answers.md
 ---
