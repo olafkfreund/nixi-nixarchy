@@ -71,7 +71,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     filter = path: type:
       let base = baseNameOf path; in
       !(lib.hasSuffix ".png" base || lib.hasSuffix ".gif" base
-        || base == ".git" || base == "result");
+        || base == ".git" || base == "result" || base == "docs");
   };
 
   nativeBuildInputs = [ makeWrapper ];

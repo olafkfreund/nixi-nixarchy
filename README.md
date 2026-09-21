@@ -1,5 +1,6 @@
-<h1 align="center">❄ Nixi</h1>
+<h1 align="center">✨ Nixi</h1>
 <p align="center"><em>Your nixarchy guide — a guided tour, a learning path, and an AI tutor that actually knows your machine.</em></p>
+<p align="center"><a href="https://olafkfreund.github.io/nixi-nixarchy/"><img src="docs/media/nixi-demo.gif" alt="Nixi answering a question, then making and undoing a change in Mechanic" width="640"></a></p>
 
 Nixi is an Omarchy overlay card: press a key, ask "how do I…" about
 [nixarchy](https://github.com/olafkfreund/nixarchy), and it answers — the keys,
@@ -15,6 +16,29 @@ an agent and the same card becomes a tutor.
 > Nixi began as a fork of [Archy](https://github.com/respira-crece-lidera) by
 > Luke Warren Wills, retargeted from Omarchy/Arch to nixarchy/NixOS. The
 > history is in [docs/FORK.md](docs/FORK.md).
+
+---
+
+## A first session
+
+Sam has just installed nixarchy, and knows Arch but not NixOS. This is one real
+session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
+[site](https://olafkfreund.github.io/nixi-nixarchy/) has the full recording.
+
+| | |
+|---|---|
+| <img src="docs/media/01-search.png" alt="Typing install shows menu entries, files and repositories" width="420"> | **1. Open it.** Sam clicks the ✨ in the bar and types `install`. Before any AI is involved, the card matches Omarchy menu entries, apps, files and repositories. Enter sends the text as a question. |
+| <img src="docs/media/02-answer.png" alt="Nixi's answer to how do I install an app" width="420"> | **2. Ask.** "How do I install an app?" The answer is nixarchy's, not `pacman -S`: pick it from **Install**, which adds it to `~/.config/nixarchy/apps.nix`, and nothing happens until **Apply changes** (`nixarchy apply`). It comes from the local manual Nixi searches before every question. |
+| <img src="docs/media/03-your-machine.png" alt="Nixi reporting the NixOS generation and disk use" width="420"> | **3. Ask about the machine.** "What generation am I on, how full is my disk?" Nixi runs read-only checks and answers with this laptop's numbers, which matched `readlink /nix/var/nix/profiles/system` and `df`. |
+| <img src="docs/media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of changing anything" width="420"> | **4. Guide changes nothing.** Asked to add btop, Nixi explains instead: btop is already installed. In Guide the bridge cancels every permission request. |
+| <img src="docs/media/05-mechanic-asks.png" alt="Mechanic asking permission before a change" width="420"> | **5. Mechanic asks first.** After `/mechanic`, "put btop on SUPER+ALT+T" is done step by step, and each step needs **Allow**. Click the buttons: Y and N [do not work yet](https://github.com/olafkfreund/nixi-nixarchy/issues/20). Mechanic also asks before read-only lookups, and a long command can be [cut short in the prompt](https://github.com/olafkfreund/nixi-nixarchy/issues/21), so read the agent's message too. |
+| <img src="docs/media/06-mechanic-done.png" alt="Nixi reporting the change and how it verified it" width="420"> | **6. Checked.** One line is added to `~/.config/hypr/bindings.lua`. Nixi reloads Hyprland, confirms the live binding, and says where the backup is. |
+| <img src="docs/media/07-undo.png" alt="Nixi restoring the file from its backup" width="420"> | **7. Undo.** "Now undo it." Nixi restores its backup and checks the binding is gone. `/guide` makes it read-only again. |
+
+With no agent at all: `/tour` ([step 2](docs/media/08-tour.png)), `/learn`
+([a lesson](docs/media/09-learn.png)) and the [calculator](docs/media/10-calculator.png).
+The FAQ rows show up in search too, but choosing one
+[does nothing yet](https://github.com/olafkfreund/nixi-nixarchy/issues/19).
 
 ---
 
@@ -100,7 +124,7 @@ journalled, so a failure restores exactly what was there before.
 
 | | |
 |---|---|
-| **Open it** | The ❄ in the bar, `nixi`, or SUPER+SPACE → Help. Bind a key if you like: `o.bind("SUPER + H", "Nixi", "nixi")` in `~/.config/hypr/bindings.lua` |
+| **Open it** | The ✨ in the bar, `nixi`, or SUPER+SPACE → Help. Bind a key if you like: `o.bind("SUPER + H", "Nixi", "nixi")` in `~/.config/hypr/bindings.lua` |
 | **Ask** | Type and press Enter. The card opens empty — nothing appears until you ask |
 | **Search first** | While you type, FAQ answers, the Tour, the Learning path, Omarchy menu entries and apps appear as rows. `@` searches files, `^` repositories, `%` windows |
 | **Tour** | `/tour`, or `nixi --tour`. Eleven steps that watch Hyprland events, so a step completes when you actually did it. Close the card mid-tour; `/tour` resumes where you were |
