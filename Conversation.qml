@@ -42,6 +42,8 @@ Item {
   property string queuedPrompt: ""
   property string pendingPermissionId: ""
   property string pendingPermissionTitle: ""
+  property string pendingPermissionDetail: ""
+  property int pendingPermissionOmitted: 0
   property var permissionQueue: []
   property string permissionMode: "permission"
   property bool permissionModePending: false
@@ -1195,14 +1197,19 @@ Item {
   function clearPermissions() {
     pendingPermissionId = ""
     pendingPermissionTitle = ""
+    pendingPermissionDetail = ""
+    pendingPermissionOmitted = 0
     permissionQueue = []
   }
 
-  function enqueuePermission(id, title) {
-    var request = { id: String(id || ""), title: String(title || "Allow tool?") }
+  function enqueuePermission(id, title, detail, omitted) {
+    var request = { id: String(id || ""), title: String(title || "Allow tool?"),
+                    detail: String(detail || ""), omitted: Number(omitted) || 0 }
     if (pendingPermissionId === "") {
       pendingPermissionId = request.id
       pendingPermissionTitle = request.title
+      pendingPermissionDetail = request.detail
+      pendingPermissionOmitted = request.omitted
     } else {
       permissionQueue = permissionQueue.concat([request])
     }
@@ -1212,12 +1219,16 @@ Item {
     if (permissionQueue.length === 0) {
       pendingPermissionId = ""
       pendingPermissionTitle = ""
+      pendingPermissionDetail = ""
+      pendingPermissionOmitted = 0
       return
     }
     var request = permissionQueue[0]
     permissionQueue = permissionQueue.slice(1)
     pendingPermissionId = request.id
     pendingPermissionTitle = request.title
+    pendingPermissionDetail = request.detail
+    pendingPermissionOmitted = request.omitted
   }
 
   function handleAgentLine(rawLine) {
@@ -1263,7 +1274,7 @@ Item {
         var toolStatus = String(event.status || "in_progress")
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
-        enqueuePermission(event.id, event.title)
+        enqueuePermission(event.id, event.title, event.detail, event.omitted)
       } else if (event.type === "permission_mode") {
         permissionMode = event.mode === "yolo" ? "yolo" : "permission"
         permissionModePending = false
@@ -2882,12 +2893,56 @@ Item {
           Text {
             width: parent.width
             text: root.pendingPermissionTitle
+            textFormat: Text.PlainText
             color: root.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             wrapMode: Text.Wrap
             maximumLineCount: 5
             elide: Text.ElideRight
+          }
+
+          // What is being approved, whole: the command, the diff, the input.
+          // Agent-supplied, so plain text; a long one scrolls inside the card.
+          // When the bridge had to cut it, its last line is the cut notice,
+          // shown below in the urgent colour instead.
+          Flickable {
+            width: parent.width
+            height: Math.min(detailText.implicitHeight, root.height * 0.45)
+            visible: root.pendingPermissionDetail !== ""
+            clip: true
+            contentWidth: width
+            contentHeight: detailText.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+
+            TextEdit {
+              id: detailText
+              width: parent.width
+              text: root.pendingPermissionOmitted > 0
+                ? root.pendingPermissionDetail.slice(0, root.pendingPermissionDetail.lastIndexOf("\n"))
+                : root.pendingPermissionDetail
+              readOnly: true
+              selectByMouse: true
+              textFormat: TextEdit.PlainText
+              wrapMode: TextEdit.WrapAnywhere
+              color: root.foreground
+              font.family: "JetBrainsMono Nerd Font"
+              font.pixelSize: Style.font.caption
+            }
+
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+          }
+
+          Text {
+            width: parent.width
+            visible: root.pendingPermissionOmitted > 0
+            text: root.pendingPermissionDetail.slice(root.pendingPermissionDetail.lastIndexOf("\n") + 1)
+            textFormat: Text.PlainText
+            color: Color.urgent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
           }
 
           Text {

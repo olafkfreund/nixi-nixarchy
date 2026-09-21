@@ -558,9 +558,27 @@ def test_permission_keys_guard():
     print("  ok  Y and N answer a prompt, and never over typed text")
 
 
+def test_permission_detail_is_plain():
+    """The permission card shows what is being approved as plain text: an
+    agent-supplied title or detail cannot restyle or hide part of itself, and a
+    long detail scrolls inside the card instead of being cut short (#21)."""
+    qml = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = qml.split("id: permissionLayer")[1].split("id: cardFade")[0]
+    title = card.split("text: root.pendingPermissionTitle")[1].split("}")[0]
+    assert "textFormat: Text.PlainText" in title, "the permission title is not PlainText"
+    assert "Flickable {" in card, "the permission detail does not scroll"
+    detail = card.split("Flickable {")[1].split("ScrollBar.vertical")[0]
+    assert "TextEdit {" in detail and "root.pendingPermissionDetail" in detail, \
+        "the permission detail is not in the Flickable"
+    assert "textFormat: TextEdit.PlainText" in detail, "the permission detail is not PlainText"
+    assert "readOnly: true" in detail, "the permission detail is editable"
+    print("  ok  the permission card shows its detail as plain, scrolling text")
+
+
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
                test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_permission_keys_guard):
+               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_permission_keys_guard,
+               test_permission_detail_is_plain):
         fn()
     print("\nall checks passed")

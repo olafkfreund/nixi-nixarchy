@@ -55,6 +55,11 @@ spec: spec/2026-09-21-21-permission-detail.md
    - Guide: no `permission` event is emitted for either.
 
    → verify: both fail before step 4.
+
+   *Deviation (implementation):* only the Mechanic test fails before step 4.
+   The Guide test passes before and after it: Guide returns before the emit,
+   and step 4 does not change that. It stays as a guard for PLEASE_EDIT and
+   PLEASE_RUN.
 4. **`bridge/bridge.js`**: import `permissionDetail`; in `requestPermission`,
    right before the `emit({ type: "permission" … })`, compute it and add
    `detail` and `omitted` to the event.
@@ -84,6 +89,11 @@ spec: spec/2026-09-21-21-permission-detail.md
      colour says the same as the bridge's cut line.
 
    → verify: `tools/test_nixi.py`'s new static check (step 7) passes.
+
+   *Deviation (implementation):* the shell's `Color` has no warning role, so
+   the cut line uses `Color.urgent`. That `Text` shows the bridge's own last
+   line of `detail`, and the `TextEdit` shows the rest, so the notice appears
+   once and says exactly what the bridge wrote.
 7. **`tools/test_nixi.py`**: `test_permission_detail_is_plain()` asserts
    that the permission card's title and detail declare `PlainText` and the
    detail sits in a `Flickable`. Register it.

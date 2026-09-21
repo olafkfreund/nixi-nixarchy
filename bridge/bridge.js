@@ -11,6 +11,7 @@ import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
+import { permissionDetail } from "./permission-detail.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -240,7 +241,8 @@ const client = {
       }
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
-    emit({ type: "permission", id: requestId, title, options });
+    const { detail, omitted } = permissionDetail(params.toolCall);
+    emit({ type: "permission", id: requestId, title, options, detail, omitted });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options });
     });
