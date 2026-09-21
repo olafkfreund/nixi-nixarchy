@@ -572,6 +572,10 @@ def test_permission_detail_is_plain():
         "the permission detail is not in the Flickable"
     assert "textFormat: TextEdit.PlainText" in detail, "the permission detail is not PlainText"
     assert "readOnly: true" in detail, "the permission detail is editable"
+    # Conversation {} is created with no size, so root.height is 0 and a
+    # detail capped by it collapses to nothing (#21, seen on razer).
+    assert "root.height" not in card.split("Flickable {")[1].split("TextEdit {")[0], \
+        "the permission detail is sized from root, which has no height"
     print("  ok  the permission card shows its detail as plain, scrolling text")
 
 

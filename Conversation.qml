@@ -2908,7 +2908,7 @@ Item {
           // shown below in the urgent colour instead.
           Flickable {
             width: parent.width
-            height: Math.min(detailText.implicitHeight, root.height * 0.45)
+            height: Math.min(detailText.implicitHeight, permissionLayer.height * 0.45)
             visible: root.pendingPermissionDetail !== ""
             clip: true
             contentWidth: width

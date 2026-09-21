@@ -120,6 +120,28 @@ spec: spec/2026-09-21-21-permission-detail.md
     Delete the probe file, restore the link, and set `/guide`.
     → verify: full command shown; diff shown; `bindings.lua` unchanged;
     link restored; trust back to Guide.
+
+    *Deviation (implementation):* the first razer run showed no detail at
+    all. The cause was the Flickable height, `Math.min(…, root.height *
+    0.45)`: `Conversation {}` is instantiated in `Ask.qml` with no size, so
+    `root.height` is 0 and the detail collapsed. It is now capped by
+    `permissionLayer.height * 0.45`, the layer that fills the card or pinned
+    window. `test_permission_detail_is_plain` fails if the Flickable is sized
+    from `root` again; it was seen to fail on the old line.
+
+    *Result (implementation):* with that fix, on razer with Claude (0.79.0):
+    - a Bash prompt shows its command under the title;
+    - a Read prompt shows its raw input as JSON;
+    - an Edit to `bindings.lua` shows the path and the `-`/`+` lines, and was
+      **denied**, leaving `bindings.lua` byte-identical;
+    - a 2.6 KB, 61-command `touch` chain showed its title cut at five lines,
+      while the detail scrolled to its last command
+      (`touch /tmp/nixi21-TAIL-IS-VISIBLE`), then was denied, so no file was
+      created.
+
+    Step 3's edit to a probe file was covered by the `bindings.lua` edit
+    prompt, which shows the same diff, so the probe file was deleted
+    unused. The link and trust level were restored.
 11. **Commit and PR**: `fix: a permission prompt shows what is being
     approved (#21)`, with the template, artifacts and screenshots. Rebase on
     `master` after #20 merges and resolve the scene-5 sentence then.
