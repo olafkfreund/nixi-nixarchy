@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 21
 spec: spec/2026-09-21-21-permission-detail.md
 ---
