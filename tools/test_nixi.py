@@ -488,9 +488,45 @@ def test_nixi_rows_are_searchable():
     print("  ok  FAQ, tour and learn are searchable from the card")
 
 
+def test_prefers_nixarchy_plugins():
+    """Nixi leads with nixarchy's own panels for the five jobs they exist for,
+    and checks each is on before recommending it (#23)."""
+    ids = ("nixarchy.pkg", "nixarchy.devenv", "nixarchy.microvm",
+           "nixarchy.podman", "nixarchy.distrobox")
+    knowledge = open(os.path.join(ROOT, "share/KNOWLEDGE.md")).read()
+    missing = [i for i in ids if i not in knowledge]
+    assert not missing, f"KNOWLEDGE.md does not name {missing}"
+    assert "nixarchy-plugin --enabled" in knowledge, "KNOWLEDGE.md has no live check"
+
+    skill = open(os.path.join(ROOT, "skills/nixi/SKILL.md")).read()
+    assert "Prefer nixarchy's own tools" in skill, "the skill has no prefer-the-panel step"
+    assert "nixarchy-plugin" in skill, "the skill never checks a plugin"
+    assert "nixarchy-plugin --enabled" in open(os.path.join(ROOT, "share/CLAUDE.md")).read()
+
+    faq = {e["q"]: e["a"] for e in json.load(open(os.path.join(ROOT, "share/faq.json")))}
+    for q in ("Run a container", "Software that only ships for Ubuntu or Arch",
+              "Try something in a throwaway VM"):
+        assert q in faq, f"FAQ has no entry {q!r}"
+    # A static answer cannot check the machine, so each one that sends people
+    # to a panel must also say what to do when that panel is off.
+    for q, a in faq.items():
+        if any(p in a for p in ("Install → Packages", "Dev environments", "Apps → Podman",
+                                "Trigger → Boxes", "Trigger → Sandbox")):
+            assert "Setup → Plugins" in a, f"FAQ {q!r} names a panel but not how to turn it on"
+    install = faq["Install an app"]
+    assert "Packages" in install and install.index("Packages") < install.index("nixarchy apply"), \
+        "the install answer does not lead with the package manager panel"
+
+    learn = {t["id"]: t["question"] for t in
+             json.load(open(os.path.join(ROOT, "share/learn.json")))["topics"]}
+    assert "package manager" in learn["install"] and "NixOS will not run" in learn["install"]
+    assert "containers" in learn["devenv"] and "VMs" in learn["devenv"]
+    print("  ok  Nixi prefers nixarchy's own panels, after checking them")
+
+
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
                test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable):
+               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins):
         fn()
     print("\nall checks passed")
