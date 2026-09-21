@@ -37,8 +37,8 @@ session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
 
 With no agent at all: `/tour` ([step 2](docs/media/08-tour.png)), `/learn`
 ([a lesson](docs/media/09-learn.png)) and the [calculator](docs/media/10-calculator.png).
-The FAQ rows show up in search too, but choosing one
-[does nothing yet](https://github.com/olafkfreund/nixi-nixarchy/issues/19).
+Written FAQ answers show up in search too: choose one and its answer appears
+in the card, with no agent and no network.
 
 ---
 
