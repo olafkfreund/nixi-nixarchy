@@ -86,6 +86,15 @@ spec: spec/2026-09-21-20-permission-keys.md
    checks 1, 3 and 4. Restore the link and switch Nixi back to `/guide`.
    → verify: all five checks pass in both window kinds; the link is restored;
    `trust` in `~/.config/omarchy/nixi.json` is `guide` again.
+
+   *Result (implementation):* all five checks passed in the overlay and in a
+   pinned window (10/10). The prompts came from `Write` requests to
+   `/tmp/nixi20-probe-*.txt`, because razer's Claude ran `ls` without asking.
+   The same request against the unpatched Home Manager build raised the
+   same prompt, which was denied with a click; this confirmed the build
+   under test was the only difference. The test build pinned razer's own
+   adapters (see #19's plan, step 5). The link, trust level and probe files
+   were restored or removed afterwards.
 8. **Commit and PR**: `fix: Y and N answer a permission prompt (#20)`, with
    the PR template, the artifacts, and the screenshots. Rebase on `master`
    after #19 merges.
