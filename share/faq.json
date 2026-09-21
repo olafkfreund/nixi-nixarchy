@@ -47,7 +47,7 @@
  {
   "cat": "Apps",
   "q": "A toolchain just for one project",
-  "a": "Don't install compilers system-wide — give each project its own. Open SUPER+SPACE → Apps → Dev environments (SUPER+ALT+E where it is bound) to create a project from a template, enter it, or see every project that has one. In a terminal, the same thing is nixarchy dev init <preset> in the project folder (run it with no argument to list presets: node, python, go, rust…). It writes a devenv.nix, and from then on the toolchain appears when you cd into that folder and disappears when you leave. Two projects can use two different versions of the same language without clashing. No Dev environments entry? It comes with the devenv service: nixarchy-service-enable devenv, then nixarchy apply."
+  "a": "Don't install compilers system-wide — give each project its own. Open SUPER+SPACE → Apps → Dev environments (SUPER+ALT+E where it is bound) to create a project from a template, enter it, or see every project that has one. In a terminal, the same thing is nixarchy dev init <preset> in the project folder (run it with no argument to list presets: node, python, go, rust…). It writes a devenv.nix, and from then on the toolchain appears when you cd into that folder and disappears when you leave. Two projects can use two different versions of the same language without clashing. No Dev environments entry? It comes with the devenv service: nixarchy-service-enable devenv, then nixarchy apply. If it is installed but off, turn it on in Setup → Plugins."
  },
  {
   "cat": "Apps",
@@ -57,7 +57,7 @@
  {
   "cat": "Apps",
   "q": "Software that only ships for Ubuntu or Arch",
-  "a": "Some programs only come as a .deb, or only in the AUR, and will not run on NixOS as they are. Put them in a box: a whole other Linux distribution running inside nixarchy, sharing your home folder and your screen. Open SUPER+SPACE → Trigger → Boxes (SUPER+ALT+D where it is bound), create a box from a template, enter it, and install the program with that distribution's own tools. In a terminal it is distrobox. No Boxes entry? Turn boxes on: nixarchy-service-enable boxes, then nixarchy apply."
+  "a": "Some programs only come as a .deb, or only in the AUR, and will not run on NixOS as they are. Put them in a box: a whole other Linux distribution running inside nixarchy, sharing your home folder and your screen. Open SUPER+SPACE → Trigger → Boxes (SUPER+ALT+D where it is bound), create a box from a template, enter it, and install the program with that distribution's own tools. In a terminal it is distrobox. No Boxes entry? Turn boxes on: nixarchy-service-enable boxes, then nixarchy apply. If it is installed but off, turn it on in Setup → Plugins."
  },
  {
   "cat": "Windows & workspaces",
@@ -112,7 +112,7 @@
  {
   "cat": "System",
   "q": "Try something in a throwaway VM",
-  "a": "Want to try a risky tool or a config change without touching this machine? Start a MicroVM: SUPER+SPACE → Trigger → Sandbox (SUPER+ALT+V where it is bound). Pick a template, and a small NixOS machine boots in seconds, sharing your /nix/store read-only. It is a console, not a desktop. Throw it away when you are done and nothing is left behind. It keeps an untrusted package off your machine; it is not a wall against an attacker. In a terminal it is nixarchy vm (nixarchy vm help lists what it can do)."
+  "a": "Want to try a risky tool or a config change without touching this machine? Start a MicroVM: SUPER+SPACE → Trigger → Sandbox (SUPER+ALT+V where it is bound). Pick a template, and a small NixOS machine boots in seconds, sharing your /nix/store read-only. It is a console, not a desktop. Throw it away when you are done and nothing is left behind. It keeps an untrusted package off your machine; it is not a wall against an attacker. In a terminal it is nixarchy vm (nixarchy vm help lists what it can do). No Sandbox entry? The MicroVMs panel may be off: turn it on in Setup → Plugins."
  },
  {
   "cat": "System",

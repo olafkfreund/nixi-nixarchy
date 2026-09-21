@@ -507,6 +507,12 @@ def test_prefers_nixarchy_plugins():
     for q in ("Run a container", "Software that only ships for Ubuntu or Arch",
               "Try something in a throwaway VM"):
         assert q in faq, f"FAQ has no entry {q!r}"
+    # A static answer cannot check the machine, so each one that sends people
+    # to a panel must also say what to do when that panel is off.
+    for q, a in faq.items():
+        if any(p in a for p in ("Install → Packages", "Dev environments", "Apps → Podman",
+                                "Trigger → Boxes", "Trigger → Sandbox")):
+            assert "Setup → Plugins" in a, f"FAQ {q!r} names a panel but not how to turn it on"
     install = faq["Install an app"]
     assert "Packages" in install and install.index("Packages") < install.index("nixarchy apply"), \
         "the install answer does not lead with the package manager panel"
