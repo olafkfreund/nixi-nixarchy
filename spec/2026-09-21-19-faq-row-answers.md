@@ -9,7 +9,7 @@ intent: intent/2026-09-21-19-faq-row-answers.md
 ## Design
 
 **The fix is one line.** In `Conversation.qml`, the `onFaqAnswered` handler
-(line 968) changes `root.messages.append({ role: "You", body: question })` to
+(line 968; the call is on 969) changes `root.messages.append({ role: "You", body: question })` to
 `messages.append(...)`. That is the bare id, the way `showNixiMessage()` on
 the next line and every other use of the model already reach it. Nothing
 else changes: the row still keeps the card open (`lastRunKeepsOpen`), still
@@ -54,9 +54,11 @@ configuration.
 - **Declare `property alias messages`** on `root` so that `root.messages`
   works: it makes the one wrong call right by adding API, where changing the
   call fixes it by removing a difference.
-- **A qmllint run in CI**: qmllint does not flag `root.<id>` on a
-  `QtObject`-typed root as an error, so it would not have caught this. Worth
-  its own issue, not this fix.
+- **A qmllint run in CI**: run on `Conversation.qml` here, qmllint (Qt 6
+  from nixpkgs) prints 1,363 warnings, mostly Quickshell imports it cannot
+  resolve, and none on line 969. It would not have caught this without first
+  teaching it the Quickshell modules. That is worth its own issue, not this
+  fix.
 
 ## Risks
 
