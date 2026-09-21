@@ -39,7 +39,7 @@ spec: spec/2026-09-21-20-permission-keys.md
 
    ```qml
    if (root.pendingPermissionId !== "") {
-     var bare = (event.modifiers & ~Qt.ShiftModifier) === Qt.NoModifier
+     var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
      if (bare && text.length === 0
          && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
        root.answerPermission(event.key === Qt.Key_Y)
@@ -53,8 +53,8 @@ spec: spec/2026-09-21-20-permission-keys.md
    }
    ```
 
-   `Qt.KeypadModifier` is treated as no modifier: when checking that the
-   modifiers are empty, mask it out along with Shift.
+   Shift and the keypad flag are masked out, so a capital Y and a keypad
+   key both count; Ctrl+Y, Alt+Y and Super+Y do not.
    → verify: it reads correctly, and the static test's composer half passes.
 3. **`Conversation.qml`, the shortcuts**: both pairs (around lines 1405 and
    2944) change to
