@@ -54,5 +54,7 @@ leaves a stray letter in what they type next.
 1. **Accidental consent.** Should Y only count after the dialog has been up
    for a short moment (for example 300 ms), or only when the composer is
    empty, so that a sentence being typed cannot approve something?
-2. Should Return mean the highlighted button (Allow), or do nothing? Today it
-   does nothing.
+2. What should Return do while a prompt is up? Today it reaches the composer
+   and calls `submit()`, which sends whatever is typed there as a steering
+   message behind the dialog. Options: do nothing while a prompt is up, or
+   mean the highlighted button (Allow).
