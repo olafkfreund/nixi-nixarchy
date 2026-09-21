@@ -1404,12 +1404,12 @@ Item {
     WindowShortcuts { conversation: root }
     Shortcut {
       sequence: "Y"
-      enabled: root.pendingPermissionId !== ""
+      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
       onActivated: root.answerPermission(true)
     }
     Shortcut {
       sequence: "N"
-      enabled: root.pendingPermissionId !== ""
+      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
       onActivated: root.answerPermission(false)
     }
     Rectangle {
@@ -1808,6 +1808,19 @@ Item {
               }
               Keys.onPressed: function(event) {
                 root.noteKeyboardActivity()
+                if (root.pendingPermissionId !== "") {
+                  var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
+                  if (bare && text.length === 0
+                      && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
+                    root.answerPermission(event.key === Qt.Key_Y)
+                    event.accepted = true
+                    return
+                  }
+                  if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    event.accepted = true
+                    return
+                  }
+                }
                 if (event.key === Qt.Key_Backspace && root.searchMode !== ""
                     && text.length === 0) {
                   root.searchMode = ""
@@ -2911,6 +2924,16 @@ Item {
               onClicked: root.answerPermission(true)
             }
           }
+
+          Text {
+            width: parent.width
+            visible: prompt.text.length > 0
+            text: "Clear the message box to answer with Y or N"
+            color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+          }
         }
       }
     }
@@ -2943,12 +2966,12 @@ Item {
     WindowShortcuts { conversation: root }
     Shortcut {
       sequence: "Y"
-      enabled: root.pendingPermissionId !== ""
+      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
       onActivated: root.answerPermission(true)
     }
     Shortcut {
       sequence: "N"
-      enabled: root.pendingPermissionId !== ""
+      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
       onActivated: root.answerPermission(false)
     }
   }

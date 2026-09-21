@@ -529,9 +529,38 @@ def test_prefers_nixarchy_plugins():
     print("  ok  Nixi prefers nixarchy's own panels, after checking them")
 
 
+def _block(src, start):
+    """The text of the brace block that opens at or after `start`."""
+    i = src.index("{", start)
+    depth = 0
+    for j in range(i, len(src)):
+        depth += {"{": 1, "}": -1}.get(src[j], 0)
+        if depth == 0:
+            return src[i:j + 1]
+    raise AssertionError("unbalanced braces")
+
+
+def test_permission_keys_guard():
+    """Y and N answer a permission prompt from the composer too, but only while
+    it is empty, and Return does not send while the prompt is up (#20)."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
+    assert "pendingPermissionId" in handler, "the composer ignores a permission prompt"
+    guard = _block(handler, handler.index("pendingPermissionId"))
+    for token in ("text.length === 0", "Qt.Key_Y", "Qt.Key_N", "Qt.Key_Return"):
+        assert token in guard, f"the composer's permission branch has no {token}"
+    shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card)
+                 if re.search(r'sequence:\s*"[YN]"', s)]
+    assert len(shortcuts) == 4, f"expected 4 Y/N shortcuts, found {len(shortcuts)}"
+    for s in shortcuts:
+        enabled = re.search(r"enabled:(.*)", s).group(1)
+        assert "text.length === 0" in enabled, "a Y/N shortcut fires over typed text"
+    print("  ok  Y and N answer a prompt, and never over typed text")
+
+
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
                test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins):
+               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_permission_keys_guard):
         fn()
     print("\nall checks passed")

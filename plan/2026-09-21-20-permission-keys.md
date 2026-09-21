@@ -65,6 +65,13 @@ spec: spec/2026-09-21-20-permission-keys.md
    0`, caption size and muted colour, reading "Clear the message box to
    answer with Y or N".
    → verify: `grep -c "Clear the message box" Conversation.qml` is 1.
+
+   *Deviation (implementation):* the hint also has `wrapMode: Text.Wrap`, so
+   it wraps on a narrow card. Step 1's test gained a small brace-matching
+   helper, `_block()`, and also asserts there are exactly four Y/N
+   shortcuts. In step 5, the site's Y/N sentence was deleted outright; the
+   note now starts "Mechanic also asks…". The README uses the plan's
+   "**Y** or **Allow**" wording.
 5. **Docs**: in `README.md` scene 5 and `docs/index.html` scene 5, drop
    "Click the buttons: Y and N [do not work yet](…/20)" and its
    `docs/index.html` equivalent. The Allow/Deny wording stays neutral: "each
