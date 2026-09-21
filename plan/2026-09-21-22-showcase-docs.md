@@ -81,12 +81,17 @@ once it has passed its checks.
    contact sheets and view them all: only the card, no terminal, calendar,
    mail or notification.
 
-3. **GIF (30–45 s).** A shorter cut from the same crop: 0:00–0:40 at 2x,
-   2:09–2:20 at 2x, 5:25–5:29 at 1x, 5:31–7:50 at 12x, 7:50–7:54 at 1x,
-   7:55–9:45 at 12x, 9:45–9:49 at 1x. Scale to 720 px wide, 10 fps,
+3. **GIF (30–45 s).** A shorter cut from the same crop: 0:00–0:40 at 3x,
+   2:09–2:20 at 3x, 5:25–5:29 at 1x, 5:31–7:50 at 24x, 7:50–7:54 at 1x,
+   7:55–9:45 at 24x, 9:45–9:49 at 1x. Scale to 720 px wide, 10 fps,
    `palettegen=stats_mode=diff` and `paletteuse=dither=bayer:bayer_scale=5`,
    looping. If it exceeds 5 MB, first drop to 8 fps, then to 640 px.
    → verify: size under 5 MB. View the contact sheet as in step 2.
+
+   *Deviation (implementation):* the first draft's speeds (2x and 12x) came
+   to 58 s, not 30–45 s, because the plan's arithmetic was wrong. They were
+   raised to 3x and 24x, giving 39.4 s. At 10 fps and 720 px that was
+   6.7 MB, so both fallbacks applied: 8 fps and 640 px give 4.96 MB.
 
 4. **Copy media into the repo:** `docs/media/` receives the ten stills,
    `nixi-demo.mp4`, `nixi-demo-poster.png` and `nixi-demo.gif`.
@@ -114,7 +119,8 @@ once it has passed its checks.
      bar" becomes "The ✨ in the bar".
    - Under the tagline: `<p align="center"><a
      href="https://olafkfreund.github.io/nixi-nixarchy/"><img
-     src="docs/media/nixi-demo.gif" alt="…" width="720"></a></p>`.
+     src="docs/media/nixi-demo.gif" alt="…" width="640"></a></p>`
+     (640, the GIF's native width after step 3's fallback).
    - After the Archy note, before `## Install`: a new `## A first session`
      section with the seven scenes (stills 01–07 at `width="420"`, one to
      two sentences each), a line on the built-ins with 08–10, and a link to
