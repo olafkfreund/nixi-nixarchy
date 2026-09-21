@@ -134,9 +134,8 @@ NixOS 26.11), captured as it happened.</p>
     <p>Sam types <code>/mechanic</code>, then "put btop on SUPER+ALT+T for me". Nixi checks that
     the key is free, finds where this machine keeps its own bindings, backs the file up, and asks
     before each step. Sam can <strong>Deny</strong> any of them, and the agent looks for another way.</p>
-    <p class="note">Mechanic also asks before read-only lookups, and a long command can be
-    <a href="https://github.com/olafkfreund/nixi-nixarchy/issues/21">cut short in the prompt</a>, so read
-    the agent's message above it too.</p>
+    <p class="note">The prompt shows the whole command or change being approved. Mechanic
+    also <a href="https://github.com/olafkfreund/nixi-nixarchy/issues/27">asks before read-only lookups</a>.</p>
   </div>
 </section>
 

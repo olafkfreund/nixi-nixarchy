@@ -126,3 +126,27 @@ test("other agents never receive OpenCode's config", async () => {
   const run = await runBridge({ env: { OPENCODE_CONFIG_CONTENT: "" } });
   assert.equal(run.agent.find((e) => e.method === "newSession").opencodeConfig, "");
 });
+
+const edit = { type: "prompt", text: "PLEASE_EDIT /tmp/probe" };
+const run = { type: "prompt", text: "PLEASE_RUN a long command" };
+
+test("Mechanic: the prompt carries what is being approved, whole", async () => {
+  const { events } = await runBridge({
+    settings: { trust: "mechanic" },
+    messages: [edit, run],
+    onPermission: (event) => ({ type: "permission", id: event.id, allow: false }),
+  });
+  const shown = events.filter((e) => e.type === "permission");
+  assert.equal(shown.length, 2);
+  const detail = shown.map((e) => e.detail).join("\n");
+  for (const part of ["- a", "+ b", "TAIL"]) assert.ok(detail.includes(part), `missing ${part}`);
+  assert.equal(shown[1].detail.length, 2048);
+  assert.deepEqual(shown.map((e) => e.omitted), [0, 0]);
+});
+
+test("Guide: neither an edit nor a command reaches the card", async () => {
+  const { agent, events } = await runBridge({ messages: [edit, run] });
+  assert.ok(!events.some((e) => e.type === "permission"), "Guide showed a permission prompt");
+  assert.deepEqual(agent.filter((e) => e.method === "permissionOutcome").map((e) => e.outcome.outcome),
+    ["cancelled", "cancelled"]);
+});

@@ -50,10 +50,17 @@ new AgentSideConnection((conn) => ({
     log({ method: "prompt", text });
     // A prompt asking for a change triggers a permission request, so tests can
     // observe how the bridge answers it.
-    if (text.includes("PLEASE_WRITE")) {
+    // PLEASE_EDIT carries a diff and PLEASE_RUN a 2 KB command, for the detail.
+    const toolCall = text.includes("PLEASE_WRITE") ? { toolCallId: "t1", title: "Write ~/probe", kind: "edit" }
+      : text.includes("PLEASE_EDIT") ? { toolCallId: "t2", title: "Edit /tmp/probe", kind: "edit",
+        content: [{ type: "diff", path: "/tmp/probe", oldText: "a\n", newText: "b\n" }] }
+      : text.includes("PLEASE_RUN") ? { toolCallId: "t3", title: "Run a long command", kind: "execute",
+        rawInput: { command: "echo " + "x".repeat(2048 - "echo  && echo TAIL".length) + " && echo TAIL" } }
+      : null;
+    if (toolCall) {
       const outcome = await conn.requestPermission({
         sessionId: params.sessionId,
-        toolCall: { toolCallId: "t1", title: "Write ~/probe", kind: "edit" },
+        toolCall,
         options: [
           { optionId: "allow", name: "Allow", kind: "allow_once" },
           { optionId: "reject", name: "Reject", kind: "reject_once" },
