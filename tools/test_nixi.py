@@ -579,10 +579,97 @@ def test_permission_detail_is_plain():
     print("  ok  the permission card shows its detail as plain, scrolling text")
 
 
+def _legacy_local_answer(c, q):
+    """bin/nixi-context's local_answer() as it was before #31, kept to prove
+    that questions no tool matches still get exactly the same excerpt."""
+    qt = c._tokens(q)
+    if not qt:
+        return None
+    qset = set(qt)
+    best, score = None, 0.0
+    for head, body, tag in c._sections():
+        ht, bt = c._tokens(head), c._tokens(body)
+        if not bt:
+            continue
+        hmatch = len(qset & set(ht))
+        s = 3.0 * hmatch                            # title/filename hits: undamped
+        if hmatch and ht:
+            s += 1.5 * hmatch / len(set(ht))        # focused titles beat long ones
+        freq = sum(min(bt.count(w), 3) for w in qset)   # repeated terms matter
+        s += freq / (1 + 0.02 * len(bt))
+        if s > score:
+            best, score = (head, body, tag), s
+    # keybinding questions: grep the live bindings too
+    kb_hit = ""
+    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
+                               "super", "press", "hotkey")):
+        kb = c._keybinds()
+        hits = [l for l in kb.splitlines()
+                if any(w in l.lower() for w in qt)][:4]
+        kb_hit = "\n".join(hits)
+    if score < 3.8 and not kb_hit:
+        return None
+    parts = []
+    if best:
+        body = best[1]
+        body = body if len(body) <= 700 else body[:700].rsplit(" ", 1)[0] + " …"
+        parts.append(f"From the {'manual' if best[2] == 'manual' else 'notes'} — {best[0]}:\n{body}")
+    if kb_hit:
+        parts.append("Your live keybindings say:\n" + kb_hit)
+    return "\n\n".join(parts)
+
+
+
+TOOL_QUESTIONS = {
+    "how do I install btop?": "nixarchy.pkg",
+    "how do I install an app?": "nixarchy.pkg",
+    "how do I remove an app": "nixarchy.pkg",
+    "I need a Python environment for one project": "nixarchy.devenv",
+    "can I try something in a throwaway VM?": "nixarchy.microvm",
+    "how do I run a container?": "nixarchy.podman",
+    "this app only ships a .deb": "nixarchy.distrobox",
+}
+
+
+def test_tools_route():
+    """For the five jobs nixarchy has a panel for, the grounding excerpt leads
+    with that panel's row from KNOWLEDGE.md, and a weak, unrelated manual
+    section no longer rides along; everything else is unchanged (#31)."""
+    data, conf = tempfile.mkdtemp(), tempfile.mkdtemp()
+    try:
+        shutil.copytree(os.path.join(ROOT, "tools", "fixtures", "manual-grounding"),
+                        os.path.join(data, "manual"))
+        shutil.copy(os.path.join(ROOT, "share/KNOWLEDGE.md"), conf)
+        os.environ["NIXI_DATA"], os.environ["NIXI_DIR"] = data, conf
+        c = load("ctx31", "bin/nixi-context")
+        c._keybinds = lambda: ""
+        for q, tool in TOOL_QUESTIONS.items():
+            hit = c.local_answer(q) or ""
+            ids = re.findall(r"nixarchy\.(?:pkg|devenv|microvm|podman|distrobox)", hit)
+            assert ids and ids[0] == tool, f"{q!r} leads with {ids[:1]}, not {tool}"
+        absent = {"how do I install btop?": "Dual boot",
+                  "can I try something in a throwaway VM?": "Using it",
+                  "how do I run a container?": "Or: add it to NixOS",
+                  "this app only ships a .deb": "I picked an app in Install"}
+        for q, section in absent.items():
+            assert section not in c.local_answer(q), f"{q!r} still carries {section!r}"
+        present = {"how do I install an app?": "I picked an app in Install",
+                   "I need a Python environment for one project": "Per-project environments"}
+        for q, section in present.items():
+            assert section in c.local_answer(q), f"{q!r} lost {section!r}"
+        for q in ("how do I close an app", "open a terminal app",
+                  "what is the scratchpad", "change the theme"):
+            assert c.local_answer(q) == _legacy_local_answer(c, q), f"{q!r} changed"
+        print("  ok  the five jobs lead with nixarchy's own tool; other questions unchanged")
+    finally:
+        shutil.rmtree(data, ignore_errors=True)
+        shutil.rmtree(conf, ignore_errors=True)
+
+
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
                test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
                test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_permission_keys_guard,
-               test_permission_detail_is_plain):
+               test_permission_detail_is_plain, test_tools_route):
         fn()
     print("\nall checks passed")

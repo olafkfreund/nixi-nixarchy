@@ -8,7 +8,7 @@
 // nixi's CLAUDE.md from its working directory.
 import { execFile } from "node:child_process";
 
-const CONTEXT_LIMIT = 1200;
+const CONTEXT_LIMIT = 1800;   // a tool row with its rules (≤900) and a manual excerpt (≤700)
 const TIMEOUT_MS = 3000;
 
 function contextCommand(env) {
@@ -29,9 +29,13 @@ export function groundPrompt(text, env = process.env) {
       const context = error ? "" : String(stdout || "").trim();
       if (!context) return resolve({ prompt: text, grounded: false, error: error ? String(error.code || error.message) : null });
       resolve({
-        // Same wording nixi-server used, which the agent already answers well.
-        prompt: text + "\n\n(Local search context — answer directly from this when it suffices, "
-          + "verify live only if it doesn't:\n" + context.slice(0, CONTEXT_LIMIT) + ")",
+        // Background, not a script. "Answer directly from this" (nixi-server's
+        // old wording) made a troubleshooting excerpt outrank the method's
+        // "prefer nixarchy's own tools", and let a key be stated unchecked (#31).
+        prompt: text + "\n\n(Local context for this question — background from the manual and "
+          + "Nixi's notes, not the whole answer. Follow your method: when a nixarchy tool below "
+          + "fits, lead with it after checking it is on; state a key only after checking it "
+          + "with `omarchy menu keybindings --print`.\n" + context.slice(0, CONTEXT_LIMIT) + ")",
         grounded: true,
         error: null,
       });
