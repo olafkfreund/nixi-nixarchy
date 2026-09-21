@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 23
 intent: intent/2026-09-21-23-prefer-nixarchy-plugins.md
 ---
