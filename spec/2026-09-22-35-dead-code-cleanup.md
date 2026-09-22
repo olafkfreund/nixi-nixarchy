@@ -8,11 +8,14 @@ intent: intent/2026-09-22-35-dead-code-cleanup.md
 
 ## Answers to the intent's open questions
 
-Confirmed by the approver on 2026-09-22: remove "product", do all the
+Confirmed by the approver on 2026-09-22: make "product" work, do all the
 findings, and test on razer.
 
-1. **math.js "product": remove it.** Nobody can have used it, since it has
-   never worked. The regex alternative and the `prod(...)` line go.
+1. **math.js "product": make it work** (changed from "remove" by the
+   approver). `commandExpression` already turns "product 2 3 4" into
+   `prod(2, 3, 4)`, and mathjs 15.2.0 evaluates that to 24, but
+   `safeExpression` rejects it because `prod` is not in the `functions`
+   allowlist. The fix is adding `"prod"` to that set.
 2. **All findings in this task**, including the four changes that swap one
    mechanism for another (the shared coast component, `Instantiator` for
    Ctrl+N, one `pendingPermission` object, the `SequentialAnimation`
@@ -92,7 +95,12 @@ Only decisions and non-obvious parts are spelled out here.
   (`repoSearchDepth` in nixi.json stays), and `OPENCODE_PATH` along with its
   test line.
 - **math.js:**
-  - remove `product`;
+  - make `product` work: add `"prod"` to the `functions` allowlist;
+  - add `bridge/math.test.js`, the first test for math.js. It runs the
+    script and feeds it input on stdin, as the card does. It checks that
+    "product 2 3 4" gives 24, that "sum 1 2 3" gives 6, and that a
+    disallowed function (for example `import(...)`) is refused. The same
+    test guards the other math.js shrinks below;
   - drop the aggregate-set clause and the second `%` rewrite;
   - parse the expression once;
   - one number-regex const;
@@ -163,8 +171,9 @@ Only decisions and non-obvious parts are spelled out here.
 - **Keep the file browser and wire it up.** Nobody asked for it, it has
   never shipped, and the `@` rows already do file search with a preview.
   Wiring it up would be a feature, which needs its own intent.
-- **Make "product" work.** It is one allowlist entry, but it adds behaviour
-  in a cleanup task. It can be a feature request if anyone wants it.
+- **Remove "product"** (the original default). The approver chose to make
+  it work instead: it costs one allowlist entry, and the command was
+  clearly meant to exist.
 - **Leave the test knobs "for later"** (`OMARCHY_TIPS_*`, `--stdin`).
   Nothing uses them, and a test that needs them can add them back.
 
