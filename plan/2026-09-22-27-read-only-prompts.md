@@ -195,6 +195,22 @@ Steps 1–8 stand. Steps 11–14 are new, and step 9 is re-run as step 13.
     If Claude still uses the shell for lookups: stop, record it here, and
     go back to the spec. Do not iterate on the wording more than once
     without asking.
+
+    *Result (implementation), razer 2026-09-22, build `l0hdwcm9…` with
+    razer's adapters, 5 links swapped, Claude in Mechanic:*
+    1. `omarchy menu keybindings --print`: a single command, expected. Allowed.
+    2. `grep -rn "Activity" ~/.local/share/omarchy/default/hypr/ --include=*.lua`:
+       **a shell lookup the rule should have prevented.** It was a single
+       command with no pipes. Allowed.
+    3. `Edit ~/.config/hypr/bindings.lua`, the change. Denied.
+
+    The Read of `bindings.lua` that Edit requires ran **without a prompt**,
+    so the allow rule applies once the agent uses its file tools. Total: 3
+    prompts, against 5–6 in the report and 4 or more (all piped Bash) on
+    the first build. **Partial pass:** one lookup still went through the
+    shell. razer restored: 5/5 links and `nixi.json` match the saved
+    copies, `bindings.lua` md5 unchanged, control released. Stopped for a
+    decision; see step 14.
 14. **Docs:** if step 13 passes, the README and site wording from steps
     6–7 stands. If it passes only in part, say so plainly in the README
     ("most lookups no longer ask").
