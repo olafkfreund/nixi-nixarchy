@@ -137,8 +137,8 @@ NixOS 26.11), captured as it happened.</p>
     the key is free, finds where this machine keeps its own bindings, backs the file up, and asks
     before each step, showing the whole command, here the exact line it will append. Sam answers
     with <strong>Y</strong> or <strong>N</strong>, or the buttons, and can deny any step.</p>
-    <p class="note">Looking at files does not ask, except for secrets such as <code>~/.ssh</code>,
-    so the prompts that do appear are the ones that change something.</p>
+    <p class="note">Most lookups no longer ask: reading files does not, except for secrets such as
+    <code>~/.ssh</code>. An occasional search still arrives as a shell command and asks.</p>
   </div>
 </section>
 
