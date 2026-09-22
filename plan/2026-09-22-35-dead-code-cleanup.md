@@ -326,6 +326,27 @@ is installed (CI's Lint job runs it).
 event field names (e.g. `\.capabilities`, `originalTitle`, `gitStatus`);
 gate G; `math.test.js` passes.
 
+*Result (implementation):*
+- PR #34 merged first, after fixing its three Copilot review threads.
+  `master` then held `test_nixi.py`'s one rebase conflict: the hand-kept
+  list against the loop. The loop won, and it picks up #27's two new tests.
+- `math.test.js` was written against the **unchanged** math.js first. It
+  failed only on the two `prod` cases, which pins every other answer.
+  After the change it passes. `normalizeUnit` uses a one-line regex, not a
+  lookup object: an object lookup would match inherited keys such as
+  `constructor`.
+- `files.js`: the file and repository priority lists differ (repositories
+  leave out Downloads), so they share an `existingRoots()` helper rather
+  than becoming one list. The old and new files.js give identical results
+  against a scratch HOME: a file, a repository in `Projects/`, and one
+  elsewhere. `fdLines()` keeps the `execFileAsync("fd"` literal that
+  `nix/package.nix` pins.
+- `bridge.js`: `once(child, "exit")` rejects on a spawn error, which the
+  old hand-made promise never did, so it gets `.catch(() => {})`. The two
+  "bad adapter command" errors become one message, still matching the
+  test's `/JSON array/`. The per-agent variable-name map, duplicated
+  between bridge.js and `adapterAvailable()`, is now `adapterOverride()`.
+
 ### Step 7: razer, through the card
 
 1. Build this branch with razer's adapters: the `nix build --impure

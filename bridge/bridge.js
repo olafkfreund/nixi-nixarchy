@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
@@ -27,17 +29,10 @@ function startupValue(resolve) {
 }
 const agentName = startupValue(() => resolveHarness());
 function configuredAgentCommand() {
-  const specificName = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agentName]
-    || "NIXI_CLAUDE_ACP_COMMAND";
-  const raw = String(process.env[specificName]
-    || process.env.NIXI_ACP_COMMAND || "").trim();
+  const raw = adapterOverride(agentName);
   if (!raw) return resolveAdapter(agentName);
-  let command;
-  try { command = JSON.parse(raw); }
-  catch { throw new Error("NIXI_ACP_COMMAND must be a JSON array of arguments"); }
-  if (!Array.isArray(command) || command.length === 0
-      || command.some((argument) => typeof argument !== "string" || argument === ""))
-    throw new Error("NIXI_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
+  const command = parseCommand(raw);
+  if (!command) throw new Error("NIXI_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
@@ -103,25 +98,15 @@ function emit(event) {
 }
 
 function messageText(content) {
-  if (!content) return "";
   if (typeof content === "string") return content;
-  if (content.type === "text") return content.text || "";
-  return "";
+  return content?.type === "text" ? content.text || "" : "";
 }
 
-function flatOptions(options) {
-  const result = [];
-  for (const option of options || []) {
-    if (Array.isArray(option.options)) result.push(...option.options);
-    else result.push(option);
-  }
-  return result;
-}
-
+// Config options may be grouped one level deep.
 function matchingValue(config, wanted) {
   if (!wanted) return "";
-  const option = flatOptions(config?.options).find(candidate => candidate.value === wanted);
-  return option?.value || "";
+  const options = (config?.options || []).flatMap((option) => option.options ?? [option]);
+  return options.some((option) => option.value === wanted) ? wanted : "";
 }
 
 async function applyRequestedModel(configOptions) {
@@ -195,8 +180,9 @@ let connection = null;
 let turnRunning = false;
 let steeringSupported = false;
 let shuttingDown = false;
-let childExitResolve;
-const childExited = new Promise((resolve) => { childExitResolve = resolve; });
+// Settles when the child exits. A spawn error rejects once(); the exit path
+// only races this against a timeout, so a failed spawn just ends the wait.
+const childExited = once(child, "exit").catch(() => {});
 
 const client = {
   sessionUpdate(params) {
@@ -212,7 +198,6 @@ const client = {
       case "tool_call_update":
         emit({
           type: "tool",
-          id: update.toolCallId || "",
           title: update.title || update.name || "Using a tool",
           status: update.status || "in_progress",
         });
@@ -242,12 +227,9 @@ const client = {
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
     if (policy.permission === "yolo") {
-      const option = options.find((item) => item.kind === "allow_once");
-      if (option) {
-        emit({ type: "status", text: `YOLO · ${title}` });
-        return Promise.resolve({ outcome: { outcome: "selected", optionId: option.id } });
-      }
-      return Promise.resolve({ outcome: { outcome: "cancelled" } });
+      const outcome = choose(options, "allow_once");
+      if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
+      return Promise.resolve(outcome);
     }
     const { detail, omitted } = permissionDetail(params.toolCall);
     emit({ type: "permission", id: requestId, title, options, detail, omitted });
@@ -288,9 +270,6 @@ async function start() {
   await applyTrustMode();
   emit({
     type: "ready",
-    agent: agentName,
-    sessionId,
-    capabilities: initialized.agentCapabilities || {},
     steeringSupported,
     permissionMode,
     trust,
@@ -346,14 +325,14 @@ function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
-  const wantedKind = message.allow ? "allow_once" : "reject_once";
-  const option = pending.options.find((item) => item.kind === wantedKind);
-  if (option) {
-    pending.resolve({ outcome: { outcome: "selected", optionId: option.id } });
-  } else {
-    pending.resolve({ outcome: { outcome: "cancelled" } });
-  }
+  pending.resolve(choose(pending.options, message.allow ? "allow_once" : "reject_once"));
   emit({ type: "status", text: message.allow ? "Working…" : "Tool denied" });
+}
+
+// The ACP answer for the option of this kind, or cancelled if there is none.
+function choose(options, kind) {
+  const option = options.find((item) => item.kind === kind);
+  return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };
 }
 
 function cancelAllPendingPermissions() {
@@ -388,22 +367,15 @@ async function applyTrustMode() {
 
 function allowAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
-    const option = pending.options.find((item) => item.kind === "allow_once");
     pendingPermissions.delete(id);
-    pending.resolve(option
-      ? { outcome: { outcome: "selected", optionId: option.id } }
-      : { outcome: { outcome: "cancelled" } });
+    pending.resolve(choose(pending.options, "allow_once"));
   }
 }
 
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const { resolve } of pendingPermissions.values()) {
-    resolve({ outcome: { outcome: "cancelled" } });
-  }
-  pendingPermissions.clear();
-  const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  cancelAllPendingPermissions();
   // Bound graceful ACP close before signalling the child. Remain alive long
   // enough to reap it; a detached kill timer cannot help after bridge exit.
   try {
@@ -471,7 +443,6 @@ input.on("line", (line) => {
 input.on("close", () => shutdown());
 
 child.on("exit", (code, signal) => {
-  childExitResolve({ code, signal });
   if (!shuttingDown) {
     emit({ type: "fatal", message: `ACP agent exited (${signal || code})` });
     process.exit(code || 0);

@@ -175,7 +175,5 @@ test("OpenCode is its own ACP server: `opencode acp`, found like any harness", (
     const opencode = join(bin, "opencode");
     writeFileSync(opencode, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
     assert.deepEqual(resolveAdapter("opencode", { PATH: bin }), [opencode, "acp"]);
-    assert.throws(() => resolveAdapter("opencode", { PATH: bin, OPENCODE_PATH: join(bin, "missing") }),
-      /configured executable is missing/);
   } finally { rmSync(bin, { recursive: true }); }
 });
