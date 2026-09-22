@@ -1,10 +1,56 @@
 ---
-status: approved
+status: draft
 issue: 27
 intent: intent/2026-09-22-27-read-only-prompts.md
 ---
 
 # Spec: Mechanic stops asking before read-only lookups
+
+## Revision (2026-09-22, after the razer test)
+
+The design below works as specified, but it was aimed at the wrong cause:
+
+- **p620:** the real claude-agent-acp 0.79.0 honours the rules. A Read
+  outside the working directory ran without a prompt, and `~/.ssh` still
+  asked.
+- **razer, through the card, new build, Mechanic:** 4 prompts before any
+  edit, **all Bash** (`grep`, `ls`, `tail`, and a recursive `grep` of `/`).
+  Claude made no Read, Grep or Glob calls, so the rules never applied.
+
+The flood comes from Claude doing its lookups in the shell, and shell
+commands still ask (answer 2). Part of that is Nixi's own doing: the
+skill's method tells the agent to run `ls /usr/share/omarchy/bin | grep -i
+<topic>`.
+
+**Addition (option A, approved 2026-09-22):** Nixi tells the agent to look
+at files with its file tools, not the shell. Everything below still stands;
+this adds to it.
+
+- **`skills/nixi/SKILL.md`, Method step 1**, gains a rule: look at files and
+  search them with your file-reading and search tools (for Claude: Read,
+  Grep, Glob), never with `cat`, `ls`, `grep`, `head`, `tail` or `find` in a
+  shell. Keep the shell for commands that only exist as commands, such as
+  `omarchy menu keybindings --print`, `hyprctl` or `nixarchy-plugin`, and
+  run each on its own, without pipes or `;`. The reason is given in one
+  line: in Mechanic every shell command needs the user's yes, and file
+  tools don't.
+- The `ls /usr/share/omarchy/bin | grep -i <topic>` line becomes "list
+  `/usr/share/omarchy/bin` with your file tools (Glob)".
+- The rule is worded by kind of tool, not by Claude's tool names, because
+  the skill is shared with Codex and OpenCode. OpenCode's read, grep and
+  glob tools are already allowed without asking.
+- **`share/CLAUDE.md` and `share/AGENTS.md`** (the short version) gain the
+  same rule in one sentence.
+- **`tools/test_nixi.py`** gains a check: the skill and both briefs state
+  the rule, and the skill no longer tells the agent to pipe shell commands
+  for lookups.
+
+**Expected result on razer:** "put btop on SUPER+ALT+T" in Mechanic asks
+for `omarchy menu keybindings --print` (a command, so it asks by design)
+and for the edit. That is about 2 prompts instead of 5 or 6, each for
+something the user can read at a glance. The rule depends on the model
+following it, so the razer run is the test. If Claude still uses the
+shell, stop and come back here.
 
 ## Answers to the intent's open questions
 
@@ -140,3 +186,9 @@ without asking (except secrets) and asks before anything else, and document
   3. With `"askBeforeReading": true` and a new session, step 1 prompts for
      reads again.
   4. Guide: the same request changes nothing. Record what it now reads.
+  5. *(Revision.)* Step 1's prompts are only commands that have no file-tool
+     equivalent (the key list) and the edit: no `grep`, `ls`, `cat` or
+     `tail` in a prompt.
+
+The "Guide reads more" risk turned out not to apply: on razer, Guide's plan
+mode already reads outside `~/.config/nixi` without asking.
