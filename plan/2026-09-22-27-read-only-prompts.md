@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 27
 spec: spec/2026-09-22-27-read-only-prompts.md
 ---
