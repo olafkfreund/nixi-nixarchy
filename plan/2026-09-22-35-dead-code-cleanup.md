@@ -167,6 +167,9 @@ steps land. Each edit is found by its content.
   velocity property and the bounds, and the constants stay the same.
 - **3b.** Replace the ten Ctrl+1…Ctrl+0 Shortcuts (L1084-1093) with
   `Instantiator { model: 10; delegate: Shortcut { sequence: "Ctrl+" + ((index + 1) % 10); enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(index) } }`.
+  *Deviation (implementation):* a `Repeater` whose delegate is an `Item`
+  holding the `Shortcut`, not an `Instantiator`. Qt finds a Shortcut's
+  window through its parent, and Instantiator's objects have no Item parent.
 - **3c.** Replace `pendingPermissionId`, `…Title`, `…Detail` and
   `…Omitted` (L43-46) with `property var pendingPermission: null`. Update
   `clearPermissions`, `enqueuePermission` and `showNextPermission`

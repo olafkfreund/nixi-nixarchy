@@ -882,16 +882,20 @@ Item {
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
     Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
-    Shortcut { sequence: "Ctrl+1"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(0) }
-    Shortcut { sequence: "Ctrl+2"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(1) }
-    Shortcut { sequence: "Ctrl+3"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(2) }
-    Shortcut { sequence: "Ctrl+4"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(3) }
-    Shortcut { sequence: "Ctrl+5"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(4) }
-    Shortcut { sequence: "Ctrl+6"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(5) }
-    Shortcut { sequence: "Ctrl+7"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(6) }
-    Shortcut { sequence: "Ctrl+8"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(7) }
-    Shortcut { sequence: "Ctrl+9"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(8) }
-    Shortcut { sequence: "Ctrl+0"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(9) }
+    // Ctrl+1 … Ctrl+9, Ctrl+0 pick the matching visible row. Each Shortcut sits
+    // in an Item so it stays in this window's item tree, which is how a
+    // Shortcut finds its window.
+    Repeater {
+      model: 10
+      Item {
+        required property int index
+        Shortcut {
+          sequence: "Ctrl+" + ((index + 1) % 10)
+          enabled: conversation.menuOpen
+          onActivated: conversation.selectVisibleSlot(index)
+        }
+      }
+    }
   }
 
   function submit() {
