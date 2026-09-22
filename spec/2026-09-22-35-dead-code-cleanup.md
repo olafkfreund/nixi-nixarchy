@@ -8,8 +8,8 @@ intent: intent/2026-09-22-35-dead-code-cleanup.md
 
 ## Answers to the intent's open questions
 
-The intent was approved without answers, so these are the defaults. Change
-any of them in this review.
+Confirmed by the approver on 2026-09-22: remove "product", do all the
+findings, and test on razer.
 
 1. **math.js "product": remove it.** Nobody can have used it, since it has
    never worked. The regex alternative and the `prod(...)` line go.
