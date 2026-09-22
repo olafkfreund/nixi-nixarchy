@@ -28,7 +28,7 @@ session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
 | | |
 |---|---|
 | <img src="docs/media/01-search.png" alt="Typing install shows menu entries, files and repositories" width="420"> | **1. Open it.** Sam clicks the ✨ in the bar and types `install`. Before any AI is involved, the card matches Omarchy menu entries, apps, files and repositories. Enter sends the text as a question. |
-| <img src="docs/media/02-answer.png" alt="Nixi's answer to how do I install an app" width="420"> | **2. Ask.** "How do I install an app?" The answer is nixarchy's, not `pacman -S`: pick it from **Install**, which adds it to `~/.config/nixarchy/apps.nix`, and nothing happens until **Apply changes** (`nixarchy apply`). It comes from the local manual Nixi searches before every question. |
+| <img src="docs/media/02-answer.png" alt="Nixi's answer to how do I install an app, leading with Install ▸ Packages" width="420"> | **2. Ask.** "How do I install an app?" The answer is nixarchy's, not `pacman -S`: the **Packages** panel (Install ▸ Packages), where picking an app only queues it until you apply, then the same in a terminal (`nixarchy pkg add`, `nixarchy apply`). Nixi checked the panel is on, and says its key isn't bound on this machine rather than naming one. |
 | <img src="docs/media/03-your-machine.png" alt="Nixi reporting the NixOS generation and disk use" width="420"> | **3. Ask about the machine.** "What generation am I on, how full is my disk?" Nixi runs read-only checks and answers with this laptop's numbers, which matched `readlink /nix/var/nix/profiles/system` and `df`. |
 | <img src="docs/media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of changing anything" width="420"> | **4. Guide changes nothing.** Asked to add btop, Nixi explains instead: btop is already installed. In Guide the bridge cancels every permission request. |
 | <img src="docs/media/05-mechanic-asks.png" alt="Mechanic asking permission before a change" width="420"> | **5. Mechanic asks first.** After `/mechanic`, "put btop on SUPER+ALT+T" is done step by step, and each step needs your yes: **Y** or **Allow**. The prompt shows the whole command or change being approved. Mechanic also [asks before read-only lookups](https://github.com/olafkfreund/nixi-nixarchy/issues/27). |
@@ -36,9 +36,9 @@ session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
 | <img src="docs/media/07-undo.png" alt="Nixi restoring the file from its backup" width="420"> | **7. Undo.** "Now undo it." Nixi restores its backup and checks the binding is gone. `/guide` makes it read-only again. |
 
 With no agent at all: `/tour` ([step 2](docs/media/08-tour.png)), `/learn`
-([a lesson](docs/media/09-learn.png)) and the [calculator](docs/media/10-calculator.png).
-Written FAQ answers show up in search too: choose one and its answer appears
-in the card, with no agent and no network.
+([a lesson](docs/media/09-learn.png)), the [calculator](docs/media/10-calculator.png),
+and [written FAQ answers](docs/media/11-faq.png): they show up in search as you
+type, and choosing one puts its answer in the card, with no network.
 
 ---
 

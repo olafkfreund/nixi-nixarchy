@@ -37,7 +37,7 @@
   .scene p { margin: 0 0 8px; }
   .note { background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 8px 12px; font-size: 0.92rem; }
   .note a { color: inherit; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
+  .grid3 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 18px; }
   .grid3 figure { margin: 0; }
   figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 6px; }
   table { border-collapse: collapse; width: 100%; margin-top: 12px; background: var(--card); }
@@ -91,15 +91,17 @@ NixOS 26.11), captured as it happened.</p>
 </section>
 
 <section class="scene">
-  <img src="media/02-answer.png" alt="Nixi answering 'how do I install an app?' with apps.nix and nixarchy apply" loading="lazy">
+  <img src="media/02-answer.png" alt="Nixi answering 'how do I install an app?' with Install ▸ Packages" loading="lazy">
   <div>
     <div class="n">2 · Ask</div>
     <h3>The answer is nixarchy's, not Arch's</h3>
-    <p>"How do I install an app?" Sam's Arch habit says <code>pacman -S</code>. Nixi says to pick it from
-    <strong>Install</strong>, which adds it to <code>~/.config/nixarchy/apps.nix</code>, and that
-    nothing is installed until <strong>Apply changes</strong> (or <code>nixarchy apply</code>).
-    Before every question Nixi searches a local, hash-verified copy of the nixarchy and Omarchy
-    manuals, so that is where this answer comes from.</p>
+    <p>"How do I install an app?" Sam's Arch habit says <code>pacman -S</code>. Nixi points to
+    nixarchy's own tool for the job: the <strong>Packages</strong> panel (Install ▸ Packages), where
+    picking an app only queues it until you apply. The terminal version comes second:
+    <code>nixarchy pkg add</code>, then <code>nixarchy apply</code>.</p>
+    <p>It checked first: the panel is on, and its key isn't bound on this laptop, so it says so
+    instead of naming one. Before every question Nixi also searches a local, hash-verified copy of
+    the nixarchy and Omarchy manuals.</p>
   </div>
 </section>
 
@@ -133,9 +135,10 @@ NixOS 26.11), captured as it happened.</p>
     <h3>Mechanic does it, but asks first</h3>
     <p>Sam types <code>/mechanic</code>, then "put btop on SUPER+ALT+T for me". Nixi checks that
     the key is free, finds where this machine keeps its own bindings, backs the file up, and asks
-    before each step. Sam can <strong>Deny</strong> any of them, and the agent looks for another way.</p>
-    <p class="note">The prompt shows the whole command or change being approved. Mechanic
-    also <a href="https://github.com/olafkfreund/nixi-nixarchy/issues/27">asks before read-only lookups</a>.</p>
+    before each step, showing the whole command, here the exact line it will append. Sam answers
+    with <strong>Y</strong> or <strong>N</strong>, or the buttons, and can deny any step.</p>
+    <p class="note">Mechanic also <a href="https://github.com/olafkfreund/nixi-nixarchy/issues/27">asks
+    before read-only lookups</a>, not only before changes.</p>
   </div>
 </section>
 
@@ -161,14 +164,13 @@ NixOS 26.11), captured as it happened.</p>
 </section>
 
 <h2>No AI needed</h2>
-<p class="lede">The tour, the learning path and the calculator run without an agent and without the network.</p>
+<p class="lede">The FAQ, the tour, the learning path and the calculator run without an agent and without the network.</p>
 <div class="grid3">
+  <figure><img src="media/11-faq.png" alt="A written FAQ answer shown in the card" loading="lazy"><figcaption>Written answers: they show up in search as you type; choose one and it's in the card.</figcaption></figure>
   <figure><img src="media/08-tour.png" alt="Tour step 2 of 11" loading="lazy"><figcaption><code>/tour</code>: eleven steps that watch Hyprland, so a step completes when you actually do it.</figcaption></figure>
   <figure><img src="media/09-learn.png" alt="Learning path lesson on the Omarchy menu" loading="lazy"><figcaption><code>/learn</code>: the next of 16 topics you have not covered yet.</figcaption></figure>
   <figure><img src="media/10-calculator.png" alt="72 F to C converted in the card" loading="lazy"><figcaption>Sums and unit conversions, answered as you type.</figcaption></figure>
 </div>
-<p style="margin-top:18px">Written FAQ answers show up as search rows too: choose one and its answer
-appears in the card, with no agent and no network.</p>
 
 <h2>Guide and Mechanic</h2>
 <table>
