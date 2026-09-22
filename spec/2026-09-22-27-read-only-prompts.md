@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 27
 intent: intent/2026-09-22-27-read-only-prompts.md
 ---
