@@ -109,8 +109,10 @@ Recorded before any #26 change, because the facts moved:
    - `README.md` and `docs/index.html`: scene 2's caption leads with the
      package manager panel; scene 5's says Y/Allow and that the whole
      command is shown; a FAQ entry is added (README: the built-ins line;
-     site: a fourth figure under "No AI needed", with the grid going to 4
-     columns on wide screens).
+     site: a fourth figure under "No AI needed", with the grid as 2×2 on
+     wide screens and one column on narrow ones). *Deviation
+     (implementation):* the draft said 4 columns; at four across, each card
+     still is too small to read, so the grid is 2×2.
    - The #19, #20 and #21 notes are removed; #27's is kept.
 
    → verify: `grep -c "issues/19\|issues/20\|issues/21"` over both files is
