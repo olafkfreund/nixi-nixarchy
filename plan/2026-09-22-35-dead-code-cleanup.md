@@ -135,6 +135,28 @@ steps land. Each edit is found by its content.
 `handleHarnessSelectorKey`, `progressChanged`, `grouped`); gate G;
 `bridge/tour-model.test.js` still passes without `total` in `start()`.
 
+*Deviations (implementation):*
+- Horizontal scrolling reached further than the finding said.
+  `scrollKeyImpulse`, `scrollBy` and `scrollLine` all lose their `dx`, and
+  the wheel handler drops `sideways`. The Y paths are unchanged.
+- The Y/N pair now reads a root `permissionKeysLive` property, because an
+  inline component cannot see the `prompt` id.
+  `test_permission_keys_guard` checks 2 shortcuts plus that property,
+  instead of 4 shortcuts.
+- Two one-line helpers (`clampImpulse`, `clampDeceleration`) instead of one
+  `clampMotion`.
+- `Ask.qml`'s `shortcutSubmapDesired` repeated the `opened` condition too,
+  so it uses `opened` as well.
+- `TourModel.start()` loses its now-unused `tour` parameter, and the tour
+  tests call it without one.
+- `BridgeProc` takes the resolved `path`, not a script name, for the same
+  scoping reason as the Y/N pair.
+- The empty stderr parser was checked against Quickshell v0.3.1's
+  `process.cpp`: with no parser it calls `closeReadChannel(StandardError)`,
+  which discards the output, the same as the empty parser.
+- `qmllint`, with Qt 6.11 and Quickshell 0.3.1 on its import path, shows no
+  new warning kinds, and fewer "unqualified access" warnings than before.
+
 ### Step 3: the four mechanism swaps (four commits)
 
 - **3a.** The coast component. Make `menuTrackpadWheel`, `menuCoastTimer`

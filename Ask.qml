@@ -52,8 +52,7 @@ Item {
   property bool copyToastVisible: false
   // One manager owns the compositor submap. Conversations only affect the
   // derived desired state; they never dispatch Hyprland commands themselves.
-  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap
-    && activeOverlay !== null && activeOverlay.opened && !activeOverlay.pinned
+  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap && opened
   property bool shortcutSubmapOwned: false
   property bool shortcutSubmapTarget: false
   property bool shortcutSubmapInitialized: false
@@ -134,9 +133,12 @@ Item {
 
   function adjustFontScale(step) { setFontScale(fontScale + step) }
 
+  function clampImpulse(value) { return Math.round(Math.max(80, Math.min(2000, value))) }
+  function clampDeceleration(value) { return Math.round(Math.max(100, Math.min(5000, value))) }
+
   function setKeyboardMotion(impulse, deceleration) {
-    var nextImpulse = Math.round(Math.max(80, Math.min(2000, impulse)))
-    var nextDeceleration = Math.round(Math.max(100, Math.min(5000, deceleration)))
+    var nextImpulse = clampImpulse(impulse)
+    var nextDeceleration = clampDeceleration(deceleration)
     if (nextImpulse === keyboardLineImpulse && nextDeceleration === keyboardDeceleration) return
     keyboardLineImpulse = nextImpulse
     keyboardDeceleration = nextDeceleration
@@ -158,13 +160,9 @@ Item {
       ? Math.round(Math.max(minSearchDebounceMs, Math.min(maxSearchDebounceMs, debounce)))
       : 270
     var impulse = Number(data.keyboardLineImpulse)
-    keyboardLineImpulse = isFinite(impulse)
-      ? Math.round(Math.max(80, Math.min(2000, impulse)))
-      : 335
+    keyboardLineImpulse = isFinite(impulse) ? clampImpulse(impulse) : 335
     var deceleration = Number(data.keyboardDeceleration)
-    keyboardDeceleration = isFinite(deceleration)
-      ? Math.round(Math.max(100, Math.min(5000, deceleration)))
-      : 608
+    keyboardDeceleration = isFinite(deceleration) ? clampDeceleration(deceleration) : 608
     fileOpenCommand = normalizeCommand(data.fileOpenCommand)
     fileEditCommand = normalizeCommand(data.fileEditCommand)
     useHyprlandShortcutSubmap = data.useHyprlandShortcutSubmap === true
@@ -182,12 +180,7 @@ Item {
     if (typeof value === "string")
       return value.trim() === "" ? [] : [value.trim()]
     if (!Array.isArray(value)) return []
-    var command = []
-    for (var i = 0; i < value.length; i++) {
-      var argument = String(value[i] || "")
-      if (argument !== "") command.push(argument)
-    }
-    return command
+    return value.map(function(argument) { return String(argument || "") }).filter(Boolean)
   }
 
   function flushSettings() {
@@ -429,18 +422,18 @@ Item {
   }
 
   function open(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned) return
+    if (opened) return
     createConversation(payloadJson)
   }
 
   function close() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     reconcileShortcutSubmap()
   }
 
   function pinActive() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.pinConversation()
   }
 
@@ -452,7 +445,7 @@ Item {
   }
 
   function toggle(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     else
       createConversation(payloadJson)

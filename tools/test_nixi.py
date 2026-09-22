@@ -572,12 +572,14 @@ def test_permission_keys_guard():
     guard = _block(handler, handler.index("pendingPermissionId"))
     for token in ("text.length === 0", "Qt.Key_Y", "Qt.Key_N", "Qt.Key_Return"):
         assert token in guard, f"the composer's permission branch has no {token}"
+    # One pair, in WindowShortcuts, shared by the overlay and the pinned window.
     shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card)
                  if re.search(r'sequence:\s*"[YN]"', s)]
-    assert len(shortcuts) == 4, f"expected 4 Y/N shortcuts, found {len(shortcuts)}"
+    assert len(shortcuts) == 2, f"expected 2 Y/N shortcuts, found {len(shortcuts)}"
     for s in shortcuts:
-        enabled = re.search(r"enabled:(.*)", s).group(1)
-        assert "text.length === 0" in enabled, "a Y/N shortcut fires over typed text"
+        assert "conversation.permissionKeysLive" in s, "a Y/N shortcut ignores the typed-text guard"
+    live = re.search(r"property bool permissionKeysLive:(.*)", card).group(1)
+    assert "text.length === 0" in live, "a Y/N shortcut fires over typed text"
     print("  ok  Y and N answer a prompt, and never over typed text")
 
 

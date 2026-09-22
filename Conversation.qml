@@ -72,6 +72,7 @@ Item {
   property string reasoningEffort: ""
   property string searchMode: ""
   property string lastVisibleShortcut: ""
+  readonly property bool permissionKeysLive: pendingPermissionId !== "" && prompt.text.length === 0
   property string hoverPreviewPath: ""
   property bool filePreviewVisible: false
   property int filePreviewRequestId: 0
@@ -253,8 +254,6 @@ Item {
     onTriggered: root.outsideDismissArmed = true
   }
 
-  function toggle() { opened ? close() : open("{}") }
-
   function pinConversation() {
     if (!opened || pinned) return
     pinned = true
@@ -265,7 +264,6 @@ Item {
     // An anchor glide owns the viewport until it lands. Streaming chunks that
     // arrive mid-glide must not snap it to the end.
     if (anchorScroll.running || keyboardCoast.running || trackpadCoast.running) return
-    horizontalScroll.stop()
     verticalScroll.stop()
     // Let the border absorb ordinary growth. Only scroll once the surface has
     // reached its height cap; scrolling during the growth animation makes the
@@ -286,7 +284,6 @@ Item {
     // caret below the fold or immediately pull the surface away again.
     anchorActive = false
     anchorScroll.stop()
-    horizontalScroll.stop()
     verticalScroll.stop()
     keyboardVelocityY = 0
     keyboardCoast.stop()
@@ -337,13 +334,11 @@ Item {
     return maxY <= 0 || surface.contentY >= maxY - Style.space(18)
   }
 
-  function scrollBy(dx, dy) {
+  function scrollBy(dy) {
     // Steps accumulate onto a running animation's destination. Measuring from
     // the animated value instead would swallow most of a held key or a fast
     // wheel spin, because every event would restart from a half-finished move.
-    var maxX = Math.max(0, surface.contentWidth - surface.width)
     var maxY = Math.max(0, surface.contentHeight - surface.height)
-    var baseX = horizontalScroll.running ? horizontalScroll.to : surface.contentX
     var baseY = anchorScroll.running
       ? anchorScroll.to
       : (verticalScroll.running ? verticalScroll.to : surface.contentY)
@@ -352,14 +347,7 @@ Item {
     keyboardVelocityY = 0
     keyboardCoast.stop()
     trackpadCoast.stop()
-    var nextX = Math.max(0, Math.min(maxX, baseX + dx))
     var nextY = Math.max(0, Math.min(maxY, baseY + dy))
-    if (nextX !== baseX) {
-      horizontalScroll.stop()
-      horizontalScroll.from = surface.contentX
-      horizontalScroll.to = nextX
-      horizontalScroll.start()
-    }
     if (nextY !== baseY) {
       verticalScroll.stop()
       verticalScroll.from = surface.contentY
@@ -368,8 +356,8 @@ Item {
     }
   }
 
-  function scrollLine(dx, dy) {
-    scrollBy(dx * Style.space(44), dy * Style.space(44))
+  function scrollLine(dy) {
+    scrollBy(dy * Style.space(44))
   }
 
   // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
@@ -411,12 +399,7 @@ Item {
     }
   }
 
-  function scrollKeyImpulse(dx, dy, page) {
-    // The transcript is normally vertical, but retain the old horizontal
-    // behavior if a future delegate makes it wider than the viewport.
-    if (dx !== 0) scrollBy(dx * Style.space(44), 0)
-    if (dy === 0) return
-    horizontalScroll.stop()
+  function scrollKeyImpulse(dy, page) {
     verticalScroll.stop()
     anchorScroll.stop()
     surface.cancelFlick()
@@ -427,9 +410,6 @@ Item {
     keyboardSampleTime = Date.now()
     keyboardCoast.start()
   }
-
-  function stepFontScale(step) { fontScaleStepRequested(step) }
-  function resetFontScale() { fontScaleResetRequested() }
 
   // Anchor the newest prompt to the top of the viewport. Called after the
   // model append so the delegate exists and the column has placed it.
@@ -444,7 +424,6 @@ Item {
     anchorY = item.y
     anchorActive = true
     Qt.callLater(function() {
-      horizontalScroll.stop()
       verticalScroll.stop()
       anchorScroll.stop()
       keyboardVelocityY = 0
@@ -588,7 +567,7 @@ Item {
 
   function scrollActiveSurface(direction, page) {
     if (root.menuOpen) root.menuScrollKeyImpulse(direction, page)
-    else root.scrollKeyImpulse(0, direction, page)
+    else root.scrollKeyImpulse(direction, page)
   }
 
   function menuActivate(modifiers) {
@@ -784,35 +763,18 @@ Item {
     }
   }
 
-  function handleFontKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) { stepFontScale(0.1); return true }
-    if (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore) { stepFontScale(-0.1); return true }
-    if (event.key === Qt.Key_0) { resetFontScale(); return true }
-    return false
-  }
-
-  // Ctrl+P pins the live conversation into a normal window. Like the font
-  // keys, it runs from the shared key handlers because a focused TextEdit
-  // claims the key before a window shortcut can see it.
-  function handlePinKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key !== Qt.Key_P) return false
-    pinConversation()
-    return true
-  }
-
-  function handleMotionTunerKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key !== Qt.Key_Comma) return false
-    motionTunerRequested()
-    return true
-  }
-
-  function handleHarnessSelectorKey(event) {
-    if ((event.modifiers & Qt.MetaModifier) === 0) return false
-    if (event.key !== Qt.Key_Comma) return false
-    harnessSelectorRequested()
+  // Ctrl+P pins the live conversation into a normal window. These keys run
+  // from the shared key handlers because a focused TextEdit claims the key
+  // before a window shortcut can see it.
+  function handleCardKey(event) {
+    var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
+    if (ctrl && (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal)) fontScaleStepRequested(0.1)
+    else if (ctrl && (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore)) fontScaleStepRequested(-0.1)
+    else if (ctrl && event.key === Qt.Key_0) fontScaleResetRequested()
+    else if (ctrl && event.key === Qt.Key_P) pinConversation()
+    else if (ctrl && event.key === Qt.Key_Comma) motionTunerRequested()
+    else if ((event.modifiers & Qt.MetaModifier) !== 0 && event.key === Qt.Key_Comma) harnessSelectorRequested()
+    else return false
     return true
   }
 
@@ -845,17 +807,13 @@ Item {
         menuScrollKeyImpulse(1, true); return true
       }
     }
-    if (ctrl && event.key === Qt.Key_K) { scrollKeyImpulse(0, -1, false); return true }
-    if (ctrl && event.key === Qt.Key_J) { scrollKeyImpulse(0, 1, false); return true }
-    if (ctrl && event.key === Qt.Key_H) { scrollKeyImpulse(-1, 0, false); return true }
-    if (ctrl && event.key === Qt.Key_L) { scrollKeyImpulse(1, 0, false); return true }
-    if (event.key === Qt.Key_PageUp || (ctrl && event.key === Qt.Key_U)) { scrollKeyImpulse(0, -1, true); return true }
-    if (event.key === Qt.Key_PageDown || (ctrl && event.key === Qt.Key_D)) { scrollKeyImpulse(0, 1, true); return true }
-    if (event.key === Qt.Key_Up) { scrollKeyImpulse(0, -1, false); return true }
-    if (event.key === Qt.Key_Down) { scrollKeyImpulse(0, 1, false); return true }
+    if (ctrl && event.key === Qt.Key_K) { scrollKeyImpulse(-1, false); return true }
+    if (ctrl && event.key === Qt.Key_J) { scrollKeyImpulse(1, false); return true }
+    if (event.key === Qt.Key_PageUp || (ctrl && event.key === Qt.Key_U)) { scrollKeyImpulse(-1, true); return true }
+    if (event.key === Qt.Key_PageDown || (ctrl && event.key === Qt.Key_D)) { scrollKeyImpulse(1, true); return true }
+    if (event.key === Qt.Key_Up) { scrollKeyImpulse(-1, false); return true }
+    if (event.key === Qt.Key_Down) { scrollKeyImpulse(1, false); return true }
     if (requireModifier) return false
-    if (event.key === Qt.Key_Left) { scrollKeyImpulse(-1, 0, false); return true }
-    if (event.key === Qt.Key_Right) { scrollKeyImpulse(1, 0, false); return true }
     return false
   }
 
@@ -866,22 +824,21 @@ Item {
     // An inline component does not share the enclosing document's scope, so
     // the conversation is handed in rather than reached through its id.
     required property Item conversation
-    Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(0, -1, false) }
-    Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(0, 1, false) }
-    Shortcut { sequence: "Left"; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
-    Shortcut { sequence: "Right"; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
-    Shortcut { sequence: "Ctrl+H"; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
+    // Y and N answer a permission prompt, but never over typed text (#20).
+    Shortcut { sequence: "Y"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(true) }
+    Shortcut { sequence: "N"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(false) }
+    Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(-1, false) }
+    Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(1, false) }
     Shortcut { sequence: "Ctrl+J"; onActivated: conversation.scrollActiveSurface(1, false) }
     Shortcut { sequence: "Ctrl+K"; onActivated: conversation.scrollActiveSurface(-1, false) }
-    Shortcut { sequence: "Ctrl+L"; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
     Shortcut { sequence: "Ctrl+U"; onActivated: conversation.scrollActiveSurface(-1, true) }
     Shortcut { sequence: "Ctrl+D"; onActivated: conversation.scrollActiveSurface(1, true) }
     Shortcut { sequence: "PageUp"; onActivated: conversation.scrollActiveSurface(-1, true) }
     Shortcut { sequence: "PageDown"; onActivated: conversation.scrollActiveSurface(1, true) }
-    Shortcut { sequence: "Ctrl+="; onActivated: conversation.stepFontScale(0.1) }
-    Shortcut { sequence: "Ctrl++"; onActivated: conversation.stepFontScale(0.1) }
-    Shortcut { sequence: "Ctrl+-"; onActivated: conversation.stepFontScale(-0.1) }
-    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.resetFontScale() }
+    Shortcut { sequence: "Ctrl+="; onActivated: conversation.fontScaleStepRequested(0.1) }
+    Shortcut { sequence: "Ctrl++"; onActivated: conversation.fontScaleStepRequested(0.1) }
+    Shortcut { sequence: "Ctrl+-"; onActivated: conversation.fontScaleStepRequested(-0.1) }
+    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.fontScaleResetRequested() }
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
     Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
@@ -1177,12 +1134,6 @@ Item {
       root.statusText = "The agent connection closed. Start a new session or choose another harness."
     }
     stdout: SplitParser { onRead: function(line) { root.handleAgentLine(line) } }
-    stderr: SplitParser {
-      onRead: function(line) {
-        // The bridge keeps its machine-readable UI stream on stdout. stderr
-        // is reserved for bridge-level diagnostics and is intentionally quiet.
-      }
-    }
   }
 
   PanelWindow {
@@ -1201,16 +1152,6 @@ Item {
 
     Shortcut { sequence: "Escape"; onActivated: root.close() }
     WindowShortcuts { conversation: root }
-    Shortcut {
-      sequence: "Y"
-      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
-      onActivated: root.answerPermission(true)
-    }
-    Shortcut {
-      sequence: "N"
-      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
-      onActivated: root.answerPermission(false)
-    }
     Rectangle {
       id: veil
       anchors.fill: parent
@@ -1272,7 +1213,6 @@ Item {
           if (!dragging) return
           root.keyboardVelocityY = 0
           keyboardCoast.stop()
-          horizontalScroll.stop()
           verticalScroll.stop()
           anchorScroll.stop()
           trackpadCoast.stop()
@@ -1307,13 +1247,6 @@ Item {
           }
         }
 
-        NumberAnimation {
-          id: horizontalScroll
-          target: surface
-          property: "contentX"
-          duration: 170
-          easing.type: Easing.OutCubic
-        }
         NumberAnimation {
           id: verticalScroll
           target: surface
@@ -1366,14 +1299,11 @@ Item {
           onWheel: function(wheel) {
             if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
               var steps = wheel.angleDelta.y / 120
-              var sideways = wheel.angleDelta.x / 120
-              if (steps !== 0 || sideways !== 0)
-                root.scrollLine(-sideways * 3, -steps * 3)
+              if (steps !== 0) root.scrollLine(-steps * 3)
               wheel.accepted = true
               return
             }
 
-            horizontalScroll.stop()
             verticalScroll.stop()
             anchorScroll.stop()
             root.keyboardVelocityY = 0
@@ -1460,7 +1390,7 @@ Item {
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
                 Keys.onPressed: function(event) {
-                  if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event)) event.accepted = true
+                  if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
               }
               TextEdit {
@@ -1480,7 +1410,7 @@ Item {
                 selectedTextColor: root.foreground
                 onLinkActivated: function(link) { Qt.openUrlExternally(link) }
                 Keys.onPressed: function(event) {
-                  if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event)) event.accepted = true
+                  if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
               }
             }
@@ -1677,7 +1607,7 @@ Item {
                     return
                   }
                 }
-                if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event, true)) {
+                if (root.handleCardKey(event) || root.handleScrollKey(event, true)) {
                   event.accepted = true
                 } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     && (root.searchMode !== ""
@@ -2469,15 +2399,5 @@ Item {
     // like the overlay it was pinned out of, and took the key away from
     // anything inside that might want it. The overlay keeps its Escape.
     WindowShortcuts { conversation: root }
-    Shortcut {
-      sequence: "Y"
-      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
-      onActivated: root.answerPermission(true)
-    }
-    Shortcut {
-      sequence: "N"
-      enabled: root.pendingPermissionId !== "" && prompt.text.length === 0
-      onActivated: root.answerPermission(false)
-    }
   }
 }
