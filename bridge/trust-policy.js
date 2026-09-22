@@ -60,7 +60,8 @@ export function opencodePermissions(askBeforeReading) {
 // these win over the allow, and the user's own ask/deny rules win too.
 const CLAUDE_SECRET_READS = [
   "Read(~/.ssh/**)", "Read(~/.gnupg/**)", "Read(~/.aws/**)",
-  "Read(~/.kube/**)", "Read(~/.config/gh/**)", "Read(~/.config/op/**)",
+  "Read(~/.kube/**)", "Read(~/.config/gcloud/**)", "Read(~/.azure/**)",
+  "Read(~/.docker/config.json)", "Read(~/.config/gh/**)", "Read(~/.config/op/**)",
   "Read(~/.config/sops/**)", "Read(~/.local/share/keyrings/**)",
   "Read(~/.claude/.credentials.json)", "Read(~/.netrc)",
   "Read(/run/agenix/**)", "Read(/run/secrets/**)",

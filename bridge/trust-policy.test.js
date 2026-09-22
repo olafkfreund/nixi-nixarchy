@@ -159,7 +159,8 @@ test("Claude may read, grep and glob without asking; nothing else, and never sec
   for (const rules of [open, strict]) {
     for (const tool of ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"])
       assert.ok(!rules.allow.some((rule) => rule.startsWith(tool)), tool);
-    for (const secret of ["Read(~/.ssh/**)", "Read(/run/agenix/**)", "Read(**/.env)", "Read(**/*.age)"])
+    for (const secret of ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.config/gcloud/**)", "Read(~/.azure/**)",
+                          "Read(/run/agenix/**)", "Read(**/.env)", "Read(**/*.age)"])
       assert.ok(rules.ask.includes(secret), secret);
   }
   assert.deepEqual(open.ask, strict.ask);

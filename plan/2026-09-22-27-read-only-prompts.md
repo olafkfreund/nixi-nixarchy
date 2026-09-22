@@ -235,3 +235,19 @@ is written to disk except the optional `askBeforeReading` key, which older
 builds ignore. For an immediate per-machine rollback without a revert, set
 `"askBeforeReading": true`. For Claude that is exactly today's behaviour.
 For OpenCode it is stricter than today, because its reads ask too.
+
+## Review round (2026-09-22, PR #34)
+
+Three review threads from Copilot, all valid, fixed in one commit:
+
+1. **Cloud credentials were not all covered.** `~/.config/gcloud/**`,
+   `~/.azure/**` and `~/.docker/config.json` join the always-ask list, so
+   the README's "cloud and GitHub credentials" claim holds. The unit test
+   checks the gcloud and Azure paths.
+2. **`askBeforeReading` did not survive a UI settings change.**
+   `Ask.qml`'s `flushSettings()` rebuilt `nixi.json` from the UI's keys
+   only. That dropped `askBeforeReading`, and `trust` too, both of which
+   only the bridge writes. It now writes on top of the file as last read
+   (`settingsOnDisk`). `test_settings_keep_bridge_keys` guards this.
+3. **The skill said file tools never prompt.** It now adds "unless the user
+   has set `askBeforeReading`".

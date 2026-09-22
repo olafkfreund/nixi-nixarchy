@@ -48,7 +48,8 @@ and replaces only what assumed Arch. Practically:
    `find` in a shell. Use the shell only for commands that have no file
    equivalent (`omarchy menu keybindings --print`, `hyprctl`,
    `nixarchy-plugin`), one command per call, with no pipes or `;`. In
-   Mechanic every shell command needs the user's yes; file tools do not.
+   Mechanic every shell command needs the user's yes; file tools do not,
+   unless the user has set `askBeforeReading`.
    Check, in this order:
    - `omarchy menu keybindings --print` — ALL live bindings, INCLUDING this
      user's personal customizations (that is how you know THEIR setup)
