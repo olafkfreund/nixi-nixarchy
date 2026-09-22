@@ -136,4 +136,5 @@ Revert the PR. Without the `_meta` permissions, Claude goes back to asking
 for every read outside `~/.config/nixi`, which is today's behaviour. Nothing
 is written to disk except the optional `askBeforeReading` key, which older
 builds ignore. For an immediate per-machine rollback without a revert, set
-`"askBeforeReading": true`.
+`"askBeforeReading": true`. For Claude that is exactly today's behaviour.
+For OpenCode it is stricter than today, because its reads ask too.
