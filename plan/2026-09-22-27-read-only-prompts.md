@@ -1,5 +1,5 @@
 ---
-status: approved
+status: draft
 issue: 27
 spec: spec/2026-09-22-27-read-only-prompts.md
 ---
@@ -34,6 +34,19 @@ spec: spec/2026-09-22-27-read-only-prompts.md
 - Guide, YOLO, Codex and the permission dialog are unchanged.
 - **Docs.** Remove the #27 notes from `README.md` and `docs/index.html`, and
   describe the new behaviour and the setting.
+
+## Revision (2026-09-22): lookups through file tools
+
+Step 9 on razer showed Claude doing every lookup in the shell (4 Bash
+prompts, no Read, Grep or Glob calls). The approved spec revision
+(option A) adds this: Nixi's skill and briefs tell the agent to look at
+files with its file tools, never with `cat`, `ls`, `grep`, `head`, `tail`
+or `find` in a shell. The shell stays for real commands
+(`omarchy menu keybindings --print`, `hyprctl`, `nixarchy-plugin`), each run
+on its own, without pipes or `;`. The rule names kinds of tool, not
+Claude's tool names, because the skill is shared with Codex and OpenCode.
+The expected result on razer is about 2 prompts: the key list and the edit.
+Steps 1–8 stand. Steps 11–14 are new, and step 9 is re-run as step 13.
 
 ## Steps
 
@@ -141,7 +154,51 @@ spec: spec/2026-09-22-27-read-only-prompts.md
        `bindings.lua` md5 unchanged, control released.
    - **Outcome not met.** Claude's lookups on razer go through the shell,
      not its read tools. **Stopped for a spec revision.**
-10. **PR:** link the intent, spec and plan. Include the before and after
+11. **`skills/nixi/SKILL.md`, Method step 1:**
+    - Add as the first bullet: "**Look with file tools, not the shell.**
+      Read, list and search files with your file-reading and search tools
+      (in Claude: Read, Grep, Glob). Never use `cat`, `ls`, `grep`, `head`,
+      `tail` or `find` in a shell for that. Use the shell only for commands
+      that have no file equivalent (`omarchy menu keybindings --print`,
+      `hyprctl`, `nixarchy-plugin`), one command per call, with no pipes or
+      `;`. In Mechanic every shell command needs the user's yes; file tools
+      do not."
+    - Replace `ls /usr/share/omarchy/bin | grep -i <topic>` with "the
+      commands in `/usr/share/omarchy/bin` (list them with your file tools)".
+    - In step 2, `test -d ~/.config/omarchy/plugins/<id>` becomes "whether
+      `~/.config/omarchy/plugins/<id>` exists (check with your file tools)".
+
+    → verify: `grep -nE '\| *grep|ls /usr|test -d' skills/nixi/SKILL.md`
+    finds nothing.
+12. **`share/CLAUDE.md` and `share/AGENTS.md`**, short version: after
+    "Verify keybindings live (…)", add: "Look at files with your file tools
+    (read, search, list), not `cat`/`ls`/`grep` in a shell; run real
+    commands one at a time, without pipes."
+
+    **`tools/test_nixi.py`**: add `test_lookups_use_file_tools`. It checks
+    that the skill and both briefs contain "file tools", and that the skill
+    has no shell pipe in a lookup instruction (no `| grep`, no `ls /usr`).
+
+    → verify: `python3 tools/test_nixi.py` passes.
+13. **razer again**, as step 9 (a fresh build with razer's adapters, `nix
+    copy`, swap the plugin link **and** the Home Manager links the change
+    touches: `~/.config/nixi/{CLAUDE,AGENTS,SKILL}.md` and
+    `~/.claude/skills/nixi/SKILL.md`; save every `readlink` first). In
+    Mechanic, "put btop on SUPER+ALT+T": record every prompt, allow
+    read-only commands, deny the edit.
+
+    → verify: no prompt is a `cat`/`ls`/`grep`/`head`/`tail`/`find` lookup;
+    about 2 prompts (key list and edit). Then restore every link and
+    `nixi.json` from the saved copies, check with `readlink`/`cmp`, check
+    that the `bindings.lua` md5 is unchanged, and release control.
+
+    If Claude still uses the shell for lookups: stop, record it here, and
+    go back to the spec. Do not iterate on the wording more than once
+    without asking.
+14. **Docs:** if step 13 passes, the README and site wording from steps
+    6–7 stands. If it passes only in part, say so plainly in the README
+    ("most lookups no longer ask").
+10. **PR:** (run last, after 14) link the intent, spec and plan. Include the before and after
     prompt counts, the Guide read comparison (spec Risks), and the Codex
     count. Close #27.
 
