@@ -55,15 +55,18 @@ spec: spec/2026-09-22-27-read-only-prompts.md
 
    → verify: `cd bridge && node --test ./trust-policy.test.js` passes.
 3. **`bridge/testing/fake-agent.js`:** log `meta: params._meta ?? null` in
-   the `newSession` entry. → verify: existing tests still pass.
+   the `newSession` entry. Offer a `model` config option in the default
+   session, as Claude's adapter does, so a test with `NIXI_MODEL` can reach
+   `ready`. *(Added during implementation: without it, `applyRequestedModel`
+   stops the run.)* → verify: existing tests still pass.
 4. **`bridge/bridge.js`:**
-   - Add `let askBeforeReading = false;`. In `loadSettings()`:
-     `askBeforeReading = settings.askBeforeReading === true;`.
-   - `OPENCODE_CONFIG_CONTENT` is set at module load, before
-     `loadSettings()` runs. Move the OpenCode env assignment so the child is
-     spawned after settings are loaded, or read the setting synchronously
-     before spawning. Pick the smaller diff when implementing; either way,
-     `opencodePermissions(askBeforeReading)` is what goes into the env.
+   - `const askBeforeReading` is read once, synchronously, from
+     `nixi.json` at module load (only `true` counts). *(Revised during
+     implementation: this was the smaller of the two options, and it
+     replaces reading the setting in `loadSettings()`. The OpenCode child is
+     spawned at module load, before `loadSettings()` runs, and the rules
+     are fixed per session anyway.)*
+   - `OPENCODE_CONFIG_CONTENT` = `opencodePermissions(askBeforeReading)`.
    - In `newSession`, for `agentName === "claude"`, always send
      `_meta.claudeCode.options.settings.permissions = claudePermissions(askBeforeReading)`.
      When `NIXI_MODEL` is set, keep `options.model`, `settings.model` and

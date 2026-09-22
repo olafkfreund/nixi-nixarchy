@@ -43,6 +43,37 @@ export const OPENCODE_PERMISSIONS = {
   },
 };
 
+// askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
+// everything" means every agent.
+export function opencodePermissions(askBeforeReading) {
+  if (askBeforeReading !== true) return OPENCODE_PERMISSIONS;
+  return { permission: { ...OPENCODE_PERMISSIONS.permission,
+    read: "ask", grep: "ask", glob: "ask", list: "ask" } };
+}
+
+// Claude asks before every Read/Grep/Glob outside its cwd (~/.config/nixi), so
+// in Mechanic one edit came after five or six lookup prompts and Allow became a
+// reflex (#27). Claude Code itself applies these rules, from its own tool names:
+// the bridge never trusts an agent's self-reported ACP `kind`. Only those three
+// tools are allowed; Bash, edits, web and MCP tools still ask. Secrets ask even
+// in Mechanic: Claude checks deny > ask > allow across all settings sources, so
+// these win over the allow, and the user's own ask/deny rules win too.
+const CLAUDE_SECRET_READS = [
+  "Read(~/.ssh/**)", "Read(~/.gnupg/**)", "Read(~/.aws/**)",
+  "Read(~/.kube/**)", "Read(~/.config/gh/**)", "Read(~/.config/op/**)",
+  "Read(~/.config/sops/**)", "Read(~/.local/share/keyrings/**)",
+  "Read(~/.claude/.credentials.json)", "Read(~/.netrc)",
+  "Read(/run/agenix/**)", "Read(/run/secrets/**)",
+  "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.age)",
+];
+
+export function claudePermissions(askBeforeReading) {
+  return {
+    allow: askBeforeReading === true ? [] : ["Read", "Grep", "Glob"],
+    ask: [...CLAUDE_SECRET_READS],
+  };
+}
+
 // permission: "cancel" (never shown), "ask" (queued in the card), "yolo" (auto allow_once)
 export function trustPolicy(agent, trust, permissionMode) {
   const level = resolveTrust(trust);

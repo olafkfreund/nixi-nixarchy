@@ -15,7 +15,7 @@ new AgentSideConnection((conn) => ({
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
   },
   async newSession(params) {
-    log({ method: "newSession", cwd: params.cwd, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
+    log({ method: "newSession", cwd: params.cwd, meta: params._meta ?? null, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
     // FAKE_AGENT_MODES=config: modes only as a config option, the way OpenCode offers them.
     if (process.env.FAKE_AGENT_MODES === "config") return {
       sessionId: "fake-session",
@@ -32,7 +32,9 @@ new AgentSideConnection((conn) => ({
           { id: "read-only", name: "Read only" },
         ],
       },
-      configOptions: [],
+      // A model option, as Claude's adapter offers one, so NIXI_MODEL can be applied.
+      configOptions: [{ id: "model", name: "Model", category: "model", type: "select", currentValue: "default",
+        options: [{ value: "default", name: "Default" }] }],
     };
   },
   async setSessionMode(params) {
