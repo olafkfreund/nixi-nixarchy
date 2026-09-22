@@ -147,19 +147,21 @@ Recorded before any #26 change, because the facts moved:
 
 ## Result (implementation, 2026-09-22)
 
-- **Pin:** nixarchy #865 (`1c3fc7c`) merged; #869 (`1e25cb8`, with #31) is
-  open with CI running at the time of this commit.
+- **Pin:** nixarchy #865 (`1c3fc7c`) and #869 (`1e25cb8`, with #31) are
+  merged.
 - **Media**, cut from `refresh/nixi26.mp4` plus the #31 scene-2 still
   (source seconds in `cut26.py` terms):
   - FAQ 106–120, `/mechanic` 128–140, the first prompt, the write prompt
-    held 180–186, the result held 240–246;
+    held **186–192**, the result held 240–246. The first cut held 180–186,
+    which is mostly the read-only prompt before the write; the write prompt
+    appears at about 185 s, found on review;
   - the undo from **337.8** s: from 335 s the frames still showed a stray
     "yy" left in the box by fast Y presses, so those 2.8 s were cut;
   - the undo's removal prompt held 400–405, and the restored file held
     448–456.
 - **Sizes:**
-  - MP4: 63.4 s, 2.07 MB;
-  - GIF: 34.0 s, 4.25 MB, at **6 fps and 600 px**. 8 fps / 640 px was
+  - MP4: 63.2 s, 1.90 MB;
+  - GIF: 34.0 s, 3.95 MB, at **6 fps and 600 px**. 8 fps / 640 px was
     6.3 MB and 7 fps / 600 px was 5.07 MB, over the 5 MB budget;
   - stills: 183 KB (scene 2), 87 KB (scene 5), 242 KB (FAQ);
   - `docs/media`: 8.6 MB in total.
@@ -173,3 +175,13 @@ Recorded before any #26 change, because the facts moved:
   - "No AI needed" gains the FAQ figure, and its grid goes from 3 columns
     to 2 (four figures);
   - the #19–#21 notes are gone; #27's is kept.
+- **nixarchy's copy is a different GIF.** The review on nixarchy #871 found
+  that nixarchy's docs require every feature GIF to be a whole desktop at
+  16:10: 900×563, 4 fps, under 1 MB, the panel on the default desktop
+  (`docs/AGENTS.md`). The GIF from #858 met none of that, and neither did
+  this one. For nixarchy, each frame's card is cut at its own border and
+  placed at 1:1 on `docs/screenshots/00-desktop.jpg`, with a shadow and the
+  backdrop dimmed under the permission scrim. Eight key states, each held
+  1–2 s (the way nixarchy's recorder holds states), at 64 colours give
+  927 KB, 12.5 s, 900×563. nixi's own README GIF is not bound by that
+  contract and keeps the fuller cut above.
