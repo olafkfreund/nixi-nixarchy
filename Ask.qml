@@ -43,6 +43,10 @@ Item {
   property string selectedReasoningEffort: ""
   readonly property real keyboardPageImpulse: keyboardLineImpulse * (740 / 360)
   property bool settingsLoaded: false
+  // nixi.json as last read. The bridge writes keys of its own to the same file
+  // (trust, askBeforeReading), so the UI writes its keys on top of these
+  // rather than replacing the file with only the keys it knows.
+  property var settingsOnDisk: ({})
   // Retained so writing the font scale cannot drop the mode the bridge owns.
   property string persistedPermissionMode: "permission"
   property bool copyToastVisible: false
@@ -143,6 +147,7 @@ Item {
     var data = {}
     try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
     if (!data || typeof data !== "object") data = {}
+    settingsOnDisk = data
     persistedPermissionMode = data.permissionMode === "yolo" ? "yolo" : "permission"
     var scale = Number(data.fontScale)
     fontScale = (isFinite(scale) && scale > 0)
@@ -187,7 +192,7 @@ Item {
 
   function flushSettings() {
     if (!settingsLoaded) return
-    settingsFile.setText(JSON.stringify({
+    settingsFile.setText(JSON.stringify(Object.assign({}, settingsOnDisk, {
       permissionMode: persistedPermissionMode,
       fontScale: fontScale,
       searchDebounceMs: searchDebounceMs,
@@ -200,7 +205,7 @@ Item {
       agent: selectedAgent,
       model: selectedModel,
       reasoningEffort: selectedReasoningEffort
-    }, null, 2) + "\n")
+    }), null, 2) + "\n")
   }
 
   FileView {

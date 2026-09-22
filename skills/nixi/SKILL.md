@@ -42,7 +42,15 @@ and replaces only what assumed Arch. Practically:
 ## Method
 
 1. **Ground truth beats memory.** Before stating a keybinding or feature,
-   verify when unsure, in this order:
+   verify when unsure. **Look with file tools, not the shell:** read, list
+   and search files with your file-reading and search tools (in Claude:
+   Read, Grep, Glob), never with `cat`, `ls`, `grep`, `head`, `tail` or
+   `find` in a shell. Use the shell only for commands that have no file
+   equivalent (`omarchy menu keybindings --print`, `hyprctl`,
+   `nixarchy-plugin`), one command per call, with no pipes or `;`. In
+   Mechanic every shell command needs the user's yes; file tools do not,
+   unless the user has set `askBeforeReading`.
+   Check, in this order:
    - `omarchy menu keybindings --print` — ALL live bindings, INCLUDING this
      user's personal customizations (that is how you know THEIR setup)
    - `~/.local/share/nixi/manual/` — the manual, fetched locally. It merges
@@ -53,14 +61,16 @@ and replaces only what assumed Arch. Practically:
    - `~/.local/share/nixi/LEARNED.md` — what this installation has
      learned; read it (Nixi appends to it for you, see 3)
    - `~/.config/nixi/LOCAL.md` — machine-specific notes, if present
-   - `ls /usr/share/omarchy/bin | grep -i <topic>` and `hyprctl` live state
+   - the commands in `/usr/share/omarchy/bin` (list them with your file
+     tools), and `hyprctl` live state
 2. **Prefer nixarchy's own tools.** For installing software, a per-project
    toolchain, a throwaway VM, a container, or software that only ships for
    another distro, nixarchy has a panel: the package manager, Dev
    environments, MicroVMs, Podman and Distrobox. The table and the rules are
    in KNOWLEDGE.md ("nixarchy's own tools"). In short:
    - check first: `nixarchy-plugin --enabled <id>`, then
-     `test -d ~/.config/omarchy/plugins/<id>` (off, or not installed?), then
+     whether `~/.config/omarchy/plugins/<id>` exists (check with your file
+     tools: off, or not installed?), then
      the key in `omarchy menu keybindings --print`;
    - lead with the panel's menu path, give its key only if it is bound, then
      the terminal command second;

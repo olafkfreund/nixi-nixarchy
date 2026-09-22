@@ -137,8 +137,8 @@ NixOS 26.11), captured as it happened.</p>
     the key is free, finds where this machine keeps its own bindings, backs the file up, and asks
     before each step, showing the whole command, here the exact line it will append. Sam answers
     with <strong>Y</strong> or <strong>N</strong>, or the buttons, and can deny any step.</p>
-    <p class="note">Mechanic also <a href="https://github.com/olafkfreund/nixi-nixarchy/issues/27">asks
-    before read-only lookups</a>, not only before changes.</p>
+    <p class="note">Most lookups no longer ask: reading files does not, except for secrets such as
+    <code>~/.ssh</code>. An occasional search still arrives as a shell command and asks.</p>
   </div>
 </section>
 
@@ -177,7 +177,7 @@ NixOS 26.11), captured as it happened.</p>
   <thead><tr><th></th><th>Guide (default)</th><th>Mechanic</th></tr></thead>
   <tbody>
     <tr><td>What it does</td><td>Explains and instructs. Nothing on your machine changes.</td><td>Makes the change, and every step needs your yes.</td></tr>
-    <tr><td>How it's enforced</td><td>The bridge cancels every permission request, and the agent runs in its most restrictive mode.</td><td>Requests are shown in the card. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
+    <tr><td>How it's enforced</td><td>The bridge cancels every permission request, and the agent runs in its most restrictive mode.</td><td>Requests are shown in the card. With Claude, reading and searching files does not ask, except for secrets; set <code>"askBeforeReading": true</code> in <code>~/.config/omarchy/nixi.json</code> to be asked for those too. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
     <tr><td>Claude</td><td><code>plan</code> mode, requests cancelled</td><td><code>default</code> mode, asks</td></tr>
     <tr><td>Codex</td><td><code>read-only</code>, requests cancelled</td><td><code>read-only</code>, asks before each edit</td></tr>
     <tr><td>OpenCode</td><td><code>plan</code>, requests cancelled</td><td><code>build</code>, asks</td></tr>

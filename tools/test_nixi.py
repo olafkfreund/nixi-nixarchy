@@ -540,6 +540,29 @@ def _block(src, start):
     raise AssertionError("unbalanced braces")
 
 
+def test_lookups_use_file_tools():
+    # #27: in Mechanic every shell command needs a yes, so lookups done with
+    # grep/ls/cat in a shell flood the card with prompts. The skill and both
+    # briefs send the agent to its file tools instead.
+    skill = open(os.path.join(ROOT, "skills/nixi/SKILL.md")).read()
+    for path in ("skills/nixi/SKILL.md", "share/CLAUDE.md", "share/AGENTS.md"):
+        assert "file tools" in open(os.path.join(ROOT, path)).read(), path
+    for piped in ("| grep", "ls /usr", "test -d"):
+        assert piped not in skill, f"the skill still teaches a shell lookup: {piped}"
+
+
+def test_settings_keep_bridge_keys():
+    """The UI and the bridge both write nixi.json. The UI must write its keys on
+    top of what it read, or a font-size change deletes trust and
+    askBeforeReading, which only the bridge writes (#27 review)."""
+    ask = open(os.path.join(ROOT, "Ask.qml")).read()
+    flush = _block(ask, ask.index("function flushSettings"))
+    assert "Object.assign({}, settingsOnDisk" in flush, "flushSettings replaces nixi.json with UI keys only"
+    load = _block(ask, ask.index("function loadSettings"))
+    assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
+    print("  ok  a UI settings write keeps the bridge's own keys")
+
+
 def test_permission_keys_guard():
     """Y and N answer a permission prompt from the composer too, but only while
     it is empty, and Return does not send while the prompt is up (#20)."""
@@ -669,7 +692,7 @@ def test_tools_route():
 if __name__ == "__main__":
     for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
                test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_permission_keys_guard,
+               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_lookups_use_file_tools, test_settings_keep_bridge_keys, test_permission_keys_guard,
                test_permission_detail_is_plain, test_tools_route):
         fn()
     print("\nall checks passed")

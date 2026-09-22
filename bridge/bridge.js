@@ -5,12 +5,12 @@ import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { permissionDetail } from "./permission-detail.js";
 import {
   ClientSideConnection,
@@ -50,6 +50,14 @@ const cwd = process.env.NIXI_CWD
   || process.env.HOME || process.cwd();
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
 const settingsPath = join(settingsDir, "nixi.json");
+
+// "Ask for everything" (#27). Read once, synchronously: the agent's permission
+// rules are fixed when it is spawned (OpenCode) or its session starts (Claude),
+// so a change applies from the next session.
+const askBeforeReading = (() => {
+  try { return JSON.parse(readFileSync(settingsPath, "utf8")).askBeforeReading === true; }
+  catch { return false; }
+})();
 
 let permissionMode = "permission";
 // Guide unless nixi.json says otherwise; unknown values are Guide too.
@@ -157,7 +165,7 @@ else if (agentName === "claude")
 // Replaces any value from the environment: Nixi's permission rules are what
 // make Guide safe with OpenCode, so the user's env must not be able to weaken them.
 if (agentName === "opencode")
-  childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(OPENCODE_PERMISSIONS);
+  childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(opencodePermissions(askBeforeReading));
 if (agentName === "codex") {
   let codexConfig = {};
   try { codexConfig = JSON.parse(process.env.CODEX_CONFIG || "{}"); } catch {}
@@ -261,11 +269,15 @@ async function start() {
     clientCapabilities: { session: { configOptions: {} } },
   });
   steeringSupported = initialized?._meta?.steering?.supported === true;
+  const model = process.env.NIXI_MODEL;
   const session = await connection.newSession({ cwd, mcpServers: [],
-    ...(agentName === "claude" && process.env.NIXI_MODEL ? {
+    ...(agentName === "claude" ? {
       _meta: { claudeCode: { options: {
-        model: process.env.NIXI_MODEL,
-        settings: { model: process.env.NIXI_MODEL, availableModels: [process.env.NIXI_MODEL] },
+        ...(model ? { model } : {}),
+        settings: {
+          ...(model ? { model, availableModels: [model] } : {}),
+          permissions: claudePermissions(askBeforeReading),
+        },
       } } },
     } : {}),
   });

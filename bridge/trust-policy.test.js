@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -149,4 +149,56 @@ test("Guide: neither an edit nor a command reaches the card", async () => {
   assert.ok(!events.some((e) => e.type === "permission"), "Guide showed a permission prompt");
   assert.deepEqual(agent.filter((e) => e.method === "permissionOutcome").map((e) => e.outcome.outcome),
     ["cancelled", "cancelled"]);
+});
+
+test("Claude may read, grep and glob without asking; nothing else, and never secrets (#27)", () => {
+  const open = claudePermissions(false);
+  const strict = claudePermissions(true);
+  assert.deepEqual(open.allow, ["Read", "Grep", "Glob"]);
+  assert.deepEqual(strict.allow, []);
+  for (const rules of [open, strict]) {
+    for (const tool of ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"])
+      assert.ok(!rules.allow.some((rule) => rule.startsWith(tool)), tool);
+    for (const secret of ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.config/gcloud/**)", "Read(~/.azure/**)",
+                          "Read(/run/agenix/**)", "Read(**/.env)", "Read(**/*.age)"])
+      assert.ok(rules.ask.includes(secret), secret);
+  }
+  assert.deepEqual(open.ask, strict.ask);
+});
+
+test("askBeforeReading makes OpenCode's reads ask too, and changes nothing else (#27)", () => {
+  assert.equal(opencodePermissions(false), OPENCODE_PERMISSIONS);
+  assert.equal(opencodePermissions(undefined), OPENCODE_PERMISSIONS);
+  const strict = opencodePermissions(true).permission;
+  for (const key of ["read", "grep", "glob", "list"]) assert.equal(strict[key], "ask", key);
+  for (const [key, value] of Object.entries(OPENCODE_PERMISSIONS.permission))
+    if (!["read", "grep", "glob", "list"].includes(key)) assert.deepEqual(strict[key], value, key);
+  assert.equal(OPENCODE_PERMISSIONS.permission.grep, "allow", "the shared default was mutated");
+});
+
+const sentPermissions = (run) =>
+  run.agent.find((e) => e.method === "newSession").meta?.claudeCode?.options?.settings?.permissions;
+
+test("Claude's session starts with Nixi's read rules; askBeforeReading withdraws the allow (#27)", async () => {
+  assert.deepEqual(sentPermissions(await runBridge()), claudePermissions(false));
+  assert.deepEqual(sentPermissions(await runBridge({ settings: { askBeforeReading: true } })),
+    claudePermissions(true));
+  assert.deepEqual(sentPermissions(await runBridge({ settings: { askBeforeReading: "yes" } })),
+    claudePermissions(false), "only true counts");
+});
+
+test("the read rules ride alongside a configured model (#27)", async () => {
+  const run = await runBridge({ env: { NIXI_MODEL: "x" } });
+  const options = run.agent.find((e) => e.method === "newSession").meta.claudeCode.options;
+  assert.equal(options.model, "x");
+  assert.equal(options.settings.model, "x");
+  assert.deepEqual(options.settings.availableModels, ["x"]);
+  assert.deepEqual(options.settings.permissions, claudePermissions(false));
+});
+
+test("askBeforeReading reaches OpenCode's rules; other agents get no Claude meta (#27)", async () => {
+  const run = await runBridge({ env: opencode, settings: { askBeforeReading: true } });
+  const newSession = run.agent.find((e) => e.method === "newSession");
+  assert.deepEqual(JSON.parse(newSession.opencodeConfig), opencodePermissions(true));
+  assert.equal(newSession.meta, null);
 });
