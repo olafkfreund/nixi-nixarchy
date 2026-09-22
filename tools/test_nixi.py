@@ -48,7 +48,7 @@ def test_updater_precedence():
     assert oma["repo"] == "omacom/omarchy-site"
 
     # markdown source: docs/manual/<slug>.md, nothing deeper, nothing else
-    s = _slug = up._slug_of
+    s = up._slug_of
     assert s("docs/manual/gaming.md", "docs/manual", "md") == "gaming"
     assert s("docs/manual/img/x.md", "docs/manual", "md") is None, "no subdirs"
     assert s("docs/manual/_config.yml", "docs/manual", "md") is None
@@ -89,9 +89,7 @@ def test_local_search():
 def test_no_runtime_rename():
     """The fork renamed branding only. If any of these ever disappears, the
     widget silently stops talking to the desktop."""
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                           text=True, check=True).stdout.split()
-    # docs/FORK.md is the one file whose JOB is to name the old identifiers.
+    files = _tracked()
     # docs/FORK.md records the old names on purpose; this file spells them
     # out as search needles. Neither is shipped branding.
     SKIP = ("docs/FORK.md", "flake.lock", "tools/test_nixi.py", "intent/", "spec/", "plan/")
@@ -243,7 +241,7 @@ def test_old_widget_stays_gone():
     16). Only the checks that they are absent, and the installer's list of what
     to delete from an old install, may name them."""
     allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py",
-               ".github/workflows/ci.yml", "install.py")
+               ".github/workflows/ci.yml", "nix/package.nix", "install.py")
     pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token")
     for f in _tracked():
         if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
@@ -307,7 +305,6 @@ def test_menu_icon_migration():
     merge_menu leaves an existing entry alone, so it would otherwise only ever
     land on fresh installs -- but nixi's own pre-0.11 icon is migrated, and a
     matching glyph on somebody else's row is not."""
-    import importlib.util
     OLD, NEW = "\U000f0625", "\U000f0674"
     root = tempfile.mkdtemp()
     home = os.environ.get("HOME")
@@ -315,10 +312,7 @@ def test_menu_icon_migration():
         # install.py anchors every write at $HOME and refuses paths outside it,
         # so the fake home has to be in place before the module is loaded.
         os.environ["HOME"] = root
-        spec = importlib.util.spec_from_file_location(
-            "nixi_install", os.path.join(ROOT, "install.py"))
-        nixi_install = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(nixi_install)
+        nixi_install = load("nixi_install", "install.py")
         ext = os.path.join(root, ".config", "omarchy", "extensions")
         os.makedirs(ext, mode=0o700, exist_ok=True)
 
@@ -692,9 +686,7 @@ def test_tools_route():
 
 
 if __name__ == "__main__":
-    for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable, test_prefers_nixarchy_plugins, test_lookups_use_file_tools, test_settings_keep_bridge_keys, test_permission_keys_guard,
-               test_permission_detail_is_plain, test_tools_route):
-        fn()
+    for name, fn in list(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            fn()
     print("\nall checks passed")

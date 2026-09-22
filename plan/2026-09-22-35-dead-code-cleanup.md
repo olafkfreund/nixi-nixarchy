@@ -247,6 +247,17 @@ install tests pass.
 `"nixi"` and `nix run .` resolves. `actionlint` passes on `ci.yml` if it
 is installed (CI's Lint job runs it).
 
+*Result (implementation):*
+- `test_old_widget_stays_gone` allows `nix/package.nix` to name `ui.html`
+  now that the absence check lives there. `ci.yml` stays on its list,
+  because the offline-installer job's cleanup test also names it.
+- The inlined `nixi-watch` unit, evaluated through the CI's Home Manager
+  configuration, matches the old one: same Description, ExecStart, Restart,
+  PATH and targets.
+- `nix run .` is covered by `meta.mainProgram = "nixi"`, as checked with
+  `nix eval`. `nixi` has no `--help`, and running it would open the card,
+  so it was not run.
+
 ### Step 6: bridge (one commit, after PR #34)
 
 1. Wait for PR #34 to merge, then `git rebase master`. If #34 is still

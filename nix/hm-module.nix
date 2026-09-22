@@ -31,21 +31,6 @@ let
     "%h/.local/bin"
   ];
 
-  mkService = { description, exec, ... }: {
-    Unit = {
-      Description = description;
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      Type = "exec";
-      Environment = [ "PATH=${unitPath}" ];
-      ExecStart = exec;
-      Restart = "on-failure";
-      RestartSec = 2;
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
 in
 {
   imports = [
@@ -71,7 +56,6 @@ in
       # actually build each one is a separate question, asked and reported by
       # nix/adapters.nix rather than folded invisibly into this list (#16).
       default = [ "claude" "codex" ];
-      defaultText = lib.literalExpression ''[ "claude" "codex" ]'';
       example = [ "claude" "codex" "opencode" ];
       description = ''
         Agents whose ACP adapters are pinned into Nixi from your `pkgs`:
@@ -247,9 +231,20 @@ in
     })
 
     (lib.mkIf cfg.watcher.enable {
-      systemd.user.services.nixi-watch = mkService {
-        description = "Nixi tip watcher (at most one suggestion per day)";
-        exec = "${nixiPkg}/bin/nixi-watch";
+      systemd.user.services.nixi-watch = {
+        Unit = {
+          Description = "Nixi tip watcher (at most one suggestion per day)";
+          PartOf = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          Type = "exec";
+          Environment = [ "PATH=${unitPath}" ];
+          ExecStart = "${nixiPkg}/bin/nixi-watch";
+          Restart = "on-failure";
+          RestartSec = 2;
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
       };
     })
 

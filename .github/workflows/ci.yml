@@ -35,29 +35,6 @@ jobs:
       # behavioural self-check derivation.
       - run: nix flake check --print-build-logs
 
-      - name: Package ships the card, the button and the programs -- not the old widget
-        run: |
-          out=$(nix build .#nixi --no-link --print-out-paths)
-          for p in nixi nixi-context nixi-watch nixi-update-manual; do
-            test -x "$out/bin/$p" || { echo "missing $p"; exit 1; }
-          done
-          plugins="$out/share/omarchy/plugins"
-          for f in io.github.olafkfreund.nixi/manifest.json io.github.olafkfreund.nixi/Ask.qml \
-                   io.github.olafkfreund.nixi/bridge/bridge.js io.github.olafkfreund.nixi/bridge/nixi-node \
-                   io.github.olafkfreund.nixi-button/BarWidget.qml; do
-            test -s "$plugins/$f" || { echo "missing $f"; exit 1; }
-          done
-          for gone in bin/nixi-server share/nixi/ui.html share/nixi/vendor; do
-            test ! -e "$out/$gone" || { echo "the old widget is back: $gone"; exit 1; }
-          done
-          # Omarchy refuses symlinks inside a plugin folder.
-          ! find "$plugins" -mindepth 2 -type l | grep -q . \
-            || { echo "symlink inside a plugin folder"; exit 1; }
-          # The build must never ship bytecode caches.
-          ! find "$out" -name '__pycache__' -o -name '*.pyc' | grep -q . \
-            || { echo "bytecode leaked into the store output"; exit 1; }
-          echo "package OK: $out"
-
   bridge:
     name: Bridge tests (node --test)
     runs-on: ubuntu-latest

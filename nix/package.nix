@@ -62,7 +62,7 @@ let
       "--set-default NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
   );
 in
-stdenvNoCC.mkDerivation (finalAttrs: {
+stdenvNoCC.mkDerivation {
   pname = "nixi";
   inherit version;
 
@@ -84,8 +84,6 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   installPhase = ''
     runHook preInstall
-
-    mkdir -p $out/bin $out/share/nixi $out/share/nixi/skills
 
     # The Python programs get a real interpreter.
     for p in nixi-watch nixi-update-manual nixi-context; do
@@ -190,10 +188,15 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
       $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped
-    # py_compile drops __pycache__ beside the source; it must not ship.
+    # py_compile drops __pycache__ beside the source; it must not ship, and
+    # nor must any other bytecode, or the old widget's page and vendor files.
     rm -rf $out/bin/__pycache__
+    ! find $out -name '__pycache__' -o -name '*.pyc' | grep -q . \
+      || { echo "bytecode leaked into the store output"; exit 1; }
+    for gone in share/nixi/ui.html share/nixi/vendor; do
+      test ! -e "$out/$gone" || { echo "the old widget is back: $gone"; exit 1; }
+    done
     ${bash}/bin/bash -n $out/bin/nixi
-    test ! -e $out/bin/nixi-server || { echo "the old widget server is still installed"; exit 1; }
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
@@ -247,4 +250,4 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     platforms = lib.platforms.linux;
     mainProgram = "nixi";
   };
-})
+}

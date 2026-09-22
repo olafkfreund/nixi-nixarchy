@@ -15,16 +15,6 @@
         default = nixi;
       });
 
-      # `nix run github:olafkfreund/nixi-nixarchy` opens the card, if the Nixi
-      # plugin is installed and enabled in the running Omarchy shell.
-      apps = forAllSystems (pkgs: rec {
-        nixi = {
-          type = "app";
-          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.nixi}/bin/nixi";
-        };
-        default = nixi;
-      });
-
       # The supported way in. `homeManagerModules` is the older spelling and
       # is kept as an alias so either name works.
       homeModules.default = import ./nix/hm-module.nix self;
