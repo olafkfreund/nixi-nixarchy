@@ -118,10 +118,8 @@ Item {
   }
 
   function showCopyToast() {
-    copyToastFade.stop()
-    copyToastCard.opacity = 1
     copyToastVisible = true
-    copyToastHold.restart()
+    copyToastAnimation.restart()
   }
 
   function setFontScale(value) {
@@ -288,21 +286,14 @@ Item {
       }
     }
 
-    Timer {
-      id: copyToastHold
-      interval: 1500
-      onTriggered: copyToastFade.restart()
-    }
-
-    NumberAnimation {
-      id: copyToastFade
-      target: copyToastCard
-      property: "opacity"
-      from: 1
-      to: 0
-      duration: 500
-      easing.type: Easing.OutQuad
-      onFinished: root.copyToastVisible = false
+    // Shown at full opacity, held, then faded. The hide is a step of the
+    // sequence, so restarting it for a second copy cannot hide the new toast.
+    SequentialAnimation {
+      id: copyToastAnimation
+      PropertyAction { target: copyToastCard; property: "opacity"; value: 1 }
+      PauseAnimation { duration: 1500 }
+      NumberAnimation { target: copyToastCard; property: "opacity"; to: 0; duration: 500; easing.type: Easing.OutQuad }
+      ScriptAction { script: root.copyToastVisible = false }
     }
   }
 
