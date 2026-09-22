@@ -11,20 +11,21 @@ for good. State: ~/.local/share/nixi/tips.json
 """
 import json
 import os
+import secrets
 import socket
+import stat
 import subprocess
-import sys
 import time
 
 DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
 STATE = os.path.join(DATA, "tips.json")
 
-# Thresholds (env-overridable so tests can force them low).
-FLIPFLOP = int(os.environ.get("OMARCHY_TIPS_FLIPFLOP", "40"))
-TERM_CHURN = int(os.environ.get("OMARCHY_TIPS_TERM_CHURN", "10"))
-MONO_WINDOWS = int(os.environ.get("OMARCHY_TIPS_MONO_WINDOWS", "8"))
-DAY_GAP = float(os.environ.get("OMARCHY_TIPS_DAY_GAP", str(24 * 3600)))
-TIP_GAP = float(os.environ.get("OMARCHY_TIPS_TIP_GAP", str(14 * 24 * 3600)))
+# Thresholds.
+FLIPFLOP = 40
+TERM_CHURN = 10
+MONO_WINDOWS = 8
+DAY_GAP = 24 * 3600
+TIP_GAP = 14 * 24 * 3600
 
 TERMINALS = {"foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty"}
 
@@ -48,9 +49,6 @@ TIPS = {
                    "between them? Teach me briefly."),
 }
 
-
-import secrets
-import stat
 
 _UID = os.getuid()
 _HOME = os.path.abspath(os.path.expanduser("~"))
@@ -228,7 +226,6 @@ class Day:
     def reset(self):
         self.start = time.time()
         self.used_special = False
-        self.workspace_switches = 0
         self.workspaces = set()
         self.opens_by_class = {}
         self.total_opens = 0
@@ -248,7 +245,6 @@ class Day:
         if ev == "workspace":
             name = data.strip()
             self.workspaces.add(name)
-            self.workspace_switches += 1
             if name.startswith("special"):
                 self.used_special = True
         elif ev in ("activespecial", "activespecialv2"):
@@ -287,10 +283,6 @@ class Day:
 
 def main():
     day = Day()
-    if "--stdin" in sys.argv:  # test mode: feed events on stdin
-        for line in sys.stdin:
-            day.on_event(line.strip())
-        return
     run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     while True:
         try:

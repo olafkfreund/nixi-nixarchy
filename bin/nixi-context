@@ -14,7 +14,7 @@ tokenizer and section splitting are what tools/test_nixi.py already verifies.
 Stdlib only, no network.
 """
 import os
-import re as _re
+import re
 import stat
 import subprocess
 import sys
@@ -52,7 +52,7 @@ def bounded_read(path, cap):
         os.close(fd)
 
 
-_WORD = _re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
+_WORD = re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
 _STOP = set("the a an and or of to in on for with how do i does what is are my "
             "you your it this that can where when omarchy use using used why "
             "work works working different way ways get set new want would "
@@ -90,14 +90,14 @@ def _sections():
             except (OSError, ValueError):
                 continue
             fname_words = " ".join(name[:-3].split("-"))
-            for part in _re.split(r"\n(?=#{1,3} )", text):
+            for part in re.split(r"\n(?=#{1,3} )", text):
                 lines = part.strip().splitlines()
                 if not lines:
                     continue
                 head = (lines[0].lstrip("# ").strip() or name) + " " + fname_words
                 body = "\n".join(lines[1:]).strip()
                 if body:
-                    docs.append((f"{head}", body, tag))
+                    docs.append((head, body, tag))
     return docs
 
 
@@ -160,7 +160,7 @@ def _tools_part(ids):
                 rows.append(" · ".join(cells))
     if not rows:
         return ""
-    rules = _re.findall(r"^\d\. .*(?:\n   .*)*", section, _re.M)[:2]
+    rules = re.findall(r"^\d\. .*(?:\n   .*)*", section, re.M)[:2]
     out = ("From the notes — nixarchy's own tools (prefer these; check before recommending):\n"
            + "\n".join(rows) + "\n" + "\n".join(" ".join(r.split()) for r in rules))
     return out if len(out) <= TOOLS_LIMIT else out[:TOOLS_LIMIT].rsplit(" ", 1)[0] + " …"
@@ -187,7 +187,7 @@ def local_answer(q):
             best, score = (head, body, tag), s
     # keybinding questions: grep the live bindings too
     kb_hit = ""
-    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
+    if any(w in qset for w in ("key", "shortcut", "keybinding", "bind",
                                "super", "press", "hotkey")):
         kb = _keybinds()
         hits = [l for l in kb.splitlines()
