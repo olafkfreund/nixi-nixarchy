@@ -120,6 +120,27 @@ spec: spec/2026-09-22-27-read-only-prompts.md
       same request. If it floods, file a new issue.
 
    → verify: record the results in the PR description.
+
+   *Result (implementation), 2026-09-22:*
+   - **p620, real claude-agent-acp 0.79.0 through this bridge in Mechanic**
+     (scratch HOME and Claude config, every prompt denied): a Read of
+     `~/.config/hypr/atmos.lua` plus a Read of a dummy `~/.ssh/config` gave
+     **1 prompt** (ssh only; the hypr read returned the file). With
+     `askBeforeReading: true` it gave **2**. The rules work as specified.
+   - **razer, through the card** (plugin link swapped to this branch's
+     build with razer's adapters; ai-mirror over SSH):
+     - Old build, Guide: no prompt shown. Reads ran, because plan mode
+       allows them; one cancelled request, the plan-approval step. So the
+       spec's "Guide reads more" risk does not happen: Guide already reads.
+     - **New build, Mechanic: 4 prompts before any edit, all Bash**
+       (`omarchy menu keybindings --print | grep …; ls …; grep …`,
+       `grep … | head; tail …`, `grep -rn …`, `grep -rln … /`). There were
+       no Read, Grep or Glob tool calls, so the new rules never applied.
+       Stopped at the fourth (a recursive grep of `/`, denied).
+     - razer restored: link and `nixi.json` match the saved copies,
+       `bindings.lua` md5 unchanged, control released.
+   - **Outcome not met.** Claude's lookups on razer go through the shell,
+     not its read tools. **Stopped for a spec revision.**
 10. **PR:** link the intent, spec and plan. Include the before and after
     prompt counts, the Guide read comparison (spec Risks), and the Codex
     count. Close #27.
