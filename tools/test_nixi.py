@@ -568,8 +568,8 @@ def test_permission_keys_guard():
     it is empty, and Return does not send while the prompt is up (#20)."""
     card = open(os.path.join(ROOT, "Conversation.qml")).read()
     handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
-    assert "pendingPermissionId" in handler, "the composer ignores a permission prompt"
-    guard = _block(handler, handler.index("pendingPermissionId"))
+    assert "pendingPermission.id" in handler, "the composer ignores a permission prompt"
+    guard = _block(handler, handler.index("pendingPermission.id"))
     for token in ("text.length === 0", "Qt.Key_Y", "Qt.Key_N", "Qt.Key_Return"):
         assert token in guard, f"the composer's permission branch has no {token}"
     # One pair, in WindowShortcuts, shared by the overlay and the pinned window.
@@ -589,11 +589,11 @@ def test_permission_detail_is_plain():
     long detail scrolls inside the card instead of being cut short (#21)."""
     qml = open(os.path.join(ROOT, "Conversation.qml")).read()
     card = qml.split("id: permissionLayer")[1].split("id: cardFade")[0]
-    title = card.split("text: root.pendingPermissionTitle")[1].split("}")[0]
+    title = card.split("text: root.pendingPermission.title")[1].split("}")[0]
     assert "textFormat: Text.PlainText" in title, "the permission title is not PlainText"
     assert "Flickable {" in card, "the permission detail does not scroll"
     detail = card.split("Flickable {")[1].split("ScrollBar.vertical")[0]
-    assert "TextEdit {" in detail and "root.pendingPermissionDetail" in detail, \
+    assert "TextEdit {" in detail and "root.pendingPermission.detail" in detail, \
         "the permission detail is not in the Flickable"
     assert "textFormat: TextEdit.PlainText" in detail, "the permission detail is not PlainText"
     assert "readOnly: true" in detail, "the permission detail is editable"

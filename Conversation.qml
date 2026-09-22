@@ -40,10 +40,10 @@ Item {
   property int activeReply: -1
   property string activeReplyMessageId: ""
   property string queuedPrompt: ""
-  property string pendingPermissionId: ""
-  property string pendingPermissionTitle: ""
-  property string pendingPermissionDetail: ""
-  property int pendingPermissionOmitted: 0
+  // The request on screen. noPermission (id "") means none, so bindings can
+  // read its fields without a null check.
+  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0 })
+  property var pendingPermission: noPermission
   property var permissionQueue: []
   property string permissionMode: "permission"
   property bool permissionModePending: false
@@ -72,7 +72,7 @@ Item {
   property string reasoningEffort: ""
   property string searchMode: ""
   property string lastVisibleShortcut: ""
-  readonly property bool permissionKeysLive: pendingPermissionId !== "" && prompt.text.length === 0
+  readonly property bool permissionKeysLive: pendingPermission.id !== "" && prompt.text.length === 0
   property string hoverPreviewPath: ""
   property bool filePreviewVisible: false
   property int filePreviewRequestId: 0
@@ -1000,40 +1000,20 @@ Item {
   }
 
   function clearPermissions() {
-    pendingPermissionId = ""
-    pendingPermissionTitle = ""
-    pendingPermissionDetail = ""
-    pendingPermissionOmitted = 0
+    pendingPermission = noPermission
     permissionQueue = []
   }
 
   function enqueuePermission(id, title, detail, omitted) {
     var request = { id: String(id || ""), title: String(title || "Allow tool?"),
                     detail: String(detail || ""), omitted: Number(omitted) || 0 }
-    if (pendingPermissionId === "") {
-      pendingPermissionId = request.id
-      pendingPermissionTitle = request.title
-      pendingPermissionDetail = request.detail
-      pendingPermissionOmitted = request.omitted
-    } else {
-      permissionQueue = permissionQueue.concat([request])
-    }
+    permissionQueue = permissionQueue.concat([request])
+    if (pendingPermission.id === "") showNextPermission()
   }
 
   function showNextPermission() {
-    if (permissionQueue.length === 0) {
-      pendingPermissionId = ""
-      pendingPermissionTitle = ""
-      pendingPermissionDetail = ""
-      pendingPermissionOmitted = 0
-      return
-    }
-    var request = permissionQueue[0]
+    pendingPermission = permissionQueue.length > 0 ? permissionQueue[0] : noPermission
     permissionQueue = permissionQueue.slice(1)
-    pendingPermissionId = request.id
-    pendingPermissionTitle = request.title
-    pendingPermissionDetail = request.detail
-    pendingPermissionOmitted = request.omitted
   }
 
   function handleAgentLine(rawLine) {
@@ -1133,8 +1113,8 @@ Item {
   }
 
   function answerPermission(allow) {
-    if (pendingPermissionId === "" || !agent.running) return
-    var answeredId = pendingPermissionId
+    if (pendingPermission.id === "" || !agent.running) return
+    var answeredId = pendingPermission.id
     agent.write(JSON.stringify({
       type: "permission",
       id: answeredId,
@@ -1497,7 +1477,7 @@ Item {
               }
               Keys.onPressed: function(event) {
                 root.noteKeyboardActivity()
-                if (root.pendingPermissionId !== "") {
+                if (root.pendingPermission.id !== "") {
                   var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
                   if (bare && text.length === 0
                       && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
@@ -2121,7 +2101,7 @@ Item {
       id: permissionLayer
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
       anchors.fill: parent
-      visible: root.pendingPermissionId !== ""
+      visible: root.pendingPermission.id !== ""
       color: Qt.rgba(root.scrim.r, root.scrim.g, root.scrim.b, 0.72)
       z: 20
 
@@ -2155,7 +2135,7 @@ Item {
 
           Text {
             width: parent.width
-            text: root.pendingPermissionTitle
+            text: root.pendingPermission.title
             textFormat: Text.PlainText
             color: root.foreground
             font.family: Style.font.family
@@ -2172,7 +2152,7 @@ Item {
           Flickable {
             width: parent.width
             height: Math.min(detailText.implicitHeight, permissionLayer.height * 0.45)
-            visible: root.pendingPermissionDetail !== ""
+            visible: root.pendingPermission.detail !== ""
             clip: true
             contentWidth: width
             contentHeight: detailText.implicitHeight
@@ -2182,9 +2162,9 @@ Item {
             TextEdit {
               id: detailText
               width: parent.width
-              text: root.pendingPermissionOmitted > 0
-                ? root.pendingPermissionDetail.slice(0, root.pendingPermissionDetail.lastIndexOf("\n"))
-                : root.pendingPermissionDetail
+              text: root.pendingPermission.omitted > 0
+                ? root.pendingPermission.detail.slice(0, root.pendingPermission.detail.lastIndexOf("\n"))
+                : root.pendingPermission.detail
               readOnly: true
               selectByMouse: true
               textFormat: TextEdit.PlainText
@@ -2199,8 +2179,8 @@ Item {
 
           Text {
             width: parent.width
-            visible: root.pendingPermissionOmitted > 0
-            text: root.pendingPermissionDetail.slice(root.pendingPermissionDetail.lastIndexOf("\n") + 1)
+            visible: root.pendingPermission.omitted > 0
+            text: root.pendingPermission.detail.slice(root.pendingPermission.detail.lastIndexOf("\n") + 1)
             textFormat: Text.PlainText
             color: Color.urgent
             font.family: Style.font.family
