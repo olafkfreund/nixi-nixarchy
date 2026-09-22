@@ -209,9 +209,7 @@ Item {
     outsideDismissArmed = false
     closeFilePreview()
     agent.running = false
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
+    transcriptPhysics.stop()
     entranceTimer.stop()
     cardFade.stop()
     veilFade.stop()
@@ -263,7 +261,7 @@ Item {
   function scrollToEnd() {
     // An anchor glide owns the viewport until it lands. Streaming chunks that
     // arrive mid-glide must not snap it to the end.
-    if (anchorScroll.running || keyboardCoast.running || trackpadCoast.running) return
+    if (anchorScroll.running || transcriptPhysics.running) return
     verticalScroll.stop()
     // Let the border absorb ordinary growth. Only scroll once the surface has
     // reached its height cap; scrolling during the growth animation makes the
@@ -285,9 +283,7 @@ Item {
     anchorActive = false
     anchorScroll.stop()
     verticalScroll.stop()
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
+    transcriptPhysics.stop()
     surface.cancelFlick()
     Qt.callLater(function() {
       if (!root.composerPinsTail) return
@@ -344,9 +340,7 @@ Item {
       : (verticalScroll.running ? verticalScroll.to : surface.contentY)
     // Any deliberate scroll takes the viewport back from the glide.
     anchorScroll.stop()
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
+    transcriptPhysics.stop()
     var nextY = Math.max(0, Math.min(maxY, baseY + dy))
     if (nextY !== baseY) {
       verticalScroll.stop()
@@ -360,55 +354,10 @@ Item {
     scrollBy(dy * Style.space(44))
   }
 
-  // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
-  // model repeated force impulses: restarting an eased position animation on
-  // every auto-repeat discards its time derivative, and inferring velocity
-  // from the remaining distance is invalid once the easing curve is not the
-  // constant-deceleration curve used by that inference.
-  property real keyboardVelocityY: 0
-  property double keyboardSampleTime: 0
-  function coastVertically(velocity) {
-    trackpadCoast.stop()
-    var speed = Math.min(surface.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * surface.flickDeceleration)
-    var maxY = Math.max(0, surface.contentHeight - surface.height)
-    var destination = Math.max(0, Math.min(maxY,
-      surface.contentY + direction * distance))
-    if (Math.abs(destination - surface.contentY) <= 1) return
-    trackpadCoast.from = surface.contentY
-    trackpadCoast.to = destination
-    // Preserve the sampled trackpad stopping distance while stretching its
-    // presentation enough for the final loss of momentum to remain legible.
-    trackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / surface.flickDeceleration)))
-    trackpadCoast.start()
-  }
-
-  function stopCoastAtBoundary(flickable, animation) {
-    if (!animation.running) return
-    var minY = flickable.originY
-    var maxY = Math.max(minY, minY + flickable.contentHeight - flickable.height)
-    if (animation.to <= minY && flickable.contentY <= minY + 0.75) {
-      animation.stop()
-      flickable.contentY = minY
-    } else if (animation.to >= maxY && flickable.contentY >= maxY - 0.75) {
-      animation.stop()
-      flickable.contentY = maxY
-    }
-  }
-
   function scrollKeyImpulse(dy, page) {
     verticalScroll.stop()
     anchorScroll.stop()
-    surface.cancelFlick()
-    trackpadCoast.stop()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    keyboardVelocityY = Math.max(-surface.maximumFlickVelocity,
-      Math.min(surface.maximumFlickVelocity, keyboardVelocityY + dy * impulse))
-    keyboardSampleTime = Date.now()
-    keyboardCoast.start()
+    transcriptPhysics.impulse(dy * (page ? root.keyboardPageImpulse : root.keyboardLineImpulse))
   }
 
   // Anchor the newest prompt to the top of the viewport. Called after the
@@ -426,9 +375,7 @@ Item {
     Qt.callLater(function() {
       verticalScroll.stop()
       anchorScroll.stop()
-      keyboardVelocityY = 0
-      keyboardCoast.stop()
-      trackpadCoast.stop()
+      transcriptPhysics.stop()
       var maxY = Math.max(0, surface.contentHeight - surface.height)
       var target = Math.min(root.anchorY, maxY)
       if (Math.abs(target - surface.contentY) < 1) {
@@ -452,8 +399,6 @@ Item {
   property int menuIndex: -1
   property int menuShortcutFirst: -1
   property int menuShortcutLast: -1
-  property real menuKeyboardVelocityY: 0
-  property double menuKeyboardSampleTime: 0
   // The list opens under wherever the pointer happens to be resting, so a
   // bare `entered` would hand it the selection the instant it appears --
   // stealing it from the keyboard without anyone touching the mouse. Hover
@@ -473,9 +418,7 @@ Item {
   function menuMove(delta) {
     if (!root.menuOpen) return false
     root.menuMouseArmed = false
-    root.menuKeyboardVelocityY = 0
-    menuKeyboardCoast.stop()
-    menuTrackpadCoast.stop()
+    menuPhysics.stop()
     inlineResults.cancelFlick()
     var range = visibleMenuRange()
     var current = root.menuIndex
@@ -532,37 +475,7 @@ Item {
 
   function menuScrollKeyImpulse(direction, page) {
     if (!root.menuOpen || direction === 0) return
-    menuTrackpadCoast.stop()
-    inlineResults.cancelFlick()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    root.menuKeyboardVelocityY = Math.max(-inlineResults.maximumFlickVelocity,
-      Math.min(inlineResults.maximumFlickVelocity,
-        root.menuKeyboardVelocityY + direction * impulse))
-    root.menuKeyboardSampleTime = Date.now()
-    menuKeyboardCoast.start()
-  }
-
-  function menuScrollBounds() {
-    var minY = inlineResults.originY
-    return { min: minY, max: Math.max(minY,
-      minY + inlineResults.contentHeight - inlineResults.height) }
-  }
-
-  function coastMenuTrackpad(velocity) {
-    menuTrackpadCoast.stop()
-    var speed = Math.min(inlineResults.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * inlineResults.flickDeceleration)
-    var bounds = menuScrollBounds()
-    var destination = Math.max(bounds.min, Math.min(bounds.max,
-      inlineResults.contentY + direction * distance))
-    if (Math.abs(destination - inlineResults.contentY) <= 1) return
-    menuTrackpadCoast.from = inlineResults.contentY
-    menuTrackpadCoast.to = destination
-    menuTrackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / inlineResults.flickDeceleration)))
-    menuTrackpadCoast.start()
+    menuPhysics.impulse(direction * (page ? root.keyboardPageImpulse : root.keyboardLineImpulse))
   }
 
   function scrollActiveSurface(direction, page) {
@@ -820,6 +733,133 @@ Item {
   // Shortcuts reach only the window that declares them, so the overlay panel
   // and the pinned window each need their own copy of the scrolling and font
   // set. These cover the case where nothing in the card holds focus at all.
+  // Scroll motion for one vertical Flickable: keyboard impulses integrated
+  // frame by frame, and trackpad momentum. The transcript and the menu each
+  // own one; their WheelHandlers keep their own notched-wheel behaviour and
+  // hand pixel-delta (trackpad) events to track().
+  //
+  // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
+  // model repeated force impulses: restarting an eased position animation on
+  // every auto-repeat discards its time derivative, and inferring velocity
+  // from the remaining distance is invalid once the easing curve is not the
+  // constant-deceleration curve used by that inference.
+  component ScrollPhysics: Item {
+    id: physics
+    required property Flickable flickable
+    property real deceleration: 608
+    property real velocity: 0
+    property double sampleTime: 0
+    property double lastWheelTime: 0
+    property real releaseVelocity: 0
+    readonly property bool running: keyTimer.running || momentum.running
+    readonly property real minY: flickable.originY
+    readonly property real maxY: Math.max(minY, minY + flickable.contentHeight - flickable.height)
+
+    function stop() {
+      velocity = 0
+      keyTimer.stop()
+      momentum.stop()
+    }
+
+    function impulse(amount) {
+      momentum.stop()
+      flickable.cancelFlick()
+      velocity = Math.max(-flickable.maximumFlickVelocity,
+        Math.min(flickable.maximumFlickVelocity, velocity + amount))
+      sampleTime = Date.now()
+      keyTimer.start()
+    }
+
+    // A precision-scroll gesture is not a pointer drag, so handing its
+    // sampled velocity back to Flickable.flick() is unreliable after
+    // cancelFlick(): on some Qt/Wayland paths the synthetic flick is
+    // discarded with the wheel sequence that just ended. Animate the
+    // stopping distance directly instead. The quint ease gives the coast a
+    // long, soft tail; distance derives from deceleration while the
+    // presentation duration is stretched enough to make that tail read.
+    function coast(release) {
+      momentum.stop()
+      var speed = Math.min(flickable.maximumFlickVelocity, Math.abs(release))
+      if (speed <= 40) return
+      var distance = speed * speed / (2 * flickable.flickDeceleration)
+      var destination = Math.max(minY, Math.min(maxY,
+        flickable.contentY + (release < 0 ? -1 : 1) * distance))
+      if (Math.abs(destination - flickable.contentY) <= 1) return
+      momentum.from = flickable.contentY
+      momentum.to = destination
+      momentum.duration = Math.max(900, Math.min(2800,
+        Math.round(speed * 1800 / flickable.flickDeceleration)))
+      momentum.start()
+    }
+
+    function release() {
+      releaseTimer.stop()
+      coast(-releaseVelocity)
+      lastWheelTime = 0
+      releaseVelocity = 0
+    }
+
+    // One pixel-delta wheel event: follow the fingers, sample the velocity,
+    // and coast once the gesture ends (or pauses past the release timer).
+    function track(wheel) {
+      stop()
+      flickable.cancelFlick()
+      var now = Date.now()
+      var first = wheel.phase === Qt.ScrollBegin || lastWheelTime === 0
+      if (first) { lastWheelTime = now; releaseVelocity = 0 }
+      if (wheel.phase === Qt.ScrollEnd) { release(); return }
+      var elapsed = first ? 16 : Math.max(1, Math.min(80, now - lastWheelTime))
+      var dy = wheel.pixelDelta.y
+      releaseVelocity = releaseVelocity * 0.55 + dy * 1000 / elapsed * 0.45
+      lastWheelTime = now
+      flickable.contentY = Math.max(minY, Math.min(maxY, flickable.contentY - dy))
+      releaseTimer.restart()
+    }
+
+    function stopAtBoundary() {
+      if (!momentum.running) return
+      if (momentum.to <= minY && flickable.contentY <= minY + 0.75) {
+        momentum.stop()
+        flickable.contentY = minY
+      } else if (momentum.to >= maxY && flickable.contentY >= maxY - 0.75) {
+        momentum.stop()
+        flickable.contentY = maxY
+      }
+    }
+
+    Timer {
+      id: keyTimer
+      interval: 16
+      repeat: true
+      onTriggered: {
+        var now = Date.now()
+        var elapsed = Math.max(1, Math.min(40, now - physics.sampleTime)) / 1000
+        physics.sampleTime = now
+        var v = physics.velocity
+        var flick = physics.flickable
+        var nextY = Math.max(physics.minY, Math.min(physics.maxY, flick.contentY + v * elapsed))
+        flick.contentY = nextY
+        if ((nextY <= physics.minY && v < 0) || (nextY >= physics.maxY && v > 0)) {
+          physics.velocity = 0
+          keyTimer.stop()
+          return
+        }
+        var loss = physics.deceleration * elapsed
+        if (Math.abs(v) <= loss) {
+          physics.velocity = 0
+          keyTimer.stop()
+        } else physics.velocity = v > 0 ? v - loss : v + loss
+      }
+    }
+    NumberAnimation {
+      id: momentum
+      target: physics.flickable
+      property: "contentY"
+      easing.type: Easing.OutQuint
+    }
+    Timer { id: releaseTimer; interval: 55; onTriggered: physics.release() }
+  }
+
   component WindowShortcuts: Item {
     // An inline component does not share the enclosing document's scope, so
     // the conversation is handed in rather than reached through its id.
@@ -1136,6 +1176,9 @@ Item {
     stdout: SplitParser { onRead: function(line) { root.handleAgentLine(line) } }
   }
 
+  ScrollPhysics { id: transcriptPhysics; flickable: surface; deceleration: root.keyboardDeceleration }
+  ScrollPhysics { id: menuPhysics; flickable: inlineResults; deceleration: root.keyboardDeceleration }
+
   PanelWindow {
     id: panel
     visible: root.opened && !root.pinned
@@ -1208,44 +1251,14 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         maximumFlickVelocity: 6000
         flickDeceleration: 650
-        onContentYChanged: root.stopCoastAtBoundary(surface, trackpadCoast)
+        onContentYChanged: transcriptPhysics.stopAtBoundary()
         onDraggingChanged: {
           if (!dragging) return
-          root.keyboardVelocityY = 0
-          keyboardCoast.stop()
+          transcriptPhysics.stop()
           verticalScroll.stop()
           anchorScroll.stop()
-          trackpadCoast.stop()
         }
 
-        Timer {
-          id: keyboardCoast
-          interval: 16
-          repeat: true
-          onTriggered: {
-            var now = Date.now()
-            var elapsed = Math.max(1, Math.min(40, now - root.keyboardSampleTime)) / 1000
-            root.keyboardSampleTime = now
-            var velocity = root.keyboardVelocityY
-            var maxY = Math.max(0, surface.contentHeight - surface.height)
-            var nextY = Math.max(0, Math.min(maxY, surface.contentY + velocity * elapsed))
-            surface.contentY = nextY
-
-            if ((nextY <= 0 && velocity < 0) || (nextY >= maxY && velocity > 0)) {
-              root.keyboardVelocityY = 0
-              stop()
-              return
-            }
-
-            var loss = root.keyboardDeceleration * elapsed
-            if (Math.abs(velocity) <= loss) {
-              root.keyboardVelocityY = 0
-              stop()
-            } else {
-              root.keyboardVelocityY = velocity > 0 ? velocity - loss : velocity + loss
-            }
-          }
-        }
 
         NumberAnimation {
           id: verticalScroll
@@ -1263,83 +1276,26 @@ Item {
           duration: 320
           easing.type: Easing.OutCubic
         }
-        // A precision-scroll gesture is not a pointer drag, so handing its
-        // sampled velocity back to Flickable.flick() is unreliable after
-        // cancelFlick(): on some Qt/Wayland paths the synthetic flick is
-        // discarded with the wheel sequence that just ended. Animate the
-        // stopping distance directly instead. The cubic ease gives the coast
-        // a long, soft tail; distance derives from deceleration while the
-        // presentation duration is stretched enough to make that tail read.
-        NumberAnimation {
-          id: trackpadCoast
-          target: surface
-          property: "contentY"
-          easing.type: Easing.OutQuint
-        }
 
         // Qt/Wayland may report a two-finger trackpad stream as either a
         // touchpad or a mouse. Pixel deltas distinguish that stream from a
         // click wheel, whose notches keep using the animated keyboard step.
         WheelHandler {
-          id: trackpadWheel
           target: null
           blocking: true
           acceptedButtons: Qt.NoButton
           acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-          property double lastSampleTime: 0
-          property real releaseVelocityY: 0
-
-          function coast() {
-            coastTimer.stop()
-            root.coastVertically(-releaseVelocityY)
-            lastSampleTime = 0
-            releaseVelocityY = 0
-          }
-
           onWheel: function(wheel) {
             if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
               var steps = wheel.angleDelta.y / 120
               if (steps !== 0) root.scrollLine(-steps * 3)
-              wheel.accepted = true
-              return
+            } else {
+              verticalScroll.stop()
+              anchorScroll.stop()
+              transcriptPhysics.track(wheel)
             }
-
-            verticalScroll.stop()
-            anchorScroll.stop()
-            root.keyboardVelocityY = 0
-            keyboardCoast.stop()
-            trackpadCoast.stop()
-            surface.cancelFlick()
-
-            var now = Date.now()
-            var firstSample = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-            if (firstSample) {
-              lastSampleTime = now
-              releaseVelocityY = 0
-            }
-            if (wheel.phase === Qt.ScrollEnd) {
-              coast()
-              wheel.accepted = true
-              return
-            }
-
-            var elapsed = firstSample ? 16 : Math.max(1, Math.min(80, now - lastSampleTime))
-            var dy = wheel.pixelDelta.y
-            releaseVelocityY = releaseVelocityY * 0.55 + dy * 1000 / elapsed * 0.45
-            lastSampleTime = now
-
-            var maxY = Math.max(0, surface.contentHeight - surface.height)
-            surface.contentY = Math.max(0, Math.min(maxY, surface.contentY - dy))
-            coastTimer.restart()
             wheel.accepted = true
           }
-
-        }
-
-        Timer {
-          id: coastTimer
-          interval: 55
-          onTriggered: trackpadWheel.coast()
         }
 
         Column {
@@ -1698,113 +1654,36 @@ Item {
               flickDeceleration: 650
               reuseItems: true
               onContentYChanged: {
-                root.stopCoastAtBoundary(inlineResults, menuTrackpadCoast)
+                menuPhysics.stopAtBoundary()
                 root.deferMenuShortcutRange()
               }
               onHeightChanged: root.deferMenuShortcutRange()
               onCountChanged: Qt.callLater(root.updateMenuShortcutRange)
               onDraggingChanged: {
                 if (!dragging) return
-                root.menuKeyboardVelocityY = 0
-                menuKeyboardCoast.stop()
-                menuTrackpadCoast.stop()
+                menuPhysics.stop()
               }
               ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-              NumberAnimation {
-                id: menuTrackpadCoast
-                target: inlineResults
-                property: "contentY"
-                easing.type: Easing.OutQuint
-              }
-
               WheelHandler {
-                id: menuTrackpadWheel
                 target: null
                 blocking: true
                 acceptedButtons: Qt.NoButton
                 acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-                property double lastSampleTime: 0
-                property real releaseVelocityY: 0
-                function coast() {
-                  menuCoastTimer.stop()
-                  root.coastMenuTrackpad(-releaseVelocityY)
-                  lastSampleTime = 0
-                  releaseVelocityY = 0
-                }
                 onWheel: function(wheel) {
                   if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
                     var steps = wheel.angleDelta.y / 120
                     if (steps !== 0)
                       root.menuScrollKeyImpulse(steps < 0 ? 1 : -1, false)
-                    wheel.accepted = true
-                    return
-                  }
-                  root.menuKeyboardVelocityY = 0
-                  menuKeyboardCoast.stop()
-                  menuTrackpadCoast.stop()
-                  inlineResults.cancelFlick()
-                  var now = Date.now()
-                  var first = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-                  if (first) { lastSampleTime = now; releaseVelocityY = 0 }
-                  if (wheel.phase === Qt.ScrollEnd) {
-                    coast(); wheel.accepted = true; return
-                  }
-                  var elapsed = first ? 16 : Math.max(1, Math.min(80,
-                    now - lastSampleTime))
-                  var dy = wheel.pixelDelta.y
-                  releaseVelocityY = releaseVelocityY * 0.55
-                    + dy * 1000 / elapsed * 0.45
-                  lastSampleTime = now
-                  var bounds = root.menuScrollBounds()
-                  inlineResults.contentY = Math.max(bounds.min,
-                    Math.min(bounds.max, inlineResults.contentY - dy))
-                  menuCoastTimer.restart()
+                  } else menuPhysics.track(wheel)
                   wheel.accepted = true
                 }
-              }
-
-              Timer {
-                id: menuCoastTimer
-                interval: 55
-                onTriggered: menuTrackpadWheel.coast()
               }
 
               Timer {
                 id: menuShortcutAssignment
                 interval: 500
                 onTriggered: root.updateMenuShortcutRange()
-              }
-
-              Timer {
-                id: menuKeyboardCoast
-                interval: 16
-                repeat: true
-                onTriggered: {
-                  var now = Date.now()
-                  var elapsed = Math.max(1, Math.min(40,
-                    now - root.menuKeyboardSampleTime)) / 1000
-                  root.menuKeyboardSampleTime = now
-                  var velocity = root.menuKeyboardVelocityY
-                  var minY = inlineResults.originY
-                  var maxY = Math.max(minY, minY + inlineResults.contentHeight
-                    - inlineResults.height)
-                  var nextY = Math.max(minY, Math.min(maxY,
-                    inlineResults.contentY + velocity * elapsed))
-                  inlineResults.contentY = nextY
-                  if ((nextY <= minY && velocity < 0)
-                      || (nextY >= maxY && velocity > 0)) {
-                    root.menuKeyboardVelocityY = 0
-                    stop()
-                    return
-                  }
-                  var loss = root.keyboardDeceleration * elapsed
-                  if (Math.abs(velocity) <= loss) {
-                    root.menuKeyboardVelocityY = 0
-                    stop()
-                  } else root.menuKeyboardVelocityY = velocity > 0
-                    ? velocity - loss : velocity + loss
-                }
               }
 
               delegate: Rectangle {
