@@ -80,9 +80,6 @@ Item {
   property var windowRows: []
   property int fileRequestId: 0
   property int windowRequestId: 0
-  property bool fileMode: false
-  property bool repoMode: false
-  property string fileQueryOverride: ""
   property bool lastRunKeepsOpen: false
 
   signal actionRan(string label)
@@ -132,7 +129,7 @@ Item {
       route: "",
       score: -2
     })
-    if (!focusedMode && !root.fileMode && root.fileRows.length > 0) scored.push({
+    if (!focusedMode && root.fileRows.length > 0) scored.push({
       id: "file-results",
       label: root.fileMatchCount + (root.fileMatchCapped ? "+" : "")
         + " matched files" + (!root.fileMatchCapped && !root.fileMatchComplete ? "…" : ""),
@@ -144,7 +141,7 @@ Item {
       isFileAggregate: true,
       appIcon: "", appId: "", action: "", route: "", score: -1
     })
-    if (!focusedMode && !root.repoMode && root.repoRows.length > 0) scored.push({
+    if (!focusedMode && root.repoRows.length > 0) scored.push({
       id: "repo-results",
       label: root.repoMatchCount + (root.repoMatchCapped ? "+" : "")
         + " matched git repos" + (!root.repoMatchCapped && !root.repoMatchComplete ? "…" : ""),
@@ -426,15 +423,9 @@ Item {
     root.refreshRows()
   }
 
-  onFileQueryOverrideChanged: if (root.fileMode || root.repoMode) root.requestFiles()
-  onFileModeChanged: if (root.fileMode) root.requestFiles()
-  onRepoModeChanged: if (root.repoMode) root.requestFiles()
-
   function requestFiles() {
-    var focused = root.fileMode || root.repoMode
-      || /^[@^]/.test(String(root.query || "").trim())
-    var wanted = (root.fileMode || root.repoMode) ? root.fileQueryOverride : root.query
-    wanted = String(wanted || "").replace(/^[@^]/, "").trim()
+    var focused = /^[@^]/.test(String(root.query || "").trim())
+    var wanted = String(root.query || "").replace(/^[@^]/, "").trim()
     // Rows belong to one query generation. Clear them before advancing the id
     // so the UI cannot briefly relabel the previous query's 100 results as
     // matches for the text that was just typed.
@@ -470,7 +461,7 @@ Item {
         root.repoMatchCapped = message.repoCapped === true
         root.repoMatchComplete = message.repoComplete !== false
       }
-      if (!root.fileMode && !root.repoMode) root.refreshRows()
+      root.refreshRows()
     } catch (error) { }
   }
 

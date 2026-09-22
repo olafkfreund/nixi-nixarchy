@@ -70,13 +70,7 @@ Item {
   property string agentName: ""
   property string modelName: ""
   property string reasoningEffort: ""
-  property bool fileBrowserOpen: false
   property string searchMode: ""
-  property string fileBrowserMode: "files"
-  property string fileBrowserQuery: ""
-  property int fileBrowserIndex: 0
-  property int fileShortcutFirst: -1
-  property int fileShortcutLast: -1
   property string lastVisibleShortcut: ""
   property string hoverPreviewPath: ""
   property bool filePreviewVisible: false
@@ -84,26 +78,18 @@ Item {
   property string filePreviewThumbnail: ""
   property string filePreviewName: ""
   property string filePreviewText: ""
-  readonly property var fileBrowserRows: fileBrowserMode === "repos"
-    ? menuSearch.repoRows
-    : menuSearch.fileRows
-  onFileBrowserIndexChanged: {
-    if (!fileBrowserOpen || fileBrowserMode !== "files") return
-    if (fileBrowserIndex < 0 || fileBrowserIndex >= fileBrowserRows.length) return
-    scheduleFilePreview(fileBrowserRows[fileBrowserIndex].path)
-  }
   onMenuIndexChanged: {
     if (root.searchMode !== "@" || menuIndex < 0
         || menuIndex >= menuSearch.rows.length) {
-      if (!root.fileBrowserOpen) closeFilePreview()
+      closeFilePreview()
       return
     }
     var row = menuSearch.rows[menuIndex]
     if (row && row.isPath && !row.isRepository)
       scheduleFilePreview(row.absolutePath)
-    else if (!root.fileBrowserOpen) closeFilePreview()
+    else closeFilePreview()
   }
-  onSearchModeChanged: if (searchMode !== "@" && !fileBrowserOpen) closeFilePreview()
+  onSearchModeChanged: if (searchMode !== "@") closeFilePreview()
   onMotionTunerOpenChanged: {
     if (!motionTunerOpen && opened && !pinned)
       Qt.callLater(function() { prompt.forceActiveFocus() })
@@ -386,10 +372,6 @@ Item {
     scrollBy(dx * Style.space(44), dy * Style.space(44))
   }
 
-  function scrollPage(direction) {
-    scrollBy(0, direction * Math.max(Style.space(44), surface.height * 0.85))
-  }
-
   // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
   // model repeated force impulses: restarting an eased position animation on
   // every auto-repeat discards its time derivative, and inferring velocity
@@ -606,7 +588,6 @@ Item {
 
   function scrollActiveSurface(direction, page) {
     if (root.menuOpen) root.menuScrollKeyImpulse(direction, page)
-    else if (root.fileBrowserOpen) root.fileScrollKeyImpulse(direction, page)
     else root.scrollKeyImpulse(0, direction, page)
   }
 
@@ -636,19 +617,6 @@ Item {
   function selectVisibleSlot(slot) {
     if (slot < 0 || slot > 9) return false
     root.menuMouseArmed = false
-    if (root.fileBrowserOpen) {
-      var fileIndex = root.fileShortcutFirst + slot
-      if (root.fileShortcutFirst < 0 || fileIndex > root.fileShortcutLast) return false
-      var fileToken = "file:" + fileIndex
-      if (root.lastVisibleShortcut === fileToken) {
-        root.lastVisibleShortcut = ""
-        root.openFileBrowserSelection(Qt.NoModifier)
-        return true
-      }
-      root.lastVisibleShortcut = fileToken
-      root.fileBrowserIndex = fileIndex
-      return true
-    }
     var menuIndex = root.menuShortcutFirst + slot
     if (!root.menuOpen || root.menuShortcutFirst < 0
         || menuIndex > root.menuShortcutLast) return false
@@ -679,23 +647,6 @@ Item {
     return root.selectVisibleSlot(slot)
   }
 
-  function openFileBrowser(mode, query) {
-    closeFilePreview()
-    // The conversation card may still be in its entrance fade when a prefix
-    // opens the file browser. End that animation before switching surfaces so
-    // it cannot write opacity back onto the now-hidden card.
-    cardFade.stop()
-    card.opacity = 0
-    fileBrowserMode = mode === "repos" ? "repos" : "files"
-    fileBrowserQuery = String(query || "").replace(/^[@^]/, "").trim()
-    fileBrowserIndex = 0
-    fileBrowserOpen = true
-    Qt.callLater(function() {
-      root.updateFileShortcutRange()
-      filePrompt.forceActiveFocus()
-    })
-  }
-
   function isImagePath(path) {
     return /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i.test(String(path || ""))
   }
@@ -709,8 +660,7 @@ Item {
   }
 
   function scheduleFilePreview(path) {
-    if (root.fileBrowserOpen ? root.fileBrowserMode !== "files"
-        : root.searchMode !== "@") return
+    if (root.searchMode !== "@") return
     root.filePreviewVisible = false
     root.filePreviewThumbnail = ""
     root.filePreviewText = ""
@@ -789,13 +739,6 @@ Item {
     Quickshell.execDetached(command)
   }
 
-  function openFileBrowserSelection(modifiers) {
-    var rows = root.fileBrowserRows
-    if (fileBrowserIndex < 0 || fileBrowserIndex >= rows.length) return
-    var path = String(rows[fileBrowserIndex].path || "")
-    root.openPath(path, root.fileBrowserMode === "repos", modifiers)
-  }
-
   function revealInSystemFileBrowser(path) {
     // Delegate to the cross-desktop FileManager1 bridge. Ask must not assume a
     // particular file manager or rewrite machine-specific compositor config.
@@ -804,142 +747,6 @@ Item {
       root.bridgeScript("reveal.js"),
       String(path || "")
     ])
-  }
-
-  property real fileKeyboardVelocityY: 0
-  property double fileKeyboardSampleTime: 0
-
-  function fileScrollBounds() {
-    // INVARIANT: ListView's scroll origin is not guaranteed to be zero.
-    // Every file-list physics path (wheel, keyboard, coast, and collision)
-    // must clamp through these bounds or rapid paging can overshoot into an
-    // invalid blank viewport and make subsequent navigation appear stuck.
-    var minY = fileList.originY
-    return {
-      min: minY,
-      max: Math.max(minY, minY + fileList.contentHeight - fileList.height)
-    }
-  }
-
-  function visibleFileRange() {
-    // INVARIANT: this means *completely* visible rows. It intentionally
-    // excludes clipped rows because both off-screen arrow recovery and the
-    // viewport-relative Ctrl+1…0 labels consume this range.
-    if (root.fileBrowserRows.length === 0 || fileList.contentHeight <= 0)
-      return { first: -1, last: -1 }
-    var bounds = fileScrollBounds()
-    var topY = Math.max(bounds.min, fileList.contentY) + 1
-    var bottomY = Math.max(topY, Math.min(
-      bounds.min + fileList.contentHeight - 1,
-      fileList.contentY + fileList.height - 1))
-    var first = fileList.indexAt(1, topY)
-    var last = fileList.indexAt(1, bottomY)
-    // indexAt can land in a fractional-pixel seam between delegates. Probe a
-    // few pixels inward rather than allowing a transient -1 to move an
-    // otherwise visible selection.
-    for (var offset = 2; first < 0 && offset < 12; offset += 2)
-      first = fileList.indexAt(1, Math.min(bottomY, topY + offset))
-    for (var inset = 2; last < 0 && inset < 12; inset += 2)
-      last = fileList.indexAt(1, Math.max(topY, bottomY - inset))
-    // indexAt includes clipped slivers. Arrow recovery and Ctrl+# assignment
-    // deliberately use only rows whose entire delegate is inside the viewport.
-    var viewportTop = fileList.contentY
-    var viewportBottom = fileList.contentY + fileList.height
-    while (first >= 0 && first <= last) {
-      var firstItem = fileList.itemAtIndex(first)
-      if (!firstItem || firstItem.y >= viewportTop - 0.5) break
-      first++
-    }
-    while (last >= first) {
-      var lastItem = fileList.itemAtIndex(last)
-      if (!lastItem || lastItem.y + lastItem.height <= viewportBottom + 0.5) break
-      last--
-    }
-    if (first > last) return { first: -1, last: -1 }
-    return { first: first, last: last }
-  }
-
-  function updateFileShortcutRange() {
-    var range = visibleFileRange()
-    root.lastVisibleShortcut = ""
-    root.fileShortcutFirst = range.first
-    root.fileShortcutLast = range.last
-  }
-
-  function deferFileShortcutRange() {
-    // Clear once at the start of motion so stale numbers cannot target rows
-    // that have left the viewport. Repeated scroll frames only restart the
-    // single debounce timer; they do not update every delegate.
-    if (root.fileShortcutFirst !== -1 || root.fileShortcutLast !== -1) {
-      root.fileShortcutFirst = -1
-      root.fileShortcutLast = -1
-      root.lastVisibleShortcut = ""
-    }
-    fileShortcutAssignment.restart()
-  }
-
-  function moveFileSelection(direction) {
-    // A selection key changes mode from viewport motion to row navigation.
-    // Freeze the viewport first; otherwise the coast can carry the newly
-    // re-anchored row off-screen immediately after this function returns.
-    root.fileKeyboardVelocityY = 0
-    fileKeyboardCoast.stop()
-    fileTrackpadCoast.stop()
-    fileCoastTimer.stop()
-    fileTrackpadWheel.lastSampleTime = 0
-    fileTrackpadWheel.releaseVelocityY = 0
-    fileList.cancelFlick()
-    var range = visibleFileRange()
-    if (range.first < 0 || range.last < 0) return
-    var current = root.fileBrowserIndex
-    var target
-    if (current < range.first || current > range.last) {
-      // Preserve direction semantics when independent scrolling strands the
-      // selection off-screen: Down enters at the first fully visible row;
-      // Up enters at the last fully visible row.
-      target = direction > 0 ? range.first : range.last
-    } else {
-      // Once the selection is in view, arrows walk the complete result set.
-      // Crossing a viewport edge scrolls only enough to reveal the next row.
-      target = Math.max(0, Math.min(root.fileBrowserRows.length - 1,
-        current + direction))
-    }
-    root.lastVisibleShortcut = ""
-    root.fileBrowserIndex = target
-    // Contain is a no-op for an already visible delegate and minimally scrolls
-    // when selection crosses the top or bottom edge.
-    Qt.callLater(function() {
-      if (root.fileBrowserOpen && root.fileBrowserIndex === target)
-        fileList.positionViewAtIndex(target, ListView.Contain)
-    })
-  }
-
-  function fileScrollKeyImpulse(direction, page) {
-    if (direction === 0) return
-    fileTrackpadCoast.stop()
-    fileList.cancelFlick()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    fileKeyboardVelocityY = Math.max(-fileList.maximumFlickVelocity,
-      Math.min(fileList.maximumFlickVelocity, fileKeyboardVelocityY + direction * impulse))
-    fileKeyboardSampleTime = Date.now()
-    fileKeyboardCoast.start()
-  }
-
-  function coastFileTrackpad(velocity) {
-    fileTrackpadCoast.stop()
-    var speed = Math.min(fileList.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * fileList.flickDeceleration)
-    var bounds = fileScrollBounds()
-    var destination = Math.max(bounds.min, Math.min(bounds.max,
-      fileList.contentY + direction * distance))
-    if (Math.abs(destination - fileList.contentY) <= 1) return
-    fileTrackpadCoast.from = fileList.contentY
-    fileTrackpadCoast.to = destination
-    fileTrackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / fileList.flickDeceleration)))
-    fileTrackpadCoast.start()
   }
 
   // Assigned by Ask.qml, which the shell assigns in turn.
@@ -957,9 +764,6 @@ Item {
     query: root.searchMode + prompt.text
     appLibrary: root.appLibrary
     debounceMs: root.searchDebounceMs
-    fileMode: root.fileBrowserOpen && root.fileBrowserMode === "files"
-    repoMode: root.fileBrowserOpen && root.fileBrowserMode === "repos"
-    fileQueryOverride: root.fileBrowserQuery
     onQueryChanged: {
       root.armIncomingResultsReveal()
       root.menuIndex = -1
@@ -1062,35 +866,35 @@ Item {
     // An inline component does not share the enclosing document's scope, so
     // the conversation is handed in rather than reached through its id.
     required property Item conversation
-    Shortcut { sequence: "Up"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(0, -1, false) }
-    Shortcut { sequence: "Down"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(0, 1, false) }
-    Shortcut { sequence: "Left"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
-    Shortcut { sequence: "Right"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
-    Shortcut { sequence: "Ctrl+H"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
-    Shortcut { sequence: "Ctrl+J"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, false) }
-    Shortcut { sequence: "Ctrl+K"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, false) }
-    Shortcut { sequence: "Ctrl+L"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
-    Shortcut { sequence: "Ctrl+U"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, true) }
-    Shortcut { sequence: "Ctrl+D"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, true) }
-    Shortcut { sequence: "PageUp"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, true) }
-    Shortcut { sequence: "PageDown"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, true) }
+    Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(0, -1, false) }
+    Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(0, 1, false) }
+    Shortcut { sequence: "Left"; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
+    Shortcut { sequence: "Right"; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
+    Shortcut { sequence: "Ctrl+H"; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
+    Shortcut { sequence: "Ctrl+J"; onActivated: conversation.scrollActiveSurface(1, false) }
+    Shortcut { sequence: "Ctrl+K"; onActivated: conversation.scrollActiveSurface(-1, false) }
+    Shortcut { sequence: "Ctrl+L"; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
+    Shortcut { sequence: "Ctrl+U"; onActivated: conversation.scrollActiveSurface(-1, true) }
+    Shortcut { sequence: "Ctrl+D"; onActivated: conversation.scrollActiveSurface(1, true) }
+    Shortcut { sequence: "PageUp"; onActivated: conversation.scrollActiveSurface(-1, true) }
+    Shortcut { sequence: "PageDown"; onActivated: conversation.scrollActiveSurface(1, true) }
     Shortcut { sequence: "Ctrl+="; onActivated: conversation.stepFontScale(0.1) }
     Shortcut { sequence: "Ctrl++"; onActivated: conversation.stepFontScale(0.1) }
     Shortcut { sequence: "Ctrl+-"; onActivated: conversation.stepFontScale(-0.1) }
-    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen && !conversation.fileBrowserOpen; onActivated: conversation.resetFontScale() }
+    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.resetFontScale() }
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
     Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
-    Shortcut { sequence: "Ctrl+1"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(0) }
-    Shortcut { sequence: "Ctrl+2"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(1) }
-    Shortcut { sequence: "Ctrl+3"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(2) }
-    Shortcut { sequence: "Ctrl+4"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(3) }
-    Shortcut { sequence: "Ctrl+5"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(4) }
-    Shortcut { sequence: "Ctrl+6"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(5) }
-    Shortcut { sequence: "Ctrl+7"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(6) }
-    Shortcut { sequence: "Ctrl+8"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(7) }
-    Shortcut { sequence: "Ctrl+9"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(8) }
-    Shortcut { sequence: "Ctrl+0"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(9) }
+    Shortcut { sequence: "Ctrl+1"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(0) }
+    Shortcut { sequence: "Ctrl+2"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(1) }
+    Shortcut { sequence: "Ctrl+3"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(2) }
+    Shortcut { sequence: "Ctrl+4"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(3) }
+    Shortcut { sequence: "Ctrl+5"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(4) }
+    Shortcut { sequence: "Ctrl+6"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(5) }
+    Shortcut { sequence: "Ctrl+7"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(6) }
+    Shortcut { sequence: "Ctrl+8"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(7) }
+    Shortcut { sequence: "Ctrl+9"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(8) }
+    Shortcut { sequence: "Ctrl+0"; enabled: conversation.menuOpen; onActivated: conversation.selectVisibleSlot(9) }
   }
 
   function submit() {
@@ -1395,22 +1199,6 @@ Item {
       : WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
 
-    // While browsing files, only the Ask card itself accepts pointer input.
-    // The rest of this transparent full-screen layer must be click-through so
-    // Sushi's adjacent preview controls remain usable.
-    mask: Region {
-      x: root.fileBrowserOpen ? fileCard.x : 0
-      y: root.fileBrowserOpen && root.filePreviewVisible
-        ? Math.min(fileCard.y, filePreviewCard.y) : (root.fileBrowserOpen ? fileCard.y : 0)
-      width: root.fileBrowserOpen && root.filePreviewVisible
-        ? filePreviewCard.x + filePreviewCard.width - fileCard.x
-        : (root.fileBrowserOpen ? fileCard.width : panel.width)
-      height: root.fileBrowserOpen && root.filePreviewVisible
-        ? Math.max(fileCard.y + fileCard.height,
-            filePreviewCard.y + filePreviewCard.height) - y
-        : (root.fileBrowserOpen ? fileCard.height : panel.height)
-    }
-
     Shortcut { sequence: "Escape"; onActivated: root.close() }
     WindowShortcuts { conversation: root }
     Shortcut {
@@ -1427,7 +1215,7 @@ Item {
       id: veil
       anchors.fill: parent
       color: root.scrim
-      visible: root.layoutReady && !root.fileBrowserOpen
+      visible: root.layoutReady
       opacity: 0
     }
     NumberAnimation { id: veilFade; target: veil; property: "opacity"; from: 0; to: 1; duration: 150; easing.type: Easing.OutQuad }
@@ -1451,7 +1239,7 @@ Item {
         ? 0
         : Math.max(Style.gapsOut, Math.round((parent.height - height) * opticalCentre))
       color: root.background
-      visible: root.layoutReady && !root.fileBrowserOpen
+      visible: root.layoutReady
       radius: root.pinned ? 0 : Style.cornerRadius
       // A pinned surface is plain content. Hyprland owns its outer frame,
       // rounding and clipping; only the layer-shell overlay draws a frame.
@@ -1805,7 +1593,7 @@ Item {
                 else Qt.callLater(root.scrollToEnd)
               }
               onTextChanged: {
-                if (!root.fileBrowserOpen && root.searchMode === "" && text.length > 0
+                if (root.searchMode === "" && text.length > 0
                     && "@^%".indexOf(text.charAt(0)) >= 0) {
                   root.searchMode = text.charAt(0)
                   text = text.slice(1)
@@ -2357,366 +2145,12 @@ Item {
       }
     }
 
-    BorderSurface {
-      id: fileCard
-      parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      readonly property int maxHeight: Math.min(Style.space(560), parent.height - Style.gapsOut * 2)
-      width: root.pinned ? parent.width : Math.min(Style.space(540), parent.width - Style.gapsOut * 2)
-      height: root.pinned ? parent.height : Math.min(maxHeight,
-        fileContent.implicitHeight + Style.spacing.panelPadding * 2)
-      anchors.horizontalCenter: parent.horizontalCenter
-      y: root.pinned ? 0 : Math.max(Style.gapsOut,
-        Math.round((parent.height - height) * 0.38))
-      visible: root.layoutReady && root.fileBrowserOpen
-      color: root.background
-      radius: root.pinned ? 0 : Style.cornerRadius
-      borderSpec: root.pinned ? Border.none()
-        : Border.surfaceSpec("menu", "border", root.border, Math.max(1, Style.space(2)))
-
-      Column {
-        id: fileContent
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: Style.spacing.panelPadding
-        spacing: Style.space(6)
-
-        Text {
-          width: parent.width
-          text: root.fileBrowserMode === "repos" ? "Git repositories" : "Files"
-          color: root.foreground
-          font.family: Style.font.family
-          font.pixelSize: root.menuPathSize
-          font.bold: true
-          font.letterSpacing: 1.2
-        }
-
-        TextArea {
-          id: filePrompt
-          Keys.priority: Keys.BeforeItem
-          width: parent.width
-          height: Math.max(Style.space(48), contentHeight)
-          text: root.fileBrowserQuery
-          padding: 0
-          color: root.accent
-          font.family: root.conversationFont
-          font.pixelSize: root.humanSizeFor(text)
-          font.italic: true
-          wrapMode: TextEdit.Wrap
-          background: null
-          onTextChanged: {
-            if (text === root.fileBrowserQuery) return
-            root.fileBrowserQuery = text
-            root.fileBrowserIndex = 0
-            root.fileKeyboardVelocityY = 0
-            fileKeyboardCoast.stop()
-            fileTrackpadCoast.stop()
-          }
-          Keys.onPressed: function(event) {
-            if (root.handleVisibleSlotKey(event)) {
-              event.accepted = true
-              return
-            }
-            var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
-            var shift = (event.modifiers & Qt.ShiftModifier) !== 0
-            var selectionDirection = 0
-            var scrollDirection = 0
-            var scrollPage = false
-            if (!ctrl && (event.key === Qt.Key_Down
-                || (event.key === Qt.Key_Tab && !shift))) selectionDirection = 1
-            else if (!ctrl && (event.key === Qt.Key_Up
-                || event.key === Qt.Key_Backtab
-                || (event.key === Qt.Key_Tab && shift))) selectionDirection = -1
-            else if (ctrl && event.key === Qt.Key_J) scrollDirection = 1
-            else if (ctrl && event.key === Qt.Key_K) scrollDirection = -1
-            else if ((ctrl && event.key === Qt.Key_D)
-                || event.key === Qt.Key_PageDown) {
-              scrollDirection = 1; scrollPage = true
-            } else if ((ctrl && event.key === Qt.Key_U)
-                || event.key === Qt.Key_PageUp) {
-              scrollDirection = -1; scrollPage = true
-            }
-            if (selectionDirection !== 0) {
-              root.moveFileSelection(selectionDirection)
-              event.accepted = true
-            } else if (scrollDirection !== 0) {
-              root.fileScrollKeyImpulse(scrollDirection, scrollPage)
-              event.accepted = true
-            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-              root.openFileBrowserSelection(event.modifiers)
-              event.accepted = true
-            }
-          }
-        }
-
-        Rectangle {
-          width: parent.width
-          height: 1
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.14)
-        }
-
-        ListView {
-          id: fileList
-          width: parent.width
-          height: Math.min(contentHeight, Style.space(360))
-          model: root.fileBrowserRows
-          currentIndex: root.fileBrowserIndex
-          clip: true
-          boundsBehavior: Flickable.StopAtBounds
-          flickableDirection: Flickable.VerticalFlick
-          maximumFlickVelocity: 6000
-          flickDeceleration: 650
-          onContentYChanged: {
-            root.stopCoastAtBoundary(fileList, fileTrackpadCoast)
-            root.deferFileShortcutRange()
-          }
-          onHeightChanged: root.deferFileShortcutRange()
-          onCountChanged: Qt.callLater(root.updateFileShortcutRange)
-          onDraggingChanged: {
-            if (!dragging) return
-            root.fileKeyboardVelocityY = 0
-            fileKeyboardCoast.stop()
-            fileTrackpadCoast.stop()
-          }
-          ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-          NumberAnimation {
-            id: fileTrackpadCoast
-            target: fileList
-            property: "contentY"
-            easing.type: Easing.OutQuint
-          }
-
-          Timer {
-            id: fileKeyboardCoast
-            interval: 16
-            repeat: true
-            onTriggered: {
-              var now = Date.now()
-              var elapsed = Math.max(1, Math.min(40, now - root.fileKeyboardSampleTime)) / 1000
-              root.fileKeyboardSampleTime = now
-              var velocity = root.fileKeyboardVelocityY
-              var bounds = root.fileScrollBounds()
-              var nextY = Math.max(bounds.min, Math.min(bounds.max,
-                fileList.contentY + velocity * elapsed))
-              fileList.contentY = nextY
-              if ((nextY <= bounds.min && velocity < 0)
-                  || (nextY >= bounds.max && velocity > 0)) {
-                root.fileKeyboardVelocityY = 0
-                stop()
-                return
-              }
-              var loss = root.keyboardDeceleration * elapsed
-              if (Math.abs(velocity) <= loss) {
-                root.fileKeyboardVelocityY = 0
-                stop()
-              } else root.fileKeyboardVelocityY = velocity > 0 ? velocity - loss : velocity + loss
-            }
-          }
-
-          WheelHandler {
-            id: fileTrackpadWheel
-            target: null
-            blocking: true
-            acceptedButtons: Qt.NoButton
-            acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-            property double lastSampleTime: 0
-            property real releaseVelocityY: 0
-            function coast() {
-              fileCoastTimer.stop()
-              root.coastFileTrackpad(-releaseVelocityY)
-              lastSampleTime = 0
-              releaseVelocityY = 0
-            }
-            onWheel: function(wheel) {
-              if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
-                var steps = wheel.angleDelta.y / 120
-                if (steps !== 0) root.fileScrollKeyImpulse(steps < 0 ? 1 : -1, false)
-                wheel.accepted = true
-                return
-              }
-              root.fileKeyboardVelocityY = 0
-              fileKeyboardCoast.stop()
-              fileTrackpadCoast.stop()
-              fileList.cancelFlick()
-              var now = Date.now()
-              var first = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-              if (first) { lastSampleTime = now; releaseVelocityY = 0 }
-              if (wheel.phase === Qt.ScrollEnd) {
-                coast(); wheel.accepted = true; return
-              }
-              var elapsed = first ? 16 : Math.max(1, Math.min(80, now - lastSampleTime))
-              var dy = wheel.pixelDelta.y
-              releaseVelocityY = releaseVelocityY * 0.55 + dy * 1000 / elapsed * 0.45
-              lastSampleTime = now
-              var bounds = root.fileScrollBounds()
-              fileList.contentY = Math.max(bounds.min, Math.min(bounds.max,
-                fileList.contentY - dy))
-              fileCoastTimer.restart()
-              wheel.accepted = true
-            }
-          }
-
-          Timer { id: fileCoastTimer; interval: 55; onTriggered: fileTrackpadWheel.coast() }
-          Timer {
-            id: fileShortcutAssignment
-            interval: 500
-            onTriggered: root.updateFileShortcutRange()
-          }
-          Timer {
-            id: filePreviewTimer
-            interval: 500
-            onTriggered: {
-              var previewingFiles = root.fileBrowserOpen
-                ? root.fileBrowserMode === "files" : root.searchMode === "@"
-              if (!previewingFiles || root.hoverPreviewPath === "") return
-              root.filePreviewRequestId++
-              filePreviewProc.running = false
-              filePreviewProc.command = [
-                "gjs",
-                root.bridgeScript("preview.js"),
-                String(root.filePreviewRequestId), root.hoverPreviewPath
-              ]
-              filePreviewProc.running = true
-            }
-          }
-          delegate: Rectangle {
-            required property var modelData
-            required property int index
-            width: fileList.width
-            readonly property bool hasThumbnail: root.fileBrowserMode === "files"
-              && root.isImagePath(modelData.path)
-            readonly property real thumbnailSize: Style.space(38)
-            height: Math.max(fileRowText.implicitHeight,
-              hasThumbnail ? thumbnailSize : 0) + Style.space(14)
-            color: index === root.fileBrowserIndex
-              ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.18)
-              : "transparent"
-
-            readonly property int visibleSlot: index - root.fileShortcutFirst
-
-            Rectangle {
-              id: fileThumbnailFrame
-              visible: parent.hasThumbnail
-              width: parent.thumbnailSize
-              height: parent.thumbnailSize
-              anchors.left: parent.left
-              anchors.leftMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.05)
-              border.width: 1
-              border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
-              clip: true
-
-              Image {
-                anchors.fill: parent
-                anchors.margins: 1
-                source: fileThumbnailFrame.visible
-                  ? root.localFileUrl(modelData.path) : ""
-                asynchronous: true
-                cache: true
-                sourceSize.width: Math.round(parent.width * 2)
-                sourceSize.height: Math.round(parent.height * 2)
-                fillMode: Image.PreserveAspectCrop
-              }
-            }
-
-            Text {
-              id: fileSlotHint
-              anchors.top: parent.top
-              anchors.right: parent.right
-              anchors.topMargin: Style.space(3)
-              anchors.rightMargin: Style.space(6)
-              visible: parent.visibleSlot >= 0 && parent.visibleSlot < 10
-                && index <= root.fileShortcutLast
-              text: parent.visibleSlot < 9 ? "Ctrl+" + (parent.visibleSlot + 1) : "Ctrl+0"
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.38)
-              font.family: Style.font.family
-              font.pixelSize: root.menuPathSize
-            }
-
-            Column {
-              id: fileRowText
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(6)
-                + (parent.hasThumbnail ? parent.thumbnailSize + Style.space(8) : 0)
-              anchors.rightMargin: Style.space(6)
-              spacing: Style.space(1)
-              Text {
-                width: Math.max(0, fileList.width - Style.space(12) - (fileSlotHint.visible
-                  ? fileSlotHint.implicitWidth + Style.space(8) : 0)
-                )
-                text: modelData.name || ""
-                color: index === root.fileBrowserIndex ? root.accent : root.foreground
-                font.family: Style.font.family
-                font.pixelSize: root.menuTitleSize
-                elide: Text.ElideMiddle
-              }
-              Row {
-                width: parent.width
-                spacing: Style.space(8)
-                Text {
-                  width: Math.max(0, parent.width - actionHint.width - parent.spacing)
-                  text: modelData.relativePath || modelData.path || ""
-                  color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45)
-                  font.family: Style.font.family
-                  font.pixelSize: root.menuPathSize
-                  elide: Text.ElideMiddle
-                }
-                Text {
-                  id: actionHint
-                  visible: index === root.fileBrowserIndex
-                  width: visible ? implicitWidth : 0
-                  text: root.fileBrowserMode === "repos"
-                    ? "↵ terminal  ·  Ctrl+↵ reveal  ·  Shift+↵ copy path"
-                    : "↵ view  ·  Ctrl+↵ reveal  ·  Alt+↵ edit  ·  Shift+↵ copy"
-                  color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.72)
-                  font.family: Style.font.family
-                  font.pixelSize: root.menuPathSize
-                }
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              hoverEnabled: true
-              onEntered: {
-                root.fileBrowserIndex = index
-                root.scheduleFilePreview(modelData.path)
-              }
-              onExited: root.cancelFilePreview(modelData.path)
-              onClicked: {
-                root.fileBrowserIndex = index
-                root.openFileBrowserSelection(Qt.NoModifier)
-              }
-            }
-          }
-        }
-
-        Text {
-          width: parent.width
-          visible: root.fileBrowserRows.length === 0
-          text: root.fileBrowserQuery.length < 2
-            ? "Type at least two characters"
-            : "No matching " + (root.fileBrowserMode === "repos" ? "repositories" : "files")
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45)
-          font.family: Style.font.family
-          font.pixelSize: root.menuPathSize
-        }
-      }
-    }
-
     Item {
       id: filePreviewCard
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      visible: root.filePreviewVisible
-        && ((root.fileBrowserOpen && root.fileBrowserMode === "files")
-          || (!root.fileBrowserOpen && root.searchMode === "@"))
-      readonly property Item anchorCard: root.fileBrowserOpen ? fileCard : card
-      readonly property Item anchorItem: root.fileBrowserOpen
-        ? fileList.currentItem : inlineResults.currentItem
+      visible: root.filePreviewVisible && root.searchMode === "@"
+      readonly property Item anchorCard: card
+      readonly property Item anchorItem: inlineResults.currentItem
       width: Math.min(Style.space(500),
         Math.max(Style.space(280), parent.width - anchorCard.x
           - anchorCard.width - Style.space(12)))
@@ -2833,6 +2267,22 @@ Item {
           font.family: Style.font.family
           font.pixelSize: root.menuTitleSize
         }
+      }
+    }
+
+    Timer {
+      id: filePreviewTimer
+      interval: 500
+      onTriggered: {
+        if (root.searchMode !== "@" || root.hoverPreviewPath === "") return
+        root.filePreviewRequestId++
+        filePreviewProc.running = false
+        filePreviewProc.command = [
+          "gjs",
+          root.bridgeScript("preview.js"),
+          String(root.filePreviewRequestId), root.hoverPreviewPath
+        ]
+        filePreviewProc.running = true
       }
     }
 
