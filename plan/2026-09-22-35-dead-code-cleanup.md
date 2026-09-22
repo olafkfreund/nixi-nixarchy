@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 35
 spec: spec/2026-09-22-35-dead-code-cleanup.md
 ---
