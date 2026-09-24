@@ -9,6 +9,7 @@
 , glib
 , python3
 , bash
+, jq
 , makeWrapper
   # Agent adapters are NOT bundled (see bridge/harness-policy.js resolveAdapter).
   # Pass nixpkgs' claude-agent-acp / codex-acp here to pin them; left null, the
@@ -210,6 +211,12 @@ stdenvNoCC.mkDerivation {
       test -s "$out/share/omarchy/plugins/${pluginId}-button/$f" \
         || { echo "the bar button plugin is missing $f"; exit 1; }
     done
+    # manifest.json is the single source `version` above is derived from; the
+    # button's copy is hand-maintained and nothing read it, so it was free to go
+    # stale at the next release (#56).
+    button_version=$(${jq}/bin/jq -r .version "$out/share/omarchy/plugins/${pluginId}-button/manifest.json")
+    [ "$button_version" = "${version}" ] \
+      || { echo "button/manifest.json says $button_version, the package is ${version}"; exit 1; }
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
     # Omarchy's validator rejects any symlink inside a plugin folder.
     links=$(find $plugin -type l)

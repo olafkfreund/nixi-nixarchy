@@ -275,6 +275,14 @@ class Services:
     def enable_now(self, unit):
         self.snapshot(unit)
         must(systemctl("daemon-reload"), "daemon-reload")
+        # `enable` adds the symlinks this [Install] asks for; it does NOT remove
+        # ones a PREVIOUS [Install] left behind. nixi-watch moved from
+        # default.target to graphical-session.target (#56), so without the
+        # disable an upgraded machine keeps default.target.wants/ and the unit
+        # still starts before the shell exists -- the exact bug being fixed,
+        # surviving the fix. Failure is ignored: not being enabled yet is the
+        # normal first-install case.
+        systemctl("disable", unit)
         must(systemctl("enable", "--now", unit), "enable " + unit)
 
     def disable_now(self, unit):

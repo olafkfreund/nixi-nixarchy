@@ -32,7 +32,7 @@
 
       checks = forAllSystems (pkgs: {
         # Building the package runs its installCheckPhase (py_compile on every
-        # program, bash -n on the launcher, assets non-empty).
+        # program, bash -n on the launcher, and every shipped file non-empty).
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
 
         # The behavioural self-check: updater precedence, offline search, tour
