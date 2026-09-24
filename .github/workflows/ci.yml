@@ -140,7 +140,7 @@ jobs:
             cp "$f" "$tmp/$(basename "$f").py"
           done
           ruff check --select=F,B,E9,E71,E72 --output-format=concise \
-            "$tmp" install.py tools/
+            "$tmp" install.py tools/ bin/nixi_safeio.py
 
       - name: shellcheck
         run: |

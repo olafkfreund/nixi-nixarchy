@@ -25,13 +25,19 @@ which Omarchy requires to be a second plugin.
 """
 import json
 import os
-import secrets
 import shutil
 import stat
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
+# The safe-IO floor (descriptor-bound directory walk, atomic replace) is shared
+# with bin/nixi-watch and bin/nixi-update-manual, so it lives beside them in
+# bin/: a suffix-less program installed to ~/.local/bin or a store bin/ finds it
+# on sys.path[0] with no help. This one runs from the checkout, so it says where.
+sys.path.insert(0, os.path.join(ROOT, "bin"))
+from nixi_safeio import _dirfd, _write  # noqa: E402  (needs the path line above)
+
 HOME = os.path.expanduser("~")
 DIR = os.path.join(HOME, ".config", "nixi")
 DATA = os.path.join(HOME, ".local", "share", "nixi")
@@ -48,68 +54,6 @@ FEATURES = ("watcher", "skill", "hooks")
 
 def log(msg):
     print(msg, file=sys.stderr if msg.startswith(("install failed", "rollback")) else sys.stdout)
-
-
-_UID = os.getuid()
-_HOME = os.path.abspath(os.path.expanduser("~"))
-
-
-def _group_exclusive(gid):
-    """A group-writable directory is acceptable only if the group is provably
-    ours alone: our primary group, no other account has it as primary, and
-    no member other than us."""
-    import grp
-    import pwd
-    if gid != os.getgid():
-        return False
-    try:
-        g = grp.getgrgid(gid)
-        me = pwd.getpwuid(_UID).pw_name
-    except KeyError:
-        return False
-    if any(m != me for m in g.gr_mem):
-        return False
-    return not any(p.pw_gid == gid and p.pw_uid != _UID for p in pwd.getpwall())
-
-
-def _dir_ok(st):
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != _UID or (st.st_mode & 0o002):
-        return False
-    if st.st_mode & 0o020:
-        return _group_exclusive(st.st_gid)
-    return True
-
-
-def _dirfd(path, create=False, mode=0o700):
-    """Open a directory under $HOME by walking every component from the
-    $HOME anchor with O_NOFOLLOW|O_DIRECTORY, validating each directory
-    (ours, never world-writable, group-writable only if exclusive). A
-    symlink anywhere on the path is refused. Returns the leaf descriptor;
-    callers keep it for every relative operation that follows."""
-    path = os.path.abspath(path)
-    if path != _HOME and not path.startswith(_HOME + os.sep):
-        raise PermissionError("outside $HOME: " + path)
-    fd = os.open(_HOME, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
-    try:
-        if not _dir_ok(os.fstat(fd)):
-            raise PermissionError("untrusted $HOME")
-        for comp in [c for c in path[len(_HOME):].split(os.sep) if c]:
-            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-            try:
-                nfd = os.open(comp, flags, dir_fd=fd)
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(comp, mode, dir_fd=fd)
-                nfd = os.open(comp, flags, dir_fd=fd)
-            os.close(fd)
-            fd = nfd
-            if not _dir_ok(os.fstat(fd)):
-                raise PermissionError("untrusted directory: " + path)
-        return fd
-    except BaseException:
-        os.close(fd)
-        raise
 
 
 def read_src(path, cap=8_000_000):
@@ -205,34 +149,6 @@ class Journal:
                 log(f"rollback: could not restore {dirpath}/{name}: {e}")
 
 
-def _write(dfd, name, data, mode):
-    tmp = ".%s.%s.tmp" % (name, secrets.token_hex(8))
-    try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                     mode, dir_fd=dfd)
-        try:
-            view = memoryview(data)
-            while view:
-                view = view[os.write(fd, view):]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        try:
-            cur = os.stat(name, dir_fd=dfd, follow_symlinks=False)
-            if not stat.S_ISREG(cur.st_mode):
-                raise PermissionError("refusing to replace non-regular file: " + name)
-        except FileNotFoundError:
-            pass
-        os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
-        os.fsync(dfd)
-    except BaseException:
-        try:
-            os.unlink(tmp, dir_fd=dfd)
-        except OSError:
-            pass
-        raise
-
-
 def systemctl(*args):
     """Run a user-manager command; returns the exit code (checked by callers)."""
     if NO_SYSTEMD:
@@ -307,6 +223,10 @@ def install_core(j, svc):
         j.place(DIR, f, read_src(src("share", f)), dir_mode=0o700)
     for b in ("nixi", "nixi-context", "nixi-update-manual"):
         j.place(BIN, b, read_src(src("bin", b)), mode=0o755)
+    # The safe-IO module the suffix-less programs import. It has to land in the
+    # SAME directory as them: that directory is their sys.path[0]. Not executable.
+    # nix/package.nix places it in $out/bin for the declarative path (#60).
+    j.place(BIN, "nixi_safeio.py", read_src(src("bin", "nixi_safeio.py")), mode=0o644)
     # The bar button is its own plugin: Omarchy gives a third-party plugin a
     # bar widget or an overlay, never both.
     button = os.path.join(PLUGINS, json.loads(read_src(src("button", "manifest.json")))["id"])
