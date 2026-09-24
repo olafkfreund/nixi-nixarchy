@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 42
 intent: intent/2026-09-24-42-markdown-untrusted-boundary.md
 ---
