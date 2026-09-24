@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -229,4 +229,34 @@ test("a successful switch still persists and reports the new trust (#40)", async
   // Applying the mode before persisting must not skip the mode call itself.
   const modes = run.agent.filter((e) => e.method === "setSessionMode").map((e) => e.modeId);
   assert.deepEqual(modes, ["plan", "default"], "startup mode then the switch to Mechanic");
+});
+
+// #41 -- Claude matches permission rules per TOOL NAME. The secret list was
+// Read(...) patterns only, so Grep and Glob, the other two tools the allow
+// grants, reached every listed path with no prompt.
+
+test("every secret path is guarded for all three allowed read tools (#41)", () => {
+  const { allow, ask } = claudePermissions(false);
+  assert.deepEqual(allow, ["Read", "Grep", "Glob"], "the allow this list has to cover");
+  for (const tool of allow)
+    for (const path of SECRET_PATHS)
+      assert.ok(ask.includes(`${tool}(${path})`), `${tool} may reach ${path} unprompted`);
+  assert.equal(ask.length, allow.length * SECRET_PATHS.length, "generated, not hand-listed");
+});
+
+test("the secret path list cannot silently shrink (#41)", () => {
+  assert.ok(SECRET_PATHS.length >= 18, `only ${SECRET_PATHS.length} secret paths`);
+  for (const path of ["~/.ssh/**", "~/.gnupg/**", "/run/agenix/**", "**/.env", "**/*.age"])
+    assert.ok(SECRET_PATHS.includes(path), `${path} is no longer guarded`);
+  // Paths, not rules: a "Read(...)" here would not generate Grep/Glob cover.
+  for (const path of SECRET_PATHS) assert.ok(!path.includes("("), `${path} looks like a rule`);
+});
+
+test("Guide and Mechanic still grant the same reads; only askBeforeReading withdraws them (#41)", () => {
+  // Guide reading without a prompt is deliberate and documented (#41), so this
+  // asserts the behaviour the docs now describe rather than a trust gate.
+  assert.deepEqual(claudePermissions(false).allow, ["Read", "Grep", "Glob"]);
+  assert.deepEqual(claudePermissions(true).allow, []);
+  assert.deepEqual(claudePermissions(true).ask, claudePermissions(false).ask,
+    "secrets stay guarded whether or not reads are allowed");
 });
