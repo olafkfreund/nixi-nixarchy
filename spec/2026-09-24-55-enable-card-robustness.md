@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 55
 intent: intent/2026-09-24-55-enable-card-robustness.md
 ---
