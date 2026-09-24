@@ -953,22 +953,35 @@ Item {
     queuedPrompt = ""
   }
 
+  // submit() clears prompt.text before calling this, so a silent return means
+  // the user watches /mechanic vanish with no explanation (#40). Unlike a
+  // prompt, a trust command is not queued and replayed -- saying so is enough.
   function setTrust(level) {
-    if (trustPending) return
-    if (agent.running && bridgeReady) {
-      trustPending = true
-      statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
-      agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
+    if (trustPending) {
+      statusText = "Still switching trust…"
+      return
     }
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    trustPending = true
+    statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
+    agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }
 
   function setPermissionMode(mode) {
-    if (permissionModePending) return
-    var next = mode === "yolo" ? "yolo" : "permission"
-    if (agent.running && bridgeReady) {
-      permissionModePending = true
-      agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
+    if (permissionModePending) {
+      statusText = "Still switching permission mode…"
+      return
     }
+    var next = mode === "yolo" ? "yolo" : "permission"
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    permissionModePending = true
+    agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
   }
 
   // A message from Nixi itself (a tour step), rendered like an agent reply --
@@ -1116,6 +1129,13 @@ Item {
     queuedPrompt = ""
     steeringSupported = false
     steeringPending = false
+    // These gate setTrust() and setPermissionMode() and are cleared only by a
+    // trust/permission_mode event. A bridge that died mid-change never sends
+    // one, so without this the trust and YOLO controls are dead no-ops for the
+    // life of the conversation. close() does not need them: it destroys the
+    // object (Ask.qml:394), so its flags are never read again.
+    trustPending = false
+    permissionModePending = false
     statusText = "Starting agent…"
     agent.running = true
   }

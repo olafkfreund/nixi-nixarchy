@@ -10,6 +10,10 @@ import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION } from "@agentclien
 
 const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify(entry) + "\n");
 
+// setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
+// one at session start. See setSessionMode below.
+let modeCalls = 0;
+
 new AgentSideConnection((conn) => ({
   async initialize() {
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
@@ -39,6 +43,13 @@ new AgentSideConnection((conn) => ({
   },
   async setSessionMode(params) {
     log({ method: "setSessionMode", modeId: params.modeId });
+    // FAKE_AGENT_HANG=mode: accept the request and never answer, the way a
+    // wedged agent does. The bridge must time out rather than wait forever,
+    // or the card's trust controls are dead for the conversation (#40).
+    // Only from the SECOND call on: the first is the one at session start,
+    // which runs before `ready` is emitted, so hanging it would fail the
+    // session instead of exercising a later trust change.
+    if (process.env.FAKE_AGENT_HANG === "mode" && ++modeCalls > 1) await new Promise(() => {});
     return {};
   },
   async setSessionConfigOption(params) {
