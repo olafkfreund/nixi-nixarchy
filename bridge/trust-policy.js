@@ -1,11 +1,23 @@
 // What Nixi lets the agent do, per trust level.
 //
-// Guide is the default and must stay safe: the agent may explain, never change
+// Guide is the default and must stay safe: the agent may explain, never CHANGE
 // the machine. Neither adapter offers a mode that guarantees that by itself --
 // asked over ACP, Claude describes `plan` as "Create a plan before making
 // changes" and Codex's closest, `read-only`, as "Always ask to edit external
 // files and use the internet". So Guide's guarantee is the bridge CANCELLING
-// every permission request, with the session mode as a second layer.
+// every permission request it receives, with the session mode as a second layer.
+//
+// "Every request it receives" is exact, and the difference matters (#41).
+// Reading is not changing, and Guide deliberately allows it: a tutor that
+// cannot look at your configuration cannot teach you about it. Read, Grep and
+// Glob are granted below in BOTH trust levels, and Claude Code applies that
+// allowlist itself -- so those three never reach ACP as a permission request,
+// and there is nothing for the bridge to cancel. Everything that writes,
+// executes, or reaches the network still produces a request, and in Guide every
+// one of those is cancelled.
+//
+// Secrets ask in both levels, for all three read tools. That is the one part of
+// the read allowance that is not open: see SECRET_PATHS.
 //
 // Mechanic asks before each change: every request is shown in the card and
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
@@ -56,20 +68,30 @@ export function opencodePermissions(askBeforeReading) {
 // tools are allowed; Bash, edits, web and MCP tools still ask. Secrets ask even
 // in Mechanic: Claude checks deny > ask > allow across all settings sources, so
 // these win over the allow, and the user's own ask/deny rules win too.
-const CLAUDE_SECRET_READS = [
-  "Read(~/.ssh/**)", "Read(~/.gnupg/**)", "Read(~/.aws/**)",
-  "Read(~/.kube/**)", "Read(~/.config/gcloud/**)", "Read(~/.azure/**)",
-  "Read(~/.docker/config.json)", "Read(~/.config/gh/**)", "Read(~/.config/op/**)",
-  "Read(~/.config/sops/**)", "Read(~/.local/share/keyrings/**)",
-  "Read(~/.claude/.credentials.json)", "Read(~/.netrc)",
-  "Read(/run/agenix/**)", "Read(/run/secrets/**)",
-  "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.age)",
+//
+// Paths, not rules: the rules are generated over every tool the allow grants.
+// Claude matches a rule per TOOL NAME, so a list of Read(...) patterns left
+// Grep and Glob -- two of the three allowed read tools -- free to reach the
+// same paths with no prompt (#41). Keeping one path list is what makes a path
+// added later cover all three automatically, which is the property whose
+// absence caused that.
+export const SECRET_PATHS = [
+  "~/.ssh/**", "~/.gnupg/**", "~/.aws/**",
+  "~/.kube/**", "~/.config/gcloud/**", "~/.azure/**",
+  "~/.docker/config.json", "~/.config/gh/**", "~/.config/op/**",
+  "~/.config/sops/**", "~/.local/share/keyrings/**",
+  "~/.claude/.credentials.json", "~/.netrc",
+  "/run/agenix/**", "/run/secrets/**",
+  "**/.env", "**/.env.*", "**/*.age",
 ];
+
+const READ_TOOLS = ["Read", "Grep", "Glob"];
+const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${tool}(${path})`));
 
 export function claudePermissions(askBeforeReading) {
   return {
-    allow: askBeforeReading ? [] : ["Read", "Grep", "Glob"],
-    ask: CLAUDE_SECRET_READS,
+    allow: askBeforeReading ? [] : READ_TOOLS,
+    ask: SECRET_READS,
   };
 }
 

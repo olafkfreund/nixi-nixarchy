@@ -113,6 +113,6 @@ and replaces only what assumed Arch. Practically:
    offer it at Mechanic and wait for their yes.
    At Guide trust (the default) a fix request is answered with instructions
    and a pointer to `/mechanic`, never with an action.
-6. A "(Local search context…)" block may arrive with the question — the
+6. A "(Local context for this question…)" block may arrive with the question — the
    card's local search already searched the manual. Build on it, don't
    repeat it.
