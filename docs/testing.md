@@ -144,6 +144,22 @@ opposed to YOLO.
    step appears. Close the card, reopen it: it is empty. `/tour` resumes at the
    same step.
 8. With Super+, select each installed agent in turn and repeat 3 and 4.
+9. Handed-over questions (`nixi --ask`, nixi#37):
+   - **No card open:** `nixi --ask "how do I add a font?"` opens a card that
+     asks and answers.
+   - **Card open and idle:** the question is asked there. No second card
+     opens.
+   - **Card busy, mid-answer:** `nixi --ask "and a theme?"` only fills the
+     prompt. The running answer continues, and Enter sends it.
+   - **Slash text:** `nixi --ask "/mechanic"` only fills the prompt. The
+     trust level is unchanged until you press Enter yourself.
+   - **Card pinned:** a fresh overlay asks the question. The pinned window is
+     untouched.
+   - **Existing actions:** `nixi --tour` still starts the tour.
+
+   When you test a changed plugin by re-pointing its symlink, run
+   `omarchy-restart-shell` first. The shell's plugin reload keeps the old
+   compiled QML, because the file URL does not change.
 
 ## Pinning and concurrency checklist
 
