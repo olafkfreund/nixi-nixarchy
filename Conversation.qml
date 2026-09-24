@@ -47,6 +47,11 @@ Item {
   readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0, options: [] })
   property var pendingPermission: noPermission
   property var permissionQueue: []
+  // False for the first 400 ms a request is on screen, so it cannot be answered
+  // before it has been seen (#50). answerPermission() is the single gate; this
+  // also disarms the keys and greys the buttons, which is the visible signal
+  // that the card in front of you is a NEW question.
+  property bool permissionSettled: false
   property string permissionMode: "permission"
   property bool permissionModePending: false
   // Nixi trust level, owned by the bridge (see bridge/trust-policy.js). Guide
@@ -74,7 +79,7 @@ Item {
   property string reasoningEffort: ""
   property string searchMode: ""
   property string lastVisibleShortcut: ""
-  readonly property bool permissionKeysLive: pendingPermission.id !== "" && prompt.text.length === 0
+  readonly property bool permissionKeysLive: pendingPermission.id !== "" && permissionSettled && prompt.text.length === 0
   property string hoverPreviewPath: ""
   property bool filePreviewVisible: false
   property int filePreviewRequestId: 0
@@ -846,13 +851,18 @@ Item {
     // Deliberately only the one-shot choices. #27 showed repeated prompting
     // trains Allow into a reflex, and a held key that grants STANDING approval
     // is the worst possible target for one -- so "always" is mouse-only (#53).
+    // autoRepeat: false, so a HELD key answers once and never again -- exact,
+    // where a timer would have to outrun the compositor's repeat_delay, which
+    // is the user's setting and not ours (#50).
     Shortcut {
       sequence: "Y"
+      autoRepeat: false
       enabled: conversation.permissionKeysLive && conversation.optionIdForKind("allow_once") !== ""
       onActivated: conversation.answerPermission(conversation.optionIdForKind("allow_once"))
     }
     Shortcut {
       sequence: "N"
+      autoRepeat: false
       enabled: conversation.permissionKeysLive && conversation.optionIdForKind("reject_once") !== ""
       onActivated: conversation.answerPermission(conversation.optionIdForKind("reject_once"))
     }
@@ -1012,11 +1022,17 @@ Item {
   function clearPermissions() {
     pendingPermission = noPermission
     permissionQueue = []
+    permissionSettled = false
+    permissionSettle.stop()
   }
 
-  function enqueuePermission(id, title, detail, omitted) {
+  // options is the agent's own list of choices and the card renders one button
+  // per entry, so dropping it here left the card with no buttons at all (#58
+  // rewired the card and its keys through it but never widened this).
+  function enqueuePermission(id, title, detail, omitted, options) {
     var request = { id: String(id || ""), title: String(title || "Allow tool?"),
-                    detail: String(detail || ""), omitted: Number(omitted) || 0 }
+                    detail: String(detail || ""), omitted: Number(omitted) || 0,
+                    options: options || [] }
     permissionQueue = permissionQueue.concat([request])
     if (pendingPermission.id === "") showNextPermission()
   }
@@ -1024,6 +1040,21 @@ Item {
   function showNextPermission() {
     pendingPermission = permissionQueue.length > 0 ? permissionQueue[0] : noPermission
     permissionQueue = permissionQueue.slice(1)
+    // The next request arrives in the same card, the same geometry, with Allow
+    // in the same pixel. Nothing may answer it until it has been on screen.
+    permissionSettled = false
+    if (pendingPermission.id !== "") permissionSettle.restart()
+    else permissionSettle.stop()
+  }
+
+  // 400 ms is Qt's own mouseDoubleClickInterval default, so the window covers
+  // exactly the pair of clicks the platform itself calls a double-click -- and
+  // is far below the ~1 s at which a UI is felt to have stalled (#50).
+  Timer {
+    id: permissionSettle
+    interval: 400
+    repeat: false
+    onTriggered: root.permissionSettled = true
   }
 
   function handleAgentLine(rawLine) {
@@ -1080,7 +1111,7 @@ Item {
         var toolStatus = String(event.status || "in_progress")
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
-        enqueuePermission(event.id, event.title, event.detail, event.omitted)
+        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options)
       } else if (event.type === "permission_mode") {
         permissionMode = event.mode === "yolo" ? "yolo" : "permission"
         permissionModePending = false
@@ -1144,7 +1175,7 @@ Item {
   // one was picked. It used to send a boolean, which collapsed every answer to
   // allow_once and threw away "allow always" entirely (#53).
   function answerPermission(optionId) {
-    if (pendingPermission.id === "" || !agent.running) return
+    if (pendingPermission.id === "" || !permissionSettled || !agent.running) return
     var option = root.optionById(optionId)
     if (!option) return
     agent.write(JSON.stringify({
@@ -1542,7 +1573,14 @@ Item {
                   var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
                   if (bare && text.length === 0
                       && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
-                    root.answerPermission(event.key === Qt.Key_Y)
+                    // A held key answers once: autorepeat is how the next
+                    // request got approved before it rendered (#50). And an
+                    // option id, not a boolean -- #58 changed the signature
+                    // here without changing this caller, so every Y and N from
+                    // the composer found no option and was silently swallowed.
+                    if (!event.isAutoRepeat)
+                      root.answerPermission(root.optionIdForKind(
+                        event.key === Qt.Key_Y ? "allow_once" : "reject_once"))
                     event.accepted = true
                     return
                   }
@@ -2286,6 +2324,13 @@ Item {
                 foreground: isAllow && isOnce ? root.accent : root.foreground
                 fontFamily: Style.font.family
                 fontSize: Style.font.body * root.fontScale
+                // Disabled for the settle window: after #53 a click here can
+                // grant STANDING approval, so the mouse is the path that most
+                // needs it -- a double-click is autorepeat's equivalent (#50).
+                // qs.Ui.Button paints no disabled state of its own, so
+                // `enabled` alone would block the click and show nothing.
+                enabled: root.permissionSettled
+                opacity: root.permissionSettled ? 1 : 0.45
                 onClicked: root.answerPermission(modelData.id)
               }
             }

@@ -659,7 +659,71 @@ def test_permission_keys_guard():
         assert "conversation.permissionKeysLive" in s, "a Y/N shortcut ignores the typed-text guard"
     live = re.search(r"property bool permissionKeysLive:(.*)", card).group(1)
     assert "text.length === 0" in live, "a Y/N shortcut fires over typed text"
+    # The composer answers with an OPTION ID. #58 changed answerPermission's
+    # signature and left this caller passing a boolean, which found no option
+    # and returned -- after event.accepted had already eaten the key (#50).
+    assert "answerPermission(event.key === Qt.Key_Y)" not in guard, \
+        "the composer answers with a boolean; answerPermission takes an option id"
+    assert "optionIdForKind" in guard, "the composer does not answer with an option id"
     print("  ok  Y and N answer a prompt, and never over typed text")
+
+
+def test_permission_settle_window():
+    """A permission request cannot be answered before it has been on screen long
+    enough to read: a held key answers once, and the next request in the queue
+    is unanswerable for 400 ms however it is aimed at (#50).
+
+    These are source assertions. The 400 ms itself is compositor-facing and can
+    only be judged on a real desktop -- what is checked here is that every gate
+    the design depends on is still in the file, so removing one fails CI. Each
+    was confirmed to fail when its gate was deleted.
+    """
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    # The agent's options have to reach the card at all: the Repeater renders one
+    # button per option and the keys resolve through them, so an enqueue that
+    # drops them leaves a card with no buttons and dead Y/N (#58 did exactly
+    # that). Without this the settle window guards nothing.
+    enqueue = _block(card, card.index("function enqueuePermission"))
+    assert "options" in enqueue, "enqueuePermission drops the agent's options"
+    call = re.search(r"enqueuePermission\(event\.[^)]*\)", card).group(0)
+    assert "event.options" in call, "the permission event's options are not passed on"
+
+    # One flag, cleared when a request is shown, set by one timer.
+    assert "property bool permissionSettled" in card, "no settle flag"
+    live = re.search(r"property bool permissionKeysLive:(.*)", card).group(1)
+    assert "permissionSettled" in live, "Y and N are live before the card settles"
+    show = _block(card, card.index("function showNextPermission"))
+    assert "permissionSettled = false" in show, "showing the next request leaves it answerable"
+    assert "permissionSettle.restart()" in show, "the settle window is never started"
+    timer = card[card.index("id: permissionSettle"):]
+    timer = timer[:timer.index("}")]
+    assert "interval: 400" in timer, "the settle window is not 400 ms"
+
+    # The gate itself, in the one function all three answer paths route through.
+    answer = _block(card, card.index("function answerPermission"))
+    assert "!permissionSettled" in answer, "answerPermission does not check the settle window"
+
+    # A held key answers once, whatever the compositor's repeat_delay is.
+    shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card)
+                 if re.search(r'sequence:\s*"[YN]"', s)]
+    assert len(shortcuts) == 2, f"expected 2 Y/N shortcuts, found {len(shortcuts)}"
+    for s in shortcuts:
+        assert "autoRepeat: false" in s, "a held Y or N repeats into the next request"
+    handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
+    assert "isAutoRepeat" in handler, "the composer answers on autorepeat"
+
+    # The mouse too: after #53 a click can grant STANDING approval, so the
+    # button is the path that most needs the window, and a greyed button is the
+    # visible signal that this is a new question.
+    buttons = card.split("id: permissionLayer")[1].split("id: cardFade")[0]
+    buttons = buttons[buttons.index("Repeater {"):]
+    assert "enabled: root.permissionSettled" in buttons, \
+        "the permission buttons are clickable before the card settles"
+    # qs.Ui.Button paints no disabled state, so `enabled` alone is invisible.
+    assert "opacity: root.permissionSettled" in buttons, \
+        "a settling permission button looks exactly like a clickable one"
+    print("  ok  a request cannot be answered before it has been seen")
 
 
 def test_permission_detail_is_plain():

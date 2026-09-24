@@ -9,11 +9,29 @@ export const CAP_LINES = 400;
 
 const lines = (text) => text.replace(/\n$/, "").split("\n");
 
+// POSIX single-quoting, applied only where it is needed. An argv array joined
+// on spaces cannot be told from one whose arguments contain spaces, so
+// ["rm", "-rf", "/tmp/a b"] read as two paths and was one (#50). Quoting only
+// what needs it keeps the ordinary case identical to the shell line the reader
+// already knows how to read, and makes the appearance of a quote a signal --
+// this argument contains something surprising -- rather than punctuation.
+const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+const shellQuote = (arg) => SHELL_SAFE.test(String(arg))
+  ? String(arg)
+  : `'${String(arg).replace(/'/g, "'\\''")}'`;
+
+// Every key, not the first one that matches. Returning `command` alone made
+// whatever a tool carries beside it invisible on the card being approved, and
+// an allowlist would only move that gap to the NEXT tool's new field, silently
+// (#50). `command` goes first because it is the part that must be read.
 function rawInputText(rawInput) {
   if (!rawInput || typeof rawInput !== "object") return "";
-  if (typeof rawInput.command === "string") return rawInput.command;
-  if (Array.isArray(rawInput.command)) return rawInput.command.join(" ");
-  return Object.keys(rawInput).length ? JSON.stringify(rawInput, null, 2) : "";
+  const { command, ...rest } = rawInput;
+  const head = typeof command === "string" ? command
+    : Array.isArray(command) ? command.map(shellQuote).join(" ")
+    : command === undefined ? "" : JSON.stringify(command, null, 2);
+  const tail = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : "";
+  return [head, tail].filter(Boolean).join("\n");
 }
 
 function contentText(item) {

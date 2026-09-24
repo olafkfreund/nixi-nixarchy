@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { permissionDetail, CAP_BYTES, CAP_LINES } from "./permission-detail.js";
 
 const cutLine = (n) =>
@@ -60,4 +61,53 @@ test("a 1 MB newText is cut at the cap, with omitted exact", () => {
 test("markup is passed through unchanged; the card renders it as plain text", () => {
   const toolCall = { title: "<b>Run</b>", rawInput: { command: "echo '<font color=red>hi</font>'" } };
   assert.deepEqual(permissionDetail(toolCall), { detail: "echo '<font color=red>hi</font>'", omitted: 0 });
+});
+
+
+// #50: what the card shows must be unambiguous about what will run. The two
+// tests below cover the rendering half; the settle window that stops a request
+// being answered before it renders is QML timing and has no coverage here --
+// it is asserted against the source in tools/test_nixi.py
+// (test_permission_settle_window) and its 400 ms can only be judged on a real
+// desktop. Nothing in this file pretends otherwise.
+
+test("an argument containing a space is quoted, so it reads as one argument", () => {
+  // The issue's own example: join(" ") showed this as two paths.
+  assert.deepEqual(permissionDetail({ rawInput: { command: ["rm", "-rf", "/tmp/a b"] } }),
+    { detail: "rm -rf '/tmp/a b'", omitted: 0 });
+});
+
+test("the quoting is real POSIX quoting: a shell parses it back to the same argv", () => {
+  // Not "what the function emits" -- what /bin/sh makes of what it emits. The
+  // args are the awkward ones: a space, an embedded single quote, an empty
+  // element (invisible before this), a tab, a double quote, something that
+  // would expand, something that would glob.
+  const args = ["/tmp/a b", "it's here", "", "x\ty", 'a"b', "$HOME/x", "*"];
+  const { detail } = permissionDetail({ rawInput: { command: ["printf", "%s\\n", ...args] } });
+  const printed = execFileSync("sh", ["-c", detail], { encoding: "utf8", cwd: "/" });
+  assert.deepEqual(printed.split("\n").slice(0, -1), args);
+  assert.ok(detail.includes("'it'\\''s here'"), detail);
+});
+
+test("an argv needing no quoting is unchanged, so a quote stays a signal", () => {
+  const { detail } = permissionDetail({ rawInput: { command: ["git", "log", "--oneline", "-n", "20", "origin/master..HEAD"] } });
+  assert.equal(detail, "git log --oneline -n 20 origin/master..HEAD");
+  assert.ok(!detail.includes("'"), detail);
+});
+
+test("a field carried beside command is shown, not dropped", () => {
+  // Bash's rawInput today. `command` returned early, so `description` and
+  // `timeout` never reached the card being approved.
+  const rawInput = { command: "rm -rf /tmp/probe", description: "Clean up", timeout: 120000 };
+  assert.deepEqual(permissionDetail({ rawInput }), {
+    detail: 'rm -rf /tmp/probe\n' + JSON.stringify({ description: "Clean up", timeout: 120000 }, null, 2),
+    omitted: 0,
+  });
+  // The command stays first: it is the part that must be read.
+  assert.ok(permissionDetail({ rawInput }).detail.startsWith("rm -rf /tmp/probe\n"));
+});
+
+test("a command that is neither string nor array is still shown", () => {
+  const { detail } = permissionDetail({ rawInput: { command: { argv: ["ls"] }, cwd: "/tmp" } });
+  assert.ok(detail.includes('"argv"') && detail.includes('"/tmp"'), detail);
 });
