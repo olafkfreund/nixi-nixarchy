@@ -761,6 +761,60 @@ def test_tools_route():
         shutil.rmtree(conf, ignore_errors=True)
 
 
+def test_unit_parity():
+    """CONTRIBUTING.md:52 makes install.py and nix/hm-module.nix parity a rule
+    and asks for a job that checks it. This is that check, in the place CI
+    already runs (checks.selfcheck) rather than a new job.
+
+    ExecStart and PATH are deliberately NOT compared: one path installs to
+    ~/.local/bin and the other to a store path, and no parity rule should
+    collapse that. What must match is ordering and restart policy -- the fields
+    that decide whether the unit works, and the ones that had drifted (#56)."""
+    units = os.path.join(ROOT, "systemd")
+    module = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+
+    def field(text, key):
+        m = re.search(r"^%s=(.*)$" % re.escape(key), text, re.M)
+        return m.group(1).strip() if m else None
+
+    watch = open(os.path.join(units, "nixi-watch.service")).read()
+    # The file version started at default.target, so the watcher ran before the
+    # shell existed, failed, and burned its start limit -- dead for the session.
+    for key, want in (("PartOf", "graphical-session.target"),
+                      ("After", "graphical-session.target"),
+                      ("WantedBy", "graphical-session.target"),
+                      ("Restart", "on-failure"),
+                      ("RestartSec", "2"),
+                      ("Type", "exec")):
+        got = field(watch, key)
+        assert got == want, "nixi-watch.service %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    timer = open(os.path.join(units, "nixi-manual.timer")).read()
+    for key, want in (("Persistent", "true"), ("RandomizedDelaySec", "6h"),
+                      ("WantedBy", "timers.target")):
+        got = field(timer, key)
+        assert got == want, "nixi-manual.timer %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    manual = open(os.path.join(units, "nixi-manual.service")).read()
+    assert field(manual, "Type") == "oneshot" and '"oneshot"' in module
+
+    # The button's version is hand-maintained beside the package's single
+    # source; nix/package.nix asserts they match at build time, and this catches
+    # it before a build is even attempted.
+    top = json.load(open(os.path.join(ROOT, "manifest.json")))
+    button = json.load(open(os.path.join(ROOT, "button", "manifest.json")))
+    assert top["version"] == button["version"], \
+        "button/manifest.json is %s, manifest.json is %s" % (button["version"], top["version"])
+
+    # A comment describing an assertion that does not exist is worse than none.
+    flake = open(os.path.join(ROOT, "flake.nix")).read()
+    assert "assets non-empty" not in flake, "flake.nix claims an assertion that is not there"
+
+    print("  ok  the two unit definitions agree, and the versions do too")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
