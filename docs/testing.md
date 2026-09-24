@@ -52,7 +52,7 @@ its original global binding still exists and works after dismissal.
 3. Confirm assistant text is sans-serif, user prompts remain serif/italic, and
    there is breathing room before the next input.
 4. Click a Markdown link and confirm the desktop URL handler opens it.
-5. Use arrows, Page Up/Down, and Ctrl+H/J/K/L/U/D to scroll. Confirm each
+5. Use arrows, Page Up/Down, and Ctrl+J/K/U/D to scroll. Confirm each
    press supplies momentum, held/repeated keys build speed, opposite keys
    brake or reverse it, and the transcript coasts to a stop after release.
 6. Scroll a long transcript with a trackpad and with a touch drag. Confirm the

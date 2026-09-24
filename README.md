@@ -138,7 +138,7 @@ journalled, so a failure restores exactly what was there before.
 ### What it knows about NixOS
 
 Before every question the bridge runs `nixi-context`, which searches a locally
-fetched, hash-verified copy of **both** manuals and prepends the best excerpt.
+fetched, hash-verified copy of **both** manuals and appends the best excerpt.
 The nixarchy manual wins every collision and Omarchy's backfills the rest, the
 way nixarchy's own manual describes it. So the answer is `nixarchy apply`, not
 `pacman -S`.
