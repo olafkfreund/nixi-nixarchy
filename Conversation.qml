@@ -31,7 +31,14 @@ Item {
   property bool waiting: false
   property bool bridgeReady: false
   property bool steeringSupported: false
-  property bool steeringPending: false
+  // #44: one place for "a request is in flight", keyed by the request kind.
+  // There used to be three booleans with three reset paths, and two of the
+  // three forgot to reset -- that is #40. The three names below are derived,
+  // so every existing binding and guard keeps working while the state itself
+  // has exactly one home, and clearAcks() cannot clear one kind and miss
+  // another.
+  property var pendingAck: ({})
+  readonly property bool steeringPending: pendingAck.steer === true
   property bool composerTailPinned: false
   property bool resultsRevealPending: false
   property bool outsideDismissArmed: false
@@ -53,18 +60,17 @@ Item {
   // that the card in front of you is a NEW question.
   property bool permissionSettled: false
   property string permissionMode: "permission"
-  property bool permissionModePending: false
+  readonly property bool permissionModePending: pendingAck.permission_mode === true
   // Nixi trust level, owned by the bridge (see bridge/trust-policy.js). Guide
   // explains and never changes the machine; Mechanic asks before each change.
   property string trust: "guide"
-  property bool trustPending: false
+  readonly property bool trustPending: pendingAck.trust === true
 
   // Font scale is owned by the manager so every conversation and both window
   // modes share one value, and so a single writer persists it.
   property real fontScale: 1
   signal fontScaleStepRequested(real step)
   signal fontScaleResetRequested()
-  signal motionTunerRequested()
   signal harnessSelectorRequested()
   signal sessionRestartRequested()
   property real keyboardLineImpulse: 335
@@ -72,8 +78,20 @@ Item {
   property real keyboardDeceleration: 608
   property var fileOpenCommand: []
   property var fileEditCommand: []
-  property bool motionTunerOpen: false
   property bool harnessSelectorOpen: false
+
+  // #38: has anything in this conversation earned a wider card? Set from the
+  // text, never from geometry, and never cleared mid-conversation -- close()
+  // resets it. A one-line exchange stays compact; a long prompt, a fenced code
+  // block or a table gets the room it needs.
+  property bool contentWantsRoom: false
+  readonly property int roomyThreshold: 420
+  function noteContentWidth(body) {
+    if (contentWantsRoom) return
+    var text = String(body || "")
+    if (text.length > roomyThreshold || text.indexOf("```") >= 0 || text.indexOf("\n|") >= 0)
+      contentWantsRoom = true
+  }
   property string agentName: ""
   property string modelName: ""
   property string reasoningEffort: ""
@@ -98,10 +116,6 @@ Item {
     else closeFilePreview()
   }
   onSearchModeChanged: if (searchMode !== "@") closeFilePreview()
-  onMotionTunerOpenChanged: {
-    if (!motionTunerOpen && opened && !pinned)
-      Qt.callLater(function() { prompt.forceActiveFocus() })
-  }
   onHarnessSelectorOpenChanged: {
     if (!harnessSelectorOpen && opened && !pinned)
       Qt.callLater(function() { prompt.forceActiveFocus() })
@@ -204,7 +218,7 @@ Item {
     waiting = false
     bridgeReady = false
     steeringSupported = false
-    steeringPending = false
+    clearAcks()
     sessionLost = false
     queuedPrompt = ""
     clearPermissions()
@@ -216,6 +230,7 @@ Item {
     searchMode = ""
     prompt.text = ""
     messages.clear()
+    contentWantsRoom = false
     closed()
   }
 
@@ -648,6 +663,7 @@ Item {
     onBrowseRequested: function(mode, query) { root.enterSearchMode(mode, query) }
     onFaqAnswered: function(question, answer) {
       messages.append({ role: "You", body: question })
+      noteContentWidth(question)
       root.showNixiMessage(answer)
     }
     onNixiActionRequested: function(action) {
@@ -668,7 +684,6 @@ Item {
     else if (ctrl && (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore)) fontScaleStepRequested(-0.1)
     else if (ctrl && event.key === Qt.Key_0) fontScaleResetRequested()
     else if (ctrl && event.key === Qt.Key_P) pinConversation()
-    else if (ctrl && event.key === Qt.Key_Comma) motionTunerRequested()
     else if ((event.modifiers & Qt.MetaModifier) !== 0 && event.key === Qt.Key_Comma) harnessSelectorRequested()
     else return false
     return true
@@ -879,7 +894,6 @@ Item {
     Shortcut { sequence: "Ctrl+-"; onActivated: conversation.fontScaleStepRequested(-0.1) }
     Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.fontScaleResetRequested() }
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
-    Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
     // Ctrl+1 … Ctrl+9, Ctrl+0 pick the matching visible row. Each Shortcut sits
     // in an Item so it stays in this window's item tree, which is how a
@@ -915,10 +929,11 @@ Item {
     }
     if (waiting) {
       if (!steeringSupported || steeringPending || !bridgeReady || !agent.running) return
-      steeringPending = true
+      beginAck("steer")
       statusText = "Steering…"
       prompt.text = ""
       messages.append({ role: "You", body: text })
+      noteContentWidth(text)
       activeReply = messages.count
       activeReplyMessageId = ""
       messages.append({ role: "Claude", body: "" })
@@ -934,6 +949,7 @@ Item {
     queuedPrompt = text
     prompt.text = ""
     messages.append({ role: "You", body: text })
+    noteContentWidth(text)
     var promptIndex = messages.count - 1
     activeReply = messages.count
     activeReplyMessageId = ""
@@ -964,7 +980,7 @@ Item {
       statusText = "The agent is still starting — try again in a moment."
       return
     }
-    trustPending = true
+    beginAck("trust")
     statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
     agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }
@@ -979,12 +995,31 @@ Item {
       statusText = "The agent is still starting — try again in a moment."
       return
     }
-    permissionModePending = true
+    beginAck("permission_mode")
     agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
   }
 
   // A message from Nixi itself (a tour step), rendered like an agent reply --
   // only "You" is treated as human by the delegate.
+  function beginAck(kind) {
+    var next = {}
+    for (var k in pendingAck) next[k] = pendingAck[k]
+    next[kind] = true
+    pendingAck = next
+  }
+
+  function settleAck(kind) {
+    if (pendingAck[kind] !== true) return
+    var next = {}
+    for (var k in pendingAck) if (k !== kind) next[k] = pendingAck[k]
+    pendingAck = next
+  }
+
+  // Every kind at once. The reason this exists is #40: a session restart reset
+  // one flag and left two set, so the trust and YOLO controls were dead for the
+  // life of the conversation. One call cannot forget a kind.
+  function clearAcks() { pendingAck = ({}) }
+
   function showNixiMessage(text) {
     messages.append({ role: "Nixi", body: String(text) })
     Qt.callLater(root.scrollToEnd)
@@ -1014,7 +1049,9 @@ Item {
       messages.append({ role: "Claude", body: "" })
     }
     if (nextMessageId !== "") activeReplyMessageId = nextMessageId
-    messages.setProperty(activeReply, "body", (messages.get(activeReply).body || "") + text)
+    var grown = (messages.get(activeReply).body || "") + text
+    messages.setProperty(activeReply, "body", grown)
+    root.noteContentWidth(grown)
     if (pinTail) root.pinComposerToEnd()
     else if (followTail) Qt.callLater(root.scrollToEnd)
   }
@@ -1074,7 +1111,7 @@ Item {
         statusText = "Replying…"
       } else if (event.type === "done") {
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         statusText = ""
         activeReply = -1
         activeReplyMessageId = ""
@@ -1085,14 +1122,36 @@ Item {
         if (pinned)
           Qt.callLater(root.requestCompletionAttention)
         Qt.callLater(function() { prompt.forceActiveFocus() })
-      } else if (event.type === "steered") {
-        steeringPending = false
-        statusText = "Thinking…"
-        Qt.callLater(function() { prompt.forceActiveFocus() })
-      } else if (event.type === "steering_error") {
-        steeringPending = false
-        statusText = String(event.message || "Could not steer the active turn")
-        Qt.callLater(function() { prompt.forceActiveFocus() })
+      } else if (event.type === "ack") {
+        // #44: one branch for every request the card makes. The bridge answers
+        // trust, permission_mode and steer with the same shape, so the pending
+        // state is settled once, here, whatever the kind -- rather than in five
+        // branches that each had to remember.
+        var of = String(event.of || "")
+        settleAck(of)
+        if (of === "trust") {
+          trust = event.trust === "mechanic" ? "mechanic" : "guide"
+          if (event.ok) {
+            if (trust === "guide") clearPermissions()
+            statusText = trust === "mechanic"
+              ? "Mechanic: Nixi asks before each change"
+              : "Guide: Nixi explains, and changes nothing"
+          } else {
+            statusText = String(event.message || "Could not change trust level")
+          }
+        } else if (of === "permission_mode") {
+          permissionMode = event.mode === "yolo" ? "yolo" : "permission"
+          if (event.ok) {
+            if (permissionMode === "yolo") clearPermissions()
+            permissionModeConfirmed(permissionMode)
+          } else {
+            statusText = String(event.message || "Could not change permission mode")
+          }
+        } else if (of === "steer") {
+          statusText = event.ok ? "Thinking…"
+            : String(event.message || "Could not steer the active turn")
+          Qt.callLater(function() { prompt.forceActiveFocus() })
+        }
       } else if (event.type === "learned") {
         // The tutor recorded something about this machine. The write used to be
         // invisible: hidden from the transcript, appended to LEARNED.md, and
@@ -1112,30 +1171,10 @@ Item {
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
         enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options)
-      } else if (event.type === "permission_mode") {
-        permissionMode = event.mode === "yolo" ? "yolo" : "permission"
-        permissionModePending = false
-        if (permissionMode === "yolo") clearPermissions()
-        permissionModeConfirmed(permissionMode)
-      } else if (event.type === "trust") {
-        trust = event.trust === "mechanic" ? "mechanic" : "guide"
-        trustPending = false
-        if (trust === "guide") clearPermissions()
-        statusText = trust === "mechanic"
-          ? "Mechanic: Nixi asks before each change"
-          : "Guide: Nixi explains, and changes nothing"
-      } else if (event.type === "trust_error") {
-        trust = event.trust === "mechanic" ? "mechanic" : "guide"
-        trustPending = false
-        statusText = String(event.message || "Could not change trust level")
-      } else if (event.type === "permission_mode_error") {
-        permissionMode = event.mode === "yolo" ? "yolo" : "permission"
-        permissionModePending = false
-        statusText = String(event.message || "Could not change permission mode")
       } else if (event.type === "error") {
         clearPermissions()
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         activeReply = -1
         activeReplyMessageId = ""
         statusText = String(event.message || "Agent error")
@@ -1145,7 +1184,7 @@ Item {
         bridgeReady = false
         sessionLost = true
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         activeReply = -1
         activeReplyMessageId = ""
         statusText = String(event.message || "Session lost")
@@ -1159,14 +1198,13 @@ Item {
     sessionLost = false
     queuedPrompt = ""
     steeringSupported = false
-    steeringPending = false
-    // These gate setTrust() and setPermissionMode() and are cleared only by a
-    // trust/permission_mode event. A bridge that died mid-change never sends
-    // one, so without this the trust and YOLO controls are dead no-ops for the
-    // life of the conversation. close() does not need them: it destroys the
-    // object (Ask.qml:394), so its flags are never read again.
-    trustPending = false
-    permissionModePending = false
+    // Every in-flight request, whatever kind. A bridge that died mid-change
+    // never sends its ack, so without this the trust and YOLO controls are
+    // dead no-ops for the life of the conversation (#40). That fix used to be
+    // "remember to reset two more flags"; since #44 there is one piece of
+    // state, so forgetting a kind is no longer possible. close() does not need
+    // it: it destroys the object (Ask.qml:394).
+    clearAcks()
     statusText = "Starting agent…"
     agent.running = true
   }
@@ -1252,7 +1290,7 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     // Let the auxiliary motion window become active without dismissing this
     // layer popup, then reclaim exclusive prompt focus when it closes.
-    WlrLayershell.keyboardFocus: root.motionTunerOpen || root.harnessSelectorOpen
+    WlrLayershell.keyboardFocus: root.harnessSelectorOpen
       ? WlrKeyboardFocus.OnDemand
       : WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
@@ -1276,10 +1314,23 @@ Item {
       // Ctrl+= crammed larger text into the same 540px box -- the opposite of
       // what zooming is for (#38). The parent bound is untouched, so however
       // large the scale, nothing can exceed the screen.
-      readonly property int maxHeight: Math.min(Style.space(560) * root.fontScale, parent.height - Style.gapsOut * 2)
+          // #38: the ceiling follows the screen instead of a fixed 560, so a long
+      // answer on a 1440p or 2160p panel is not squeezed into a third of it.
+      readonly property int maxHeight: Math.min(Math.round(parent.height * 0.85), parent.height - Style.gapsOut * 2)
+      readonly property int compactWidth: Style.space(540) * root.fontScale
+      readonly property int roomyWidth: Math.min(Style.space(1000) * root.fontScale,
+                                                 Math.round(parent.width * 0.7))
       readonly property int frameInset: Style.spacing.panelPadding * 2
       readonly property int headerInset: Style.space(8)
-      width: root.pinned ? parent.width : Math.min(Style.space(540) * root.fontScale, parent.width - Style.gapsOut * 2)
+      // Width grows only when the CONTENT asks for it, never from a measured
+      // height. Measuring would loop: wider wraps less, so the card shortens,
+      // so it would narrow, so it lengthens again. root.contentWantsRoom is
+      // computed from the message text itself, so the layout cannot feed back
+      // into it -- and it is monotonic within a conversation, so the card
+      // cannot oscillate even at a threshold.
+      width: root.pinned ? parent.width
+        : Math.min(root.contentWantsRoom ? roomyWidth : compactWidth, parent.width - Style.gapsOut * 2)
+      Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
       height: root.pinned ? parent.height : Math.min(maxHeight, stack.height + frameInset)
       anchors.horizontalCenter: parent.horizontalCenter
       // Optical centre, not the mathematical one. A card placed at exactly

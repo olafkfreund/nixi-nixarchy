@@ -88,7 +88,8 @@ test("YOLO cannot be switched on from Guide", async () => {
   const { events, settingsAfter } = await runBridge({
     messages: [{ type: "permission_mode", mode: "yolo" }],
   });
-  assert.ok(events.some((e) => e.type === "permission_mode_error"), "YOLO was accepted in Guide");
+  assert.ok(events.some((e) => e.type === "ack" && e.of === "permission_mode" && !e.ok),
+    "YOLO was accepted in Guide");
   assert.notEqual(settingsAfter?.permissionMode, "yolo");
 });
 
@@ -209,9 +210,9 @@ test("an agent that never answers setSessionMode is bounded, and trust is not mo
     env: { FAKE_AGENT_HANG: "mode", NIXI_MODE_TIMEOUT_MS: "300" },
     messages: [{ type: "trust", trust: "mechanic" }],
   });
-  const error = run.events.find((e) => e.type === "trust_error");
+  const error = run.events.find((e) => e.type === "ack" && e.of === "trust" && !e.ok);
   assert.ok(error, `expected trust_error, got ${JSON.stringify(run.events.map((e) => e.type))}`);
-  assert.ok(!run.events.some((e) => e.type === "trust"),
+  assert.ok(!run.events.some((e) => e.type === "ack" && e.of === "trust" && e.ok),
     "reported success for a mode change the agent never acknowledged");
   // The level it reports must be the one still in force, never the one asked for.
   assert.equal(error.trust, "guide");
@@ -222,9 +223,9 @@ test("an agent that never answers setSessionMode is bounded, and trust is not mo
 
 test("a successful switch still persists and reports the new trust (#40)", async () => {
   const run = await runBridge({ messages: [{ type: "trust", trust: "mechanic" }] });
-  const ack = run.events.find((e) => e.type === "trust");
+  const ack = run.events.find((e) => e.type === "ack" && e.of === "trust" && e.ok);
   assert.equal(ack?.trust, "mechanic");
-  assert.ok(!run.events.some((e) => e.type === "trust_error"));
+  assert.ok(!run.events.some((e) => e.type === "ack" && e.of === "trust" && !e.ok));
   assert.equal(run.settingsAfter.trust, "mechanic");
   // Applying the mode before persisting must not skip the mode call itself.
   const modes = run.agent.filter((e) => e.method === "setSessionMode").map((e) => e.modeId);
@@ -410,4 +411,49 @@ test("the deny reaches the session as transmitted, under both read settings (#52
   assert.deepEqual(strict.deny, plain.deny);
   assert.deepEqual(plain.allow, ["Read", "Grep", "Glob"]);
   assert.deepEqual(strict.allow, []);
+});
+
+// #44 -- three request/ack/error triples became one ack shape. The point is not
+// tidiness: each triple had its own pending flag and its own reset path, and two
+// of the three forgot to reset, which is #40. One shape means one place to
+// clear, so that bug cannot recur per-request-kind.
+
+test("every request is answered with the same ack shape (#44)", async () => {
+  for (const [message, of] of [
+    [{ type: "trust", trust: "mechanic" }, "trust"],
+    [{ type: "permission_mode", mode: "yolo" }, "permission_mode"],
+  ]) {
+    const run = await runBridge({ settings: { trust: "mechanic" }, messages: [message] });
+    const acks = run.events.filter((e) => e.type === "ack");
+    assert.ok(acks.length > 0, `no ack for ${of}; got ${JSON.stringify(run.events.map((e) => e.type))}`);
+    const mine = acks.find((e) => e.of === of);
+    assert.ok(mine, `no ack carrying of="${of}"`);
+    assert.equal(typeof mine.ok, "boolean", "an ack must say whether it succeeded");
+  }
+});
+
+test("the old per-kind event names are gone (#44)", async () => {
+  const run = await runBridge({
+    settings: { trust: "mechanic" },
+    messages: [{ type: "trust", trust: "guide" }],
+  });
+  const types = new Set(run.events.map((e) => e.type));
+  for (const dead of ["trust", "trust_error", "permission_mode",
+                      "permission_mode_error", "steered", "steering_error"]) {
+    assert.ok(!types.has(dead),
+      `${dead} is still emitted -- a second ack shape defeats the collapse`);
+  }
+});
+
+test("a failed request acks with ok:false and keeps the level in force (#44)", async () => {
+  const run = await runBridge({
+    env: { FAKE_AGENT_HANG: "mode", NIXI_MODE_TIMEOUT_MS: "300" },
+    settings: { trust: "mechanic" },
+    messages: [{ type: "trust", trust: "guide" }],
+  });
+  const ack = run.events.find((e) => e.type === "ack" && e.of === "trust");
+  assert.ok(ack, "a hung request produced no ack at all -- the card would wait forever");
+  assert.equal(ack.ok, false);
+  // The same guarantee #40 established: never report a level the session is not in.
+  assert.equal(ack.trust, "mechanic");
 });

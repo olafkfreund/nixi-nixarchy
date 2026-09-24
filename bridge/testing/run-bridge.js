@@ -80,9 +80,12 @@ export async function runBridge(options = {}) {
         const target = ++turns;
         await until(() => events.filter((e) => e.type === "done").length >= target, `turn ${target}`);
       } else if (message.type === "trust" || message.type === "permission_mode") {
-        const count = events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length;
-        await until(() => events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length > count,
-          `${message.type} acknowledgement`);
+        // One ack shape since #44: { type: "ack", of, ok }. `of` matches the
+        // inbound message type, so waiting for a reply is the same expression
+        // whatever was asked -- which is the point of collapsing the triples.
+        const acks = () => events.filter((e) => e.type === "ack" && e.of === message.type).length;
+        const count = acks();
+        await until(() => acks() > count, `${message.type} acknowledgement`);
       }
     }
     const agent = existsSync(log)
