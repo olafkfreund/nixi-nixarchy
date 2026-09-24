@@ -19,7 +19,6 @@ Item {
   // Emitted with the text to show; the manager puts it in the open card.
   signal stepShown(string text)
   signal tourFinished()
-  signal progressChanged()
 
   property var tourData: ({ steps: [] })
   property var learnData: ({ topics: [] })
@@ -35,12 +34,10 @@ Item {
       stepShown("The tour data is missing from this install.")
       return
     }
-    state = TourModel.start(tourData)
+    state = TourModel.start()
     advanceTo(TourModel.onCheck(state, tourData, { defaultAgent: defaultAgentSet }))
     show()
   }
-
-  function stop() { state = TourModel.idle() }
 
   function show() {
     if (!active) return
@@ -88,10 +85,7 @@ Item {
   }
 
   function markToured() {
-    var next = {}
-    for (var key in learning) next[key] = learning[key]
-    next.toured = true
-    learning = next
+    learning = Object.assign({}, learning, { toured: true })
     saveLearning()
   }
 
@@ -100,7 +94,6 @@ Item {
   function saveLearning() {
     // Progress only -- ids and timestamps. No transcript is ever written.
     learningFile.setText(JSON.stringify(learning, null, 2) + "\n")
-    progressChanged()
   }
 
   // ---- the world ----------------------------------------------------------
@@ -134,7 +127,6 @@ Item {
     watchChanges: true
     onLoaded: {
       try { root.learning = JSON.parse(text()) || {} } catch (error) { root.learning = {} }
-      root.progressChanged()
     }
     // Absent until something has been learned; an empty state is correct.
     onLoadFailed: { root.learning = {} }

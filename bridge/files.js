@@ -8,14 +8,13 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 const home = process.env.HOME || process.cwd();
-// `@` is a general file finder, so its default scope is the whole home
-// directory. NIXI_FILE_ROOT is an explicit opt-in for users who want a
-// narrower index. Keep the fd fallback and repository discovery on exactly
-// the same root so results do not change scope while the primary index warms.
-const basePath = resolve(process.env.NIXI_FILE_ROOT || home);
-const searchRoots = [basePath].filter((path) => existsSync(path));
-const priorityFileRoots = ["Downloads", "Documents", "Desktop", "Projects", "Work"]
-  .map((name) => join(basePath, name)).filter((path) => existsSync(path));
+// `@` is a general file finder, so its scope is the whole home directory. The
+// fd fallback and repository discovery use exactly the same root so results do
+// not change scope while the primary index warms.
+const basePath = resolve(home);
+const searchRoots = [basePath];
+const existingRoots = (names) => names.map((name) => join(basePath, name)).filter((path) => existsSync(path));
+const priorityFileRoots = existingRoots(["Downloads", "Documents", "Desktop", "Projects", "Work"]);
 const settingsPath = join(process.env.XDG_CONFIG_HOME || join(home, ".config"), "omarchy", "nixi.json");
 let configuredRepoDepth = 6;
 try {
@@ -23,8 +22,6 @@ try {
   if (settings.repoSearchDepth !== undefined)
     configuredRepoDepth = Number(settings.repoSearchDepth);
 } catch {}
-if (process.env.NIXI_REPO_SEARCH_DEPTH !== undefined)
-  configuredRepoDepth = Number(process.env.NIXI_REPO_SEARCH_DEPTH);
 // Zero means unlimited. Bound positive values to keep accidental settings
 // from generating nonsensical fd arguments.
 const repoSearchDepth = Number.isFinite(configuredRepoDepth)
@@ -35,7 +32,7 @@ const created = FileFinder.create({
   aiMode: false,
   disableMmapCache: true,
   disableContentIndexing: true,
-  enableHomeDirScanning: basePath === resolve(home),
+  enableHomeDirScanning: true,
 });
 const finder = created.ok ? created.value : null;
 let ready = false;
@@ -59,34 +56,45 @@ function setRepos(paths) {
   emitCurrentRepos();
 }
 
-async function findRepoMarkers(roots, timeout) {
-  const depthArgs = repoSearchDepth > 0 ? ["--max-depth", String(repoSearchDepth)] : [];
-  const outputs = await Promise.all(roots.map((root) => execFileAsync("fd", [
-    "--hidden", "--no-ignore", ...depthArgs,
-    "--exclude", ".cache", "--exclude", "node_modules",
-    "^\\.git$", root,
-  ], { timeout, maxBuffer: 2 * 1024 * 1024 }).then((value) => value.stdout).catch(() => "")));
+// fd once per root, run together; a root that fails or times out adds nothing.
+async function fdLines(args, roots, timeout, signal) {
+  const outputs = await Promise.all(roots.map((root) => execFileAsync("fd", [...args, root],
+    { timeout, maxBuffer: 2 * 1024 * 1024, signal }).then((value) => value.stdout).catch(() => "")));
   return outputs.join("\n").split("\n").filter(Boolean);
+}
+
+// plocate's database can be stale: keep only paths that still exist, of the
+// wanted kind, under the search root and outside caches.
+function locatedUnderBase(output, isDirectory) {
+  const basePrefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
+  return output.split("\n").filter((path) => {
+    if (!path.startsWith(basePrefix) || path.includes("/node_modules/")
+        || path.includes("/.cache/")) return false;
+    try {
+      const stat = statSync(path);
+      return isDirectory ? stat.isDirectory() : stat.isFile();
+    } catch { return false; }
+  });
+}
+
+function findRepoMarkers(roots, timeout) {
+  const depthArgs = repoSearchDepth > 0 ? ["--max-depth", String(repoSearchDepth)] : [];
+  return fdLines(["--hidden", "--no-ignore", ...depthArgs,
+    "--exclude", ".cache", "--exclude", "node_modules", "^\\.git$"], roots, timeout);
 }
 
 async function discoverRepos() {
   try {
-    const basePrefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
     const located = await execFileAsync("plocate", ["--regex", "/\\.git/?$"] , {
       timeout: 1200, maxBuffer: 4 * 1024 * 1024,
     }).then((value) => value.stdout).catch(() => "");
-    const warm = located.split("\n").filter((path) => {
-      if (!path.startsWith(basePrefix) || path.includes("/node_modules/")
-          || path.includes("/.cache/")) return false;
-      try { return statSync(path).isDirectory(); } catch { return false; }
-    });
+    const warm = locatedUnderBase(located, true);
     if (warm.length > 0) setRepos(warm);
 
     // Repositories people actively work in usually live in one of these
     // roots. Scan them first so a stale locate database does not make the
     // repo row wait behind caches and application data elsewhere in $HOME.
-    const priorityRoots = ["Projects", "Work", "Documents", "Desktop"]
-      .map((name) => join(basePath, name)).filter((path) => existsSync(path));
+    const priorityRoots = existingRoots(["Projects", "Work", "Documents", "Desktop"]);
     if (priorityRoots.length > 0) setRepos(await findRepoMarkers(priorityRoots, 3000));
 
     const scanned = await findRepoMarkers(searchRoots, 15_000);
@@ -127,7 +135,6 @@ function emitCurrentRepos() {
   emit({
     id: latestRequestId,
     query: latestRepoQuery,
-    basePath,
     repoOnly: true,
     repos: result.rows,
     repoTotalMatched: result.totalMatched,
@@ -149,8 +156,8 @@ async function initialize() {
   }
 }
 
-const initializing = initialize();
-const repoInitialization = discoverRepos();
+initialize();
+discoverRepos();
 
 function emitSearch(message, query, rows, totalMatched = rows.length, capped = false,
     complete = true) {
@@ -158,7 +165,6 @@ function emitSearch(message, query, rows, totalMatched = rows.length, capped = f
   emit({
     id: message.id,
     query,
-    basePath,
     rows,
     totalMatched,
     capped,
@@ -209,12 +215,7 @@ async function fallbackFiles(query, signal) {
       "--ignore-case", "--limit", "300", query,
     ], { timeout: 1200, maxBuffer: 2 * 1024 * 1024, signal })
       .then((value) => value.stdout).catch(() => "");
-    const basePrefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
-    const locatedPaths = located.split("\n").filter((path) => {
-      if (!path.startsWith(basePrefix) || path.includes("/node_modules/")
-          || path.includes("/.cache/")) return false;
-      try { return statSync(path).isFile(); } catch { return false; }
-    });
+    const locatedPaths = locatedUnderBase(located, false);
     if (locatedPaths.length > 0) return {
       rows: locatedPaths.slice(0, 100).map((path) => ({
         name: basename(path),
@@ -229,20 +230,14 @@ async function fallbackFiles(query, signal) {
     const pattern = query.trim().split(/\s+/).map((part) => part.replace(/[^A-Za-z0-9._-]/g, ""))
       .filter(Boolean).join(".*");
     if (!pattern) return { rows: [], totalMatched: 0, capped: false, complete: true };
-    const scan = async (roots, timeout) => Promise.all(roots.map((root) => execFileAsync("fd", [
-      "--type", "f", "--hidden", "--ignore-case", "--max-results", "101",
-      "--exclude", ".cache", "--exclude", "node_modules", pattern, root,
-    ], { timeout, maxBuffer: 2 * 1024 * 1024, signal })
-      .then((value) => value.stdout).catch(() => "")));
+    const scan = (roots, timeout) => fdLines(["--type", "f", "--hidden", "--ignore-case",
+      "--max-results", "101", "--exclude", ".cache", "--exclude", "node_modules", pattern],
+      roots, timeout, signal);
     // A whole-home traversal is not ordered by relevance and can spend its
     // entire timeout in large hidden trees before reaching Downloads. Search
     // normal user-facing roots first, then fall back to the complete scope.
-    const priorityOutputs = await scan(priorityFileRoots, 3000);
-    let found = priorityOutputs.join("\n").split("\n").filter(Boolean);
-    if (found.length === 0) {
-      const outputs = await scan(searchRoots, 15_000);
-      found = outputs.join("\n").split("\n").filter(Boolean);
-    }
+    let found = await scan(priorityFileRoots, 3000);
+    if (found.length === 0) found = await scan(searchRoots, 15_000);
     return { rows: found.slice(0, 100).map((path) => {
       const absolute = resolve(path);
       return {
@@ -258,7 +253,7 @@ async function fallbackFiles(query, signal) {
 async function search(message, signal) {
   const query = String(message.query || "").trim();
   if (query.length < 2) {
-    emit({ id: message.id, query, basePath, rows: [], totalMatched: 0,
+    emit({ id: message.id, query, rows: [], totalMatched: 0,
       capped: false, complete: true, repos: [] });
     return;
   }
@@ -287,9 +282,6 @@ async function search(message, signal) {
       name: item.fileName,
       relativePath: item.relativePath,
       path: resolve(basePath, item.relativePath),
-      size: item.size,
-      modified: item.modified,
-      gitStatus: item.gitStatus,
     }));
   // FFF can report its scan complete while a newly created file is still
   // absent from its native index. Do not let an empty index result suppress a
@@ -317,10 +309,7 @@ input.on("line", (line) => {
     latestRequestId = Number(message.id) || 0;
     latestRepoQuery = String(message.query || "").trim();
     emitCurrentRepos();
-    if (pendingSearchTimer) clearTimeout(pendingSearchTimer);
-    if (activeSearchController) activeSearchController.abort();
-    for (const timer of progressiveTimers) clearTimeout(timer);
-    progressiveTimers = [];
+    cancelPending();
     pendingSearchTimer = setTimeout(() => {
       pendingSearchTimer = null;
       const controller = new AbortController();
@@ -332,10 +321,16 @@ input.on("line", (line) => {
   } catch {}
 });
 
-function shutdown() {
+// Stop the queued search, the one running, and any rows still to be shown.
+function cancelPending() {
   if (pendingSearchTimer) clearTimeout(pendingSearchTimer);
   if (activeSearchController) activeSearchController.abort();
   for (const timer of progressiveTimers) clearTimeout(timer);
+  progressiveTimers = [];
+}
+
+function shutdown() {
+  cancelPending();
   try { finder?.destroy(); } catch {}
   process.exit(0);
 }

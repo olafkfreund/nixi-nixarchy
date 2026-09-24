@@ -11,10 +11,8 @@
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
 // from Mechanic; it can never be reached from Guide.
 
-export const TRUST_LEVELS = ["guide", "mechanic"];
-
 export function resolveTrust(value) {
-  return TRUST_LEVELS.includes(value) ? value : "guide";
+  return value === "mechanic" ? "mechanic" : "guide";
 }
 
 const MODES = {
@@ -46,7 +44,7 @@ export const OPENCODE_PERMISSIONS = {
 // askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
 // everything" means every agent.
 export function opencodePermissions(askBeforeReading) {
-  if (askBeforeReading !== true) return OPENCODE_PERMISSIONS;
+  if (!askBeforeReading) return OPENCODE_PERMISSIONS;
   return { permission: { ...OPENCODE_PERMISSIONS.permission,
     read: "ask", grep: "ask", glob: "ask", list: "ask" } };
 }
@@ -70,8 +68,8 @@ const CLAUDE_SECRET_READS = [
 
 export function claudePermissions(askBeforeReading) {
   return {
-    allow: askBeforeReading === true ? [] : ["Read", "Grep", "Glob"],
-    ask: [...CLAUDE_SECRET_READS],
+    allow: askBeforeReading ? [] : ["Read", "Grep", "Glob"],
+    ask: CLAUDE_SECRET_READS,
   };
 }
 
@@ -79,6 +77,6 @@ export function claudePermissions(askBeforeReading) {
 export function trustPolicy(agent, trust, permissionMode) {
   const level = resolveTrust(trust);
   const modeId = (MODES[agent] || MODES.claude)[level];
-  if (level === "guide") return { trust: level, modeId, permission: "cancel" };
-  return { trust: level, modeId, permission: permissionMode === "yolo" ? "yolo" : "ask" };
+  if (level === "guide") return { modeId, permission: "cancel" };
+  return { modeId, permission: permissionMode === "yolo" ? "yolo" : "ask" };
 }

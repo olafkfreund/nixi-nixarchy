@@ -26,6 +26,7 @@ which Omarchy requires to be a second plugin.
 import json
 import os
 import secrets
+import shutil
 import stat
 import subprocess
 import sys
@@ -43,11 +44,9 @@ EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
 NO_SYSTEMD = "--no-systemd" in sys.argv
 PLUGINS = os.path.join(HOME, ".config", "omarchy", "plugins")
 FEATURES = ("watcher", "skill", "hooks")
-_LOG = []
 
 
 def log(msg):
-    _LOG.append(str(msg))
     print(msg, file=sys.stderr if msg.startswith(("install failed", "rollback")) else sys.stdout)
 
 
@@ -305,9 +304,6 @@ def install_core(j, svc):
     button = os.path.join(PLUGINS, json.loads(read_src(src("button", "manifest.json")))["id"])
     for f in ("manifest.json", "BarWidget.qml"):
         j.place(button, f, read_src(src("button", f)))
-    version = json.loads(read_src(src("manifest.json")))["version"]
-    j.place(DATA, "source_root", (ROOT + "\n").encode(), mode=0o600, dir_mode=0o700)
-    j.place(DATA, ".installed-version", (version + "\n").encode(), mode=0o600, dir_mode=0o700)
     merge_menu(j)
     install_bridge_deps()
     if not os.path.realpath(ROOT).startswith(os.path.realpath(PLUGINS) + os.sep):
@@ -347,7 +343,7 @@ def install_bridge_deps():
     bridge = src("bridge")
     if os.environ.get("NIXI_SKIP_NPM") in ("1", "true", "yes"):
         return
-    if not _shutil_which("npm"):
+    if not shutil.which("npm"):
         log("bridge: npm is not on PATH, so the card cannot start an agent; "
             "add pkgs.nodejs, then run install.py --refresh")
         return
@@ -366,9 +362,8 @@ ADAPTERS = (("claude", "claude-agent-acp"), ("codex", "codex-acp"), ("opencode",
 
 
 def requirements():
-    found = {agent: bool(_shutil_which(cmd)) for agent, cmd in ADAPTERS}
-    return {"agents": found, "fileSearch": bool(_shutil_which("fd")),
-            "node": bool(_shutil_which("node"))}
+    found = {agent: bool(shutil.which(cmd)) for agent, cmd in ADAPTERS}
+    return {"agents": found, "fileSearch": bool(shutil.which("fd"))}
 
 
 def merge_menu(j):
@@ -447,16 +442,14 @@ def disable_watcher(j, svc):
 
 
 def enable_skill(j, svc):
-    for f in sorted(os.listdir(src("skills", "nixi"))):
-        if f.endswith(".md"):
-            j.place(SKILLS, f, read_src(src("skills", "nixi", f)))
-    j.place(DIR, "SKILL.md", read_src(src("skills", "nixi", "SKILL.md")), dir_mode=0o700)
+    skill = read_src(src("skills", "nixi", "SKILL.md"))
+    j.place(SKILLS, "SKILL.md", skill)
+    j.place(DIR, "SKILL.md", skill, dir_mode=0o700)
 
 
 def disable_skill(j, svc):
-    for f in ("SKILL.md",):
-        j.remove(SKILLS, f)
-        j.remove(DIR, f)
+    j.remove(SKILLS, "SKILL.md")
+    j.remove(DIR, "SKILL.md")
     try:
         os.rmdir(SKILLS)
     except OSError:
@@ -481,11 +474,6 @@ def disable_hooks(j, svc):
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
-def _shutil_which(b):
-    import shutil
-    return shutil.which(b)
-
-
 def status():
     return {
         "watcher": os.path.exists(os.path.join(UNITS, "nixi-watch.service"))
@@ -500,11 +488,11 @@ DISABLE = {"watcher": disable_watcher, "skill": disable_skill, "hooks": disable_
 
 
 def main(argv):
-    args = [a for a in argv if a not in ("--no-systemd", "--log")]
+    args = [a for a in argv if a != "--no-systemd"]
     if args == ["--status"]:
         print(json.dumps(status()))
         return 0
-    want_on, want_off, core = [], [], True
+    want_on, want_off = [], []
     for a in args:
         if a == "--all":
             want_on = list(FEATURES)
@@ -514,12 +502,11 @@ def main(argv):
             want_on.append(a[7:])
         elif a.startswith("--without-") and a[10:] in FEATURES:
             want_off.append(a[10:])
-            core = False
         else:
             print("unknown flag: " + a, file=sys.stderr)
             return 64
-    if want_on and not core:
-        core = True
+    # --without-X alone only removes X; anything else also (re)installs the core.
+    core = bool(want_on) or not want_off
     j, svc = Journal(), Services()
     try:
         if core:
@@ -532,7 +519,6 @@ def main(argv):
         log("install failed: %s — rolling back" % e)
         svc.rollback()
         j.rollback()
-        write_log()
         return 1
     # The first manual fetch is a convenience, not part of the install: it is
     # already best-effort, and CI (and air-gapped installs) want it skipped
@@ -580,24 +566,7 @@ def main(argv):
                 % (", ".join(off), " ".join("--with-" + f for f in off)))
         else:
             log("all optional features are enabled")
-    write_log()
     return 0
-
-
-def write_log():
-    """The setup log lives in the private state dir, written through the
-    same descriptor-bound primitive as everything else (never a shell
-    redirection through a symlink)."""
-    if "--log" not in sys.argv:
-        return
-    try:
-        dfd = _dirfd(DATA, create=True)
-        try:
-            _write(dfd, "setup.log", ("\n".join(_LOG) + "\n").encode(), 0o600)
-        finally:
-            os.close(dfd)
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

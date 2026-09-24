@@ -35,22 +35,18 @@ try {
   }
 
   let text = "";
-  let truncated = false;
   if (!thumbnail && Gio.content_type_is_a(mime, "text/plain")) {
     const [, contents] = file.load_contents(null);
     const decoded = ByteArray.toString(contents).replace(/\u0000/g, "");
     text = decoded.slice(0, 24000);
-    truncated = decoded.length > text.length;
   }
 
   emit({
     id: requestId,
     path,
     name: info.get_display_name() || file.get_basename() || "",
-    mime,
     thumbnail: thumbnail || "",
-    text,
-    truncated
+    text
   });
 } catch (error) {
   emit({ id: requestId, path, name: GLib.path_get_basename(path), thumbnail: "", text: "" });

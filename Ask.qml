@@ -52,8 +52,7 @@ Item {
   property bool copyToastVisible: false
   // One manager owns the compositor submap. Conversations only affect the
   // derived desired state; they never dispatch Hyprland commands themselves.
-  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap
-    && activeOverlay !== null && activeOverlay.opened && !activeOverlay.pinned
+  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap && opened
   property bool shortcutSubmapOwned: false
   property bool shortcutSubmapTarget: false
   property bool shortcutSubmapInitialized: false
@@ -119,10 +118,8 @@ Item {
   }
 
   function showCopyToast() {
-    copyToastFade.stop()
-    copyToastCard.opacity = 1
     copyToastVisible = true
-    copyToastHold.restart()
+    copyToastAnimation.restart()
   }
 
   function setFontScale(value) {
@@ -134,9 +131,12 @@ Item {
 
   function adjustFontScale(step) { setFontScale(fontScale + step) }
 
+  function clampImpulse(value) { return Math.round(Math.max(80, Math.min(2000, value))) }
+  function clampDeceleration(value) { return Math.round(Math.max(100, Math.min(5000, value))) }
+
   function setKeyboardMotion(impulse, deceleration) {
-    var nextImpulse = Math.round(Math.max(80, Math.min(2000, impulse)))
-    var nextDeceleration = Math.round(Math.max(100, Math.min(5000, deceleration)))
+    var nextImpulse = clampImpulse(impulse)
+    var nextDeceleration = clampDeceleration(deceleration)
     if (nextImpulse === keyboardLineImpulse && nextDeceleration === keyboardDeceleration) return
     keyboardLineImpulse = nextImpulse
     keyboardDeceleration = nextDeceleration
@@ -158,13 +158,9 @@ Item {
       ? Math.round(Math.max(minSearchDebounceMs, Math.min(maxSearchDebounceMs, debounce)))
       : 270
     var impulse = Number(data.keyboardLineImpulse)
-    keyboardLineImpulse = isFinite(impulse)
-      ? Math.round(Math.max(80, Math.min(2000, impulse)))
-      : 335
+    keyboardLineImpulse = isFinite(impulse) ? clampImpulse(impulse) : 335
     var deceleration = Number(data.keyboardDeceleration)
-    keyboardDeceleration = isFinite(deceleration)
-      ? Math.round(Math.max(100, Math.min(5000, deceleration)))
-      : 608
+    keyboardDeceleration = isFinite(deceleration) ? clampDeceleration(deceleration) : 608
     fileOpenCommand = normalizeCommand(data.fileOpenCommand)
     fileEditCommand = normalizeCommand(data.fileEditCommand)
     useHyprlandShortcutSubmap = data.useHyprlandShortcutSubmap === true
@@ -182,12 +178,7 @@ Item {
     if (typeof value === "string")
       return value.trim() === "" ? [] : [value.trim()]
     if (!Array.isArray(value)) return []
-    var command = []
-    for (var i = 0; i < value.length; i++) {
-      var argument = String(value[i] || "")
-      if (argument !== "") command.push(argument)
-    }
-    return command
+    return value.map(function(argument) { return String(argument || "") }).filter(Boolean)
   }
 
   function flushSettings() {
@@ -295,21 +286,14 @@ Item {
       }
     }
 
-    Timer {
-      id: copyToastHold
-      interval: 1500
-      onTriggered: copyToastFade.restart()
-    }
-
-    NumberAnimation {
-      id: copyToastFade
-      target: copyToastCard
-      property: "opacity"
-      from: 1
-      to: 0
-      duration: 500
-      easing.type: Easing.OutQuad
-      onFinished: root.copyToastVisible = false
+    // Shown at full opacity, held, then faded. The hide is a step of the
+    // sequence, so restarting it for a second copy cannot hide the new toast.
+    SequentialAnimation {
+      id: copyToastAnimation
+      PropertyAction { target: copyToastCard; property: "opacity"; value: 1 }
+      PauseAnimation { duration: 1500 }
+      NumberAnimation { target: copyToastCard; property: "opacity"; to: 0; duration: 500; easing.type: Easing.OutQuad }
+      ScriptAction { script: root.copyToastVisible = false }
     }
   }
 
@@ -441,8 +425,10 @@ Item {
   }
 
   function open(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned) {
+    if (opened) {
       // An open card ignores a summons, except a handed-over question.
+      // `opened` is this branch's extraction of master's inline
+      // activeOverlay && .opened && !.pinned -- same condition, one name.
       try {
         var payload = JSON.parse(payloadJson || "{}")
         if (payload && payload.action === "ask") root.askFromSummon(activeOverlay, payload)
@@ -453,13 +439,13 @@ Item {
   }
 
   function close() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     reconcileShortcutSubmap()
   }
 
   function pinActive() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.pinConversation()
   }
 
@@ -471,7 +457,7 @@ Item {
   }
 
   function toggle(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     else
       createConversation(payloadJson)

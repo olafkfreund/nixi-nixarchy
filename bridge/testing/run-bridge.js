@@ -1,6 +1,7 @@
 // Runs the real bridge.js against testing/fake-agent.js and returns what the
 // agent received. Shared by the bridge's behavioural tests.
 import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -49,24 +50,17 @@ export async function runBridge(options = {}) {
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
   const events = [];
   let permissionFailure = null;
-  let buffer = "";
   const waiters = [];
-  child.stdout.on("data", (chunk) => {
-    buffer += chunk;
-    let index;
-    while ((index = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, index);
-      buffer = buffer.slice(index + 1);
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      events.push(event);
-      // options.onPermission answers a permission prompt the way the card would.
-      if (event.type === "permission" && options.onPermission) {
-        try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
-        catch (error) { permissionFailure = error; }
-      }
-      for (const waiter of waiters.splice(0)) waiter();
+  createInterface({ input: child.stdout }).on("line", (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    events.push(event);
+    // options.onPermission answers a permission prompt the way the card would.
+    if (event.type === "permission" && options.onPermission) {
+      try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
+      catch (error) { permissionFailure = error; }
     }
+    for (const waiter of waiters.splice(0)) waiter();
   });
   const until = (predicate, label) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}; events: ${JSON.stringify(events)}`)), 15000);
