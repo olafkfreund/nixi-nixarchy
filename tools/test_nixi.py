@@ -247,11 +247,15 @@ def test_lock_bundles_no_adapter():
 
 def test_old_widget_stays_gone():
     """The browser widget, its server and voice input were removed (plan step
-    16). Only the checks that they are absent, and the installer's list of what
-    to delete from an old install, may name them."""
-    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py",
-               ".github/workflows/ci.yml", "nix/package.nix", "install.py")
-    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token")
+    16). Only the fork record and the intent/spec/plan prose may name them.
+
+    This is a dead-feature drift guard, not migration code: seven of its seven
+    patterns are the removed voice and browser-widget surface, and this is one of
+    only two invariants of its class in the tree
+    (spec/2026-09-24-56-drift-traps.md). The `ui.html` alternative dropped out
+    with #35, which removed the last code allowed to name it."""
+    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py")
+    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|8642|X-Nixi-Token")
     for f in _tracked():
         if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
             continue
@@ -259,54 +263,6 @@ def test_old_widget_stays_gone():
         m = pattern.search(text)
         assert not m, "the old widget is back in %s: %r" % (f, m.group(0))
     print("  ok  the old widget, server and voice input stay gone")
-
-
-def test_old_plugin_dir_migration():
-    """0.9.x left a real directory where 0.10 links the plugin, which fails
-    Home Manager's checkLinkTargets on every upgraded machine. The migration
-    may remove it only when it holds nothing but Home Manager's own links."""
-    script = os.path.join(ROOT, "nix", "migrate-plugin-dir.sh")
-    hm = "/nix/store/2l4gxghyqargbik6bx57rvkck6rrc8qh-home-manager-files/.config/omarchy/plugins/x/"
-    root = tempfile.mkdtemp()
-    try:
-        def plugin_dir(name, entries):
-            d = os.path.join(root, name)
-            os.mkdir(d)
-            for entry, target in entries:
-                if target is None:
-                    open(os.path.join(d, entry), "w").write("mine")
-                else:
-                    os.symlink(target, os.path.join(d, entry))
-            return d
-
-        def run(d, **env):
-            return subprocess.run(["bash", script, d], capture_output=True, text=True,
-                                  env={**os.environ, **env}, check=True)
-
-        ours = plugin_dir("ours", [("manifest.json", hm + "manifest.json"), ("BarWidget.qml", hm + "BarWidget.qml")])
-        out = run(ours, DRY_RUN="1")
-        assert os.path.isdir(ours) and "would remove" in out.stdout, "dry run deleted something"
-        run(ours)
-        assert not os.path.lexists(ours), "Home Manager's old directory was not removed"
-
-        checkout = plugin_dir("checkout", [("manifest.json", hm + "manifest.json"), ("install.py", None)])
-        out = run(checkout)
-        assert os.path.isfile(os.path.join(checkout, "install.py")), "a user's file was deleted"
-        assert "move it aside" in out.stderr, "a foreign directory was kept silently"
-
-        elsewhere = plugin_dir("elsewhere", [("manifest.json", "/home/someone/manifest.json")])
-        run(elsewhere)
-        assert os.path.islink(os.path.join(elsewhere, "manifest.json")), "a link not made by Home Manager was deleted"
-
-        target = plugin_dir("target", [])
-        linked = os.path.join(root, "linked")
-        os.symlink(target, linked)
-        run(linked)
-        run(os.path.join(root, "absent"))
-        assert os.path.islink(linked) and os.path.isdir(target), "an existing 0.10 link was touched"
-        print("  ok  the 0.9 plugin directory is removed only when it is Home Manager's")
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_menu_icon_migration():

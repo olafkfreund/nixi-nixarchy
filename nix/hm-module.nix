@@ -179,14 +179,6 @@ in
         "nixi/SKILL.md".source = "${share}/skills/SKILL.md";
       };
 
-      # A 0.9.x install left a real directory where the plugin link now goes,
-      # which would fail checkLinkTargets; see the script for what it removes.
-      home.activation.nixiOldPluginDir =
-        lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-          DRY_RUN=''${DRY_RUN:+1} ${pkgs.bash}/bin/bash ${./migrate-plugin-dir.sh} \
-            "${config.xdg.configHome}/omarchy/plugins/${pluginId}"
-        '';
-
       # Enable the card once (nixarchy#709); see the script for the rules.
       home.activation.nixiEnableCard = lib.mkIf cfg.autoEnable
         (lib.hm.dag.entryAfter [ "linkGeneration" ] ''
