@@ -256,6 +256,18 @@ async function start() {
     ...(agentName === "claude" ? {
       _meta: { claudeCode: { options: {
         ...(model ? { model } : {}),
+        // The agent's cwd is ~/.config/nixi, so Claude Code would read
+        // .claude/settings.json and PreToolUse hooks from a directory the agent
+        // can write to -- letting an approved write grant it standing
+        // permissions, or install a hook that runs a shell command with no
+        // prompt (#63). The adapter's default is ["user","project","local"];
+        // naming only "user" drops the two that live in the cwd.
+        //
+        // "user", not [], because Nixi is a card on someone else's machine: it
+        // constrains what the AGENT can do to itself and leaves what the PERSON
+        // configured alone. CLAUDE.md is unaffected -- measured, not assumed:
+        // the tutor brief still loads under restricted sources.
+        settingSources: ["user"],
         settings: {
           ...(model ? { model, availableModels: [model] } : {}),
           permissions: claudePermissions(askBeforeReading),

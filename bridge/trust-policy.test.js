@@ -324,3 +324,26 @@ test("Guide still cancels, and is offered no option at all (#53)", async () => {
     { outcome: "cancelled" });
   assert.ok(!run.events.some((e) => e.type === "permission"), "Guide showed a permission prompt");
 });
+
+// #63 -- the agent's cwd is ~/.config/nixi, so Claude Code would read
+// .claude/settings.json and PreToolUse hooks from a directory the agent can
+// write to. One approved write there could grant it standing permissions, or
+// install a hook that runs a shell command with no prompt.
+
+test("the agent cannot load settings from its own working directory (#63)", async () => {
+  const run = await runBridge({});
+  const options = run.agent.find((e) => e.method === "newSession").meta.claudeCode.options;
+  // The adapter's default is ["user","project","local"]. project and local are
+  // the two that live in the cwd; user is the person's own config and stays,
+  // because Nixi constrains the agent, not its owner.
+  assert.deepEqual(options.settingSources, ["user"],
+    `settingSources is ${JSON.stringify(options.settingSources)} -- the agent can load its own settings`);
+});
+
+test("only Claude gets the settings restriction; the others get no meta at all (#63)", async () => {
+  for (const env of [{ NIXI_AGENT: "codex" }, { NIXI_AGENT: "opencode" }]) {
+    const run = await runBridge({ env });
+    assert.equal(run.agent.find((e) => e.method === "newSession").meta, null,
+      `${env.NIXI_AGENT} received Claude meta`);
+  }
+});
