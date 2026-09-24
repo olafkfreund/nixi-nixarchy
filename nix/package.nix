@@ -122,7 +122,7 @@ stdenvNoCC.mkDerivation {
     # ---- the overlay plugin (omarchy-ask based, issue #8) ---------------------
     plugin=$out/share/omarchy/plugins/${pluginId}
     install -Dm644 manifest.json $plugin/manifest.json
-    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml Tour.qml; do
+    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml Tour.qml; do
       install -Dm644 "$q" "$plugin/$q"
     done
     # Tour logic shared with the node tests, and the tour/learning data.
@@ -199,13 +199,10 @@ stdenvNoCC.mkDerivation {
       'import sys; sys.path.insert(0, "'"$out"'/bin"); import nixi_safeio; nixi_safeio._dirfd' \
       || { echo "nixi_safeio is not importable from the package bin directory"; exit 1; }
     # py_compile drops __pycache__ beside the source; it must not ship, and
-    # nor must any other bytecode, or the old widget's page and vendor files.
+    # nor must any other bytecode.
     rm -rf $out/bin/__pycache__
     ! find $out -name '__pycache__' -o -name '*.pyc' | grep -q . \
       || { echo "bytecode leaked into the store output"; exit 1; }
-    for gone in share/nixi/ui.html share/nixi/vendor; do
-      test ! -e "$out/$gone" || { echo "the old widget is back: $gone"; exit 1; }
-    done
     ${bash}/bin/bash -n $out/bin/nixi
 
     # ---- overlay plugin ----

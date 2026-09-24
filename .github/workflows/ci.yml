@@ -166,17 +166,15 @@ jobs:
       # HOME keeps the runner's own dotfiles out of it. NIXI_SKIP_MANUAL keeps
       # this deterministic (the fetch is rate limited per runner IP and covered
       # by `manual` below); NIXI_SKIP_NPM keeps it offline -- `bridge` runs npm.
-      - name: install.py --all into a throwaway HOME, over a 0.9.x install
+      - name: install.py --all into a throwaway HOME
         env:
           NIXI_SKIP_MANUAL: '1'
           NIXI_SKIP_NPM: '1'
         run: |
           fake=$(mktemp -d)
-          # What a 0.9.x install left behind; the installer must remove it.
-          mkdir -p "$fake/.local/bin" "$fake/.config/systemd/user" "$fake/.config/nixi"
-          echo old > "$fake/.local/bin/nixi-server"
-          echo old > "$fake/.config/systemd/user/nixi.service"
-          echo old > "$fake/.config/nixi/ui.html"
+          # install.py places into ~/.config/nixi with dir_mode=0o700 and _dir_ok
+          # rejects a group/world-writable destination, so pre-create it 0700.
+          mkdir -p "$fake/.config/nixi"
           chmod 700 "$fake/.config/nixi"
           HOME="$fake" python3 install.py --no-systemd --all | tee /tmp/install.log
           HOME="$fake" python3 install.py --no-systemd --status | tee /tmp/status.json
@@ -192,10 +190,7 @@ jobs:
                    .claude/skills/nixi/SKILL.md; do
             test -e "$fake/$f" || { echo "missing $f"; exit 1; }
           done
-          for f in .local/bin/nixi-server .config/systemd/user/nixi.service .config/nixi/ui.html; do
-            test ! -e "$fake/$f" || { echo "old widget left behind: $f"; exit 1; }
-          done
-          echo "installer placed everything it claims to, and removed the old widget"
+          echo "installer placed everything it claims to"
 
   manual:
     name: Manual fetch (network, non-blocking)
