@@ -126,6 +126,7 @@ stdenvNoCC.mkDerivation {
     done
     # Tour logic shared with the node tests, and the tour/learning data.
     install -Dm644 TourModel.js $plugin/TourModel.js
+    install -Dm644 TextFormat.js $plugin/TextFormat.js
     install -Dm644 share/tour.json $plugin/share/tour.json
     install -Dm644 share/learn.json $plugin/share/learn.json
     # The FAQ is searchable from the card, so it ships beside the QML.
@@ -200,7 +201,7 @@ stdenvNoCC.mkDerivation {
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
-    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js TextFormat.js \
              share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }

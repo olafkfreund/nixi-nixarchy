@@ -94,6 +94,33 @@ Runtime checks, after rebuild and `omarchy-restart-shell`:
    underlying per-chunk re-parse is a separate issue and is not fixed here, but
    this change must not measurably worsen it.
 
+## Deviations, found during implementation
+
+1. **The allowed root does not exist.** The spec said "the file-preview
+   directory the card already works in". `bridge/preview.js` uses the XDG
+   thumbnail cache through `GnomeDesktop.DesktopThumbnailFactory`; there is no
+   directory from which agent-authored Markdown images legitimately render
+   today. The root is therefore an explicit **parameter**, defaulting to `""` =
+   allow nothing, with `Conversation.qml` supplying
+   `$HOME/.local/share/nixi/images` (it has `HOME`; `TextFormat.js` stays
+   Qt-free and cannot expand `~`). A caller that passes nothing gets the closed
+   door, which is the right behaviour if the local-image feature is never built.
+
+2. **The regex was wrong.** `!\[...\]\(([^)]*)\)` stops at the first `)`, so
+   `![x](javascript:alert(1))` left a stray `)`. Markdown allows balanced parens
+   in a URL. Replaced with a depth-tracking scanner. Caught by the test, not by
+   review.
+
+3. **Unclosed image syntax is deliberately left alone.** Checked against Qt
+   6.11.2 rather than assumed: `![x](http://host` with no closing paren does
+   **not** trigger a fetch, so rewriting it would risk mangling prose containing
+   `![` for no security gain.
+
+4. **New files must be `git add`ed before `nix flake check`.** The flake source
+   carries only git-tracked files, so the build failed with `install: cannot
+   stat 'TextFormat.js'` until they were staged. Worth knowing for every future
+   plan that adds a file.
+
 ## Rollback
 
 `git revert` the implementation commit.
