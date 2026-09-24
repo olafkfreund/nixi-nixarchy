@@ -200,6 +200,37 @@ test("askBeforeReading reaches OpenCode's rules; other agents get no Claude meta
   assert.equal(newSession.meta, null);
 });
 
+// #40 -- a hung setSessionMode used to leave the card's trustPending set for the
+// life of the conversation, so /mechanic, /guide and the YOLO badge became
+// silent no-ops. These two cover the bound and the ordering it depends on.
+
+test("an agent that never answers setSessionMode is bounded, and trust is not moved (#40)", async () => {
+  const run = await runBridge({
+    env: { FAKE_AGENT_HANG: "mode", NIXI_MODE_TIMEOUT_MS: "300" },
+    messages: [{ type: "trust", trust: "mechanic" }],
+  });
+  const error = run.events.find((e) => e.type === "trust_error");
+  assert.ok(error, `expected trust_error, got ${JSON.stringify(run.events.map((e) => e.type))}`);
+  assert.ok(!run.events.some((e) => e.type === "trust"),
+    "reported success for a mode change the agent never acknowledged");
+  // The level it reports must be the one still in force, never the one asked for.
+  assert.equal(error.trust, "guide");
+  // And nothing may be persisted: a restart must not come back in Mechanic
+  // after a switch that did not take.
+  assert.notEqual(run.settingsAfter?.trust, "mechanic");
+});
+
+test("a successful switch still persists and reports the new trust (#40)", async () => {
+  const run = await runBridge({ messages: [{ type: "trust", trust: "mechanic" }] });
+  const ack = run.events.find((e) => e.type === "trust");
+  assert.equal(ack?.trust, "mechanic");
+  assert.ok(!run.events.some((e) => e.type === "trust_error"));
+  assert.equal(run.settingsAfter.trust, "mechanic");
+  // Applying the mode before persisting must not skip the mode call itself.
+  const modes = run.agent.filter((e) => e.method === "setSessionMode").map((e) => e.modeId);
+  assert.deepEqual(modes, ["plan", "default"], "startup mode then the switch to Mechanic");
+});
+
 // #41 -- Claude matches permission rules per TOOL NAME. The secret list was
 // Read(...) patterns only, so Grep and Glob, the other two tools the allow
 // grants, reached every listed path with no prompt.
