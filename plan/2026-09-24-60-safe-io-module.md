@@ -72,6 +72,35 @@ spec: spec/2026-09-24-60-safe-io-module.md
    verify by running the suite, and by confirming the new test fails when a
    helper is pasted back into `bin/nixi-watch`.
 
+## Deviations found while implementing
+
+Both recorded here in the same commit as the code, per the workflow.
+
+1. **`tools/test_nixi.py:load()` has to drop the cached module** (step 7).
+   `_HOME` is computed once, at import. While every program carried its own copy,
+   `load()` re-executing a program recomputed it, which is how
+   `test_menu_icon_migration` installs into a fake `$HOME`. With one shared
+   module, `sys.modules` caches the first `$HOME` and that test failed with
+   `PermissionError: outside $HOME`. `load()` now does
+   `sys.modules.pop("nixi_safeio", None)`, so a loaded program re-imports the
+   module and re-anchors exactly as before. This is a test-harness artefact of
+   module caching, not a behaviour change: each program is its own process in
+   production, where `_HOME` is computed once either way.
+
+2. **CI's ruff step had to be extended** (step 6). It copies the suffix-less
+   `bin/*` programs to a temp directory and lints that plus `install.py` and
+   `tools/` — so `bin/nixi_safeio.py`, which already has a suffix and stays in
+   `bin/`, would have been the one Python file in the repository nothing linted.
+   `bin/nixi_safeio.py` is now on that command line, which `CONTRIBUTING.md`'s
+   "extend the matching CI job" rule asks for anyway.
+
+Observed, reported on #60, deliberately **not** fixed here: `_write` passes its
+`mode` to `os.open`, so the mode is masked by the caller's umask — under
+`umask 077` a file asked for as `0o644` lands as `0o600`. This is pre-existing
+and applies to every file `install.py` has ever placed (verified on `master`:
+`nixi` lands `0o700` under that umask), the error is in the safe direction, and
+owner access is all these files need. Not a bug, and not this change's business.
+
 ## Tests
 
 ```

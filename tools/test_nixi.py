@@ -19,9 +19,18 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# bin/ holds nixi_safeio.py, which the programs loaded below import by name: in
+# every real layout it sits in their own directory, which is their sys.path[0].
+# Loading them from here instead means saying where it is (#60).
+sys.path.insert(0, os.path.join(ROOT, "bin"))
 
 
 def load(name, path):
+    # Dropping the cached nixi_safeio makes the loaded program re-import it, so
+    # its $HOME anchor is recomputed against the environment this call is made
+    # in. Tests that install into a fake HOME rely on that, and used to get it
+    # for free when every program carried its own copy of the helpers (#60).
+    sys.modules.pop("nixi_safeio", None)
     spec = importlib.util.spec_from_loader(
         name, importlib.machinery.SourceFileLoader(name, os.path.join(ROOT, path)))
     m = importlib.util.module_from_spec(spec)
@@ -813,6 +822,50 @@ def test_unit_parity():
     assert "assets non-empty" not in flake, "flake.nix claims an assertion that is not there"
 
     print("  ok  the two unit definitions agree, and the versions do too")
+
+
+def test_safeio_is_shared():
+    """The safe-IO floor is the best-audited code here -- descriptor-bound
+    $HOME-anchored walks, per-component uid/mode checks, O_EXCL temp plus
+    renameat -- and it used to exist three times, byte-identically, in
+    install.py, bin/nixi-watch and bin/nixi-update-manual (#60). Three copies is
+    not redundancy: the next fix lands in one and rots in the other two, and the
+    one-file diff looks complete.
+
+    So this asserts there is exactly ONE definition of each helper, that it is
+    in bin/nixi_safeio.py, and that everyone else imports it. Paste any helper
+    back into a second file and this fails."""
+    helpers = ("_group_exclusive", "_dir_ok", "_dirfd", "_write")
+    consumers = ("install.py", "bin/nixi-watch", "bin/nixi-update-manual")
+    home = "bin/nixi_safeio.py"
+
+    sources = {rel: open(os.path.join(ROOT, rel)).read()
+               for rel in consumers + (home,)}
+    for h in helpers:
+        where = [rel for rel, text in sources.items()
+                 if re.search(r"^def %s\(" % h, text, re.M)]
+        assert where == [home], "%s is defined in %s, want only %s" % (h, where, home)
+    where = [rel for rel, text in sources.items()
+             if re.search(r"^_UID = os\.getuid\(\)", text, re.M)]
+    assert where == [home], "_UID is defined in %s, want only %s" % (where, home)
+
+    for rel in consumers:
+        assert re.search(r"^from nixi_safeio import ", sources[rel], re.M), \
+            "%s no longer imports the shared safe-IO module" % rel
+        # A local grp/pwd import is the tell-tale of a pasted-back copy.
+        assert "import grp" not in sources[rel], "%s looks like it grew a copy again" % rel
+
+    # CONTRIBUTING.md:52 -- both install paths must place it, in the same
+    # directory as the suffix-less programs that import it by name.
+    assert 'j.place(BIN, "nixi_safeio.py"' in sources["install.py"], \
+        "install.py does not place nixi_safeio.py in ~/.local/bin"
+    package = open(os.path.join(ROOT, "nix", "package.nix")).read()
+    assert "install -Dm644 bin/nixi_safeio.py $out/bin/nixi_safeio.py" in package, \
+        "nix/package.nix does not place nixi_safeio.py in the store bin/"
+    assert "import nixi_safeio" in package, \
+        "nix/package.nix does not prove the module is importable from $out/bin"
+
+    print("  ok  the safe-IO helpers live in exactly one file, placed by both paths")
 
 
 if __name__ == "__main__":
