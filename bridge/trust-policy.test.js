@@ -347,3 +347,43 @@ test("only Claude gets the settings restriction; the others get no meta at all (
       `${env.NIXI_AGENT} received Claude meta`);
   }
 });
+
+// #63 -- #66 stopped Claude loading settings from its own cwd. OpenCode was
+// reading a whole second config layer from the same directory, and Nixi's rules
+// do not beat it: a cwd opencode.json supplies `bash`/`edit`/`write`, which the
+// "*": "ask" wildcard never names, and a cwd .opencode/agent/*.md permission
+// block is appended after Nixi's rules, where the last match wins. Either way a
+// write stops producing a permission request -- so Guide has nothing to cancel.
+//
+// Asserted from the CHILD's environment as recorded at newSession, not from
+// what the bridge constructed: this is upstream's flag name, so a rename there
+// has to surface as a failure rather than as a silently ineffective env var.
+
+test("OpenCode cannot be handed a second config layer by its own cwd (#63)", async () => {
+  const newSession = (run) => run.agent.find((e) => e.method === "newSession");
+  const opencodeRun = newSession(await runBridge({ env: opencode }));
+  assert.equal(opencodeRun.disableProjectConfig, "1",
+    `OPENCODE_DISABLE_PROJECT_CONFIG reached the adapter as ${JSON.stringify(opencodeRun.disableProjectConfig)}` +
+    " -- the cwd's opencode.json and .opencode/agent/*.md still apply");
+  // It rides with the rules, not instead of them, under both read settings.
+  assert.deepEqual(JSON.parse(opencodeRun.opencodeConfig), opencodePermissions(false));
+  const strict = newSession(await runBridge({ env: opencode, settings: { askBeforeReading: true } }));
+  assert.equal(strict.disableProjectConfig, "1");
+  assert.deepEqual(JSON.parse(strict.opencodeConfig), opencodePermissions(true));
+  // And no other adapter is handed an OpenCode knob: Claude's cwd is closed by
+  // settingSources, and setting a stray env var for Codex would be cargo cult.
+  for (const env of [{}, { NIXI_AGENT: "codex" }])
+    assert.equal(newSession(await runBridge({ env })).disableProjectConfig, null,
+      `${env.NIXI_AGENT || "claude"} was given OpenCode's flag`);
+});
+
+// Codex is deliberately NOT covered by a test here, and that is the finding,
+// not an omission. codex-acp reads <cwd>/.codex/config.toml and grants itself
+// the trust that gates it -- createSessionConfig() sets
+// projects.<sessionRoot>.trust_level = "trusted" on every session, where
+// sessionRoot is the ACP cwd. There is no settingSources equivalent and no env
+// var that withholds that trust, so there is nothing for Nixi to assert from
+// outside. A test here could only restate a constant. See
+// spec/2026-09-24-63-adapter-project-config.md, Finding 2, and the follow-up
+// issue; asserting something vacuous would make this look covered when it is
+// not, which is the failure mode the whole issue is about.
