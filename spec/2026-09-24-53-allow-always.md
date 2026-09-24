@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 53
 intent: intent/2026-09-24-53-allow-always.md
 ---
