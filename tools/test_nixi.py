@@ -888,6 +888,45 @@ def test_safeio_is_shared():
     print("  ok  the safe-IO helpers live in exactly one file, placed by both paths")
 
 
+def test_card_grows_with_content():
+    """#38: the card widens for content that needs it, and the ceiling follows
+    the screen -- without the width ever depending on a measured height.
+
+    That last part is the whole risk. Binding width to how tall the content
+    measures creates a loop: wider wraps less, so the card shortens, so it
+    narrows, so it lengthens again. CI does not run QML, so a loop would ship
+    green and show up as a card that visibly flickers."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    trigger = _block(card, card.index("function noteContentWidth"))
+    for forbidden in ("height", "width", "implicit", "parent.", "stack."):
+        assert forbidden not in trigger, \
+            "noteContentWidth reads %r -- the width trigger must not touch geometry" % forbidden
+
+    # The expression wraps across two lines; take both.
+    width = re.search(r"^\s*width: root\.pinned.*\n.*$", card, re.M).group(0)
+    assert "contentWantsRoom" in width, "the card width ignores the content"
+    for forbidden in ("stack.height", "implicitHeight", "maxHeight"):
+        assert forbidden not in width, \
+            "card width depends on %s -- that is a layout feedback loop" % forbidden
+
+    # The ceiling follows the panel rather than a fixed 560 (#38).
+    maxh = re.search(r"^\s*readonly property int maxHeight:.*$", card, re.M).group(0)
+    assert "parent.height" in maxh and "560" not in maxh, \
+        "maxHeight is still a fixed ceiling: " + maxh.strip()
+
+    # Every place a user message enters the model must feed the trigger, or a
+    # long prompt silently fails to widen the card.
+    for m in re.finditer(r'messages\.append\(\{ role: "You".*\n(.*)', card):
+        assert "noteContentWidth" in m.group(1), \
+            "a You message is appended without noting its width: " + m.group(1).strip()
+
+    assert "contentWantsRoom = false" in _block(card, card.index("function close")), \
+        "contentWantsRoom survives close(), so a new conversation starts wide"
+
+    print("  ok  the card grows with its content, with no layout feedback loop")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

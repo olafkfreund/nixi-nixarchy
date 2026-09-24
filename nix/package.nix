@@ -128,7 +128,7 @@ stdenvNoCC.mkDerivation {
     # ---- the overlay plugin (omarchy-ask based, issue #8) ---------------------
     plugin=$out/share/omarchy/plugins/${pluginId}
     install -Dm644 manifest.json $plugin/manifest.json
-    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml Tour.qml; do
+    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml Tour.qml; do
       install -Dm644 "$q" "$plugin/$q"
     done
     # Tour logic shared with the node tests, and the tour/learning data.
