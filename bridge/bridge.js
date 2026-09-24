@@ -284,8 +284,22 @@ const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd
 async function finishLearned() {
   const { visible, facts } = learned.flush();
   if (visible) emit({ type: "text", text: visible, messageId: lastMessageId });
-  try { await appendLearned(facts, learnedDir); }
-  catch (error) { emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` }); }
+  // Guide does not write. LEARNED.md is a write, and one that steers later
+  // sessions -- nixi-context reads it as a notes source and grounding.js
+  // prepends the result to future prompts. #41 settled that reading is not
+  // changing and writing is, which is why Guide keeps unprompted reads; the
+  // same distinction says it must not accumulate durable state that alters its
+  // own future behaviour behind a promise that nothing changes (#51).
+  if (resolveTrust(trust) === "guide" || facts.length === 0) return;
+  try {
+    await appendLearned(facts, learnedDir);
+    // Kept, so say so. Hiding the write was deliberate -- a bare LEARNED: line
+    // is noise -- but the user could not see their tutor forming a belief about
+    // their machine, or correct it.
+    emit({ type: "learned", facts });
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` });
+  }
 }
 
 async function prompt(text) {
