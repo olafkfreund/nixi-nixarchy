@@ -79,11 +79,34 @@ test("a symlinked LEARNED.md is left alone", async () => {
   } finally { rmSync(dir, { recursive: true }); }
 });
 
-test("through the bridge: the card never sees the LEARNED line, and LEARNED.md gets the fact", async () => {
-  const run = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_LEARN something" }] });
+test("Mechanic: the card never sees the LEARNED line, LEARNED.md gets the fact, and the user is told", async () => {
+  const run = await runBridge({
+    settings: { trust: "mechanic" },
+    messages: [{ type: "prompt", text: "PLEASE_LEARN something" }],
+  });
   const shown = run.events.filter((e) => e.type === "text").map((e) => e.text).join("");
   assert.equal(shown, "Use nixarchy apply.\n");
   assert.match(run.learnedAfter, /^# Learned on this machine\n- \d{4}-\d{2}-\d{2}: apps queue in apps\.nix\n$/);
   const events = run.events.map((e) => e.type);
   assert.ok(events.lastIndexOf("text") < events.indexOf("done"), "text arrived after done");
+  // The write used to be invisible: stripped from the transcript, appended to
+  // disk, and fed back into every later prompt with nothing shown (#51).
+  const learned = run.events.find((e) => e.type === "learned");
+  assert.ok(learned, `no learned event; got ${JSON.stringify(events)}`);
+  assert.deepEqual(learned.facts, ["apps queue in apps.nix"]);
+});
+
+test("Guide records nothing: it promises your machine does not change (#51)", async () => {
+  // LEARNED.md is a write, and one that steers later sessions -- nixi-context
+  // reads it as a notes source and grounding.js prepends the result. #41 settled
+  // that reading is not changing and writing is; that is why Guide keeps
+  // unprompted reads and must not accumulate durable state behind a promise
+  // that nothing changes.
+  const run = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_LEARN something" }] });
+  assert.equal(run.events.find((e) => e.type === "ready").trust, "guide", "not the default trust");
+  const shown = run.events.filter((e) => e.type === "text").map((e) => e.text).join("");
+  assert.equal(shown, "Use nixarchy apply.\n", "Guide still strips the marker line");
+  assert.equal(run.learnedAfter, null, "Guide wrote to LEARNED.md");
+  assert.ok(!run.events.some((e) => e.type === "learned"),
+    "Guide announced a fact it did not keep");
 });

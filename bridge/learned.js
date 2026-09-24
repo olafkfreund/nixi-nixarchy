@@ -1,8 +1,13 @@
 // The learned-fact broker, moved from nixi-server. The tutor ends an answer
 // with `LEARNED: <one sentence>` lines when the user corrects it. The bridge
 // hides those lines from the card and appends them to LEARNED.md, which
-// nixi-context searches. The bridge writes the file, never the agent, so this
-// works in Guide, where every agent write is cancelled.
+// nixi-context searches.
+//
+// The bridge writes the file rather than the agent -- but that is about who
+// holds the pen, not about whose machine is written to, so it does NOT make
+// this safe in Guide. Guide promises nothing on your machine changes, and a
+// file that steers every later session is the most consequential kind of
+// change to make invisibly. bridge.js skips the append in Guide (#51).
 import { mkdir, readFile, rename, writeFile, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
