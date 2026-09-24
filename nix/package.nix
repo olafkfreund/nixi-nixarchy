@@ -86,6 +86,12 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
 
+    # The safe-IO module those programs import (descriptor-bound directory walk,
+    # atomic replace). It must sit in the same directory as them -- a script's own
+    # directory is its sys.path[0] -- which is also where install.py puts it on
+    # the imperative path (#60). Not executable, and no shebang to substitute.
+    install -Dm644 bin/nixi_safeio.py $out/bin/nixi_safeio.py
+
     # The Python programs get a real interpreter.
     for p in nixi-watch nixi-update-manual nixi-context; do
       install -Dm755 bin/$p $out/bin/$p
@@ -189,7 +195,15 @@ stdenvNoCC.mkDerivation {
     # Every Python program must at least import-compile with the pinned
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
-      $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped
+      $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped \
+      $out/bin/nixi_safeio.py
+    # The shared module must be there AND actually importable from that directory,
+    # which is the whole reason it is installed beside the programs rather than
+    # anywhere tidier. -B so no __pycache__ lands in the store (checked below).
+    test -s $out/bin/nixi_safeio.py || { echo "the safe-IO module is missing"; exit 1; }
+    ${python3}/bin/python3 -B -c \
+      'import sys; sys.path.insert(0, "'"$out"'/bin"); import nixi_safeio; nixi_safeio._dirfd' \
+      || { echo "nixi_safeio is not importable from the package bin directory"; exit 1; }
     # py_compile drops __pycache__ beside the source; it must not ship, and
     # nor must any other bytecode, or the old widget's page and vendor files.
     rm -rf $out/bin/__pycache__
