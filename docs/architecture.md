@@ -123,7 +123,7 @@ These are Nixi's additions to the upstream card. Each has a test that fails
 if the invariant breaks.
 
 **Grounding** (`bridge/grounding.js`). Before every prompt the bridge runs
-`nixi-context` with the question (3 s timeout) and prepends its excerpt of the
+`nixi-context` with the question (3 s timeout) and appends its excerpt of the
 local manuals. A missing or failing `nixi-context` sends the question
 unchanged and emits a diagnostic; it never blocks the turn. The agent runs in
 `~/.config/nixi` when it exists, so its `CLAUDE.md`/`AGENTS.md` is the tutor
