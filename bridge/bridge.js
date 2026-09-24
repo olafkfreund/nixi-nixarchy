@@ -348,17 +348,34 @@ let configOptions = [];
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
 // cancelled regardless -- so a missing mode is reported, not fatal.
-async function applyTrustMode() {
-  const { modeId } = currentPolicy();
+// An agent that never answers leaves the card's trustPending set forever, so
+// /mechanic, /guide and the YOLO badge become silent no-ops for the life of the
+// conversation (#40). Bounded like shutdown()'s close, but this one REJECTS:
+// the caller has to be able to tell a hang from a success. ref: false so the
+// losing timer cannot hold the bridge open.
+const MODE_TIMEOUT_MS = Number(process.env.NIXI_MODE_TIMEOUT_MS) || 8000;
+async function withModeTimeout(promise) {
+  const expired = Symbol("expired");
+  const result = await Promise.race([promise, delay(MODE_TIMEOUT_MS, expired, { ref: false })]);
+  if (result === expired)
+    throw new Error(`the agent did not answer within ${MODE_TIMEOUT_MS / 1000}s`);
+  return result;
+}
+
+// targetTrust is explicit so the mode can be applied BEFORE the global `trust`
+// is updated -- currentPolicy() reads that global, so computing the policy
+// after the move would apply the mode we are leaving.
+async function applyTrustMode(targetTrust = trust) {
+  const { modeId } = trustPolicy(agentName, targetTrust, permissionMode);
   const offered = (sessionModes?.availableModes || []).map((mode) => mode.id);
   if (offered.includes(modeId)) {
-    await connection.setSessionMode({ sessionId, modeId });
+    await withModeTimeout(connection.setSessionMode({ sessionId, modeId }));
     return;
   }
   // OpenCode offers its modes as a config option rather than ACP session modes.
   const option = (configOptions || []).find((item) => item.category === "mode");
   if (option && (option.options || []).some((item) => item.value === modeId)) {
-    const response = await connection.setSessionConfigOption({ sessionId, configId: option.id, value: modeId });
+    const response = await withModeTimeout(connection.setSessionConfigOption({ sessionId, configId: option.id, value: modeId }));
     configOptions = response.configOptions || configOptions;
     return;
   }
@@ -414,13 +431,18 @@ input.on("line", (line) => {
     answerPermission(message);
   } else if (message.type === "trust") {
     const next = resolveTrust(message.trust);
-    mergeSettings({ trust: next }).then(async () => {
+    // Apply the ACP mode FIRST, then persist and publish. The old order set
+    // `trust` before the mode call, so a failure reported the level the session
+    // had NOT moved to (#40). On failure nothing is written and `trust` still
+    // holds the level actually in force, which is what trust_error carries.
+    (async () => {
+      if (connection && sessionId) await applyTrustMode(next);
+      await mergeSettings({ trust: next });
       trust = next;
       // Leaving Mechanic must not leave an approval waiting in the card.
       if (trust === "guide") cancelAllPendingPermissions();
-      if (connection && sessionId) await applyTrustMode();
       emit({ type: "trust", trust });
-    }).catch((error) => {
+    })().catch((error) => {
       emit({ type: "trust_error", trust, message: `Could not change trust level: ${error.message}` });
     });
   } else if (message.type === "permission_mode") {
