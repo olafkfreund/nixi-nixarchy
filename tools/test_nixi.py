@@ -971,6 +971,41 @@ def test_card_grows_with_content():
     print("  ok  the card grows with its content, with no layout feedback loop")
 
 
+def test_one_ack_shape():
+    """#44: the card keeps ONE piece of in-flight state, so a reset cannot
+    clear one request kind and miss another -- which is exactly how #40
+    happened. CI does not run QML, so this is the only thing guarding it."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    assert "property var pendingAck" in card, "the single ack state is gone"
+    for name in ("steeringPending", "trustPending", "permissionModePending"):
+        assert re.search(r"readonly property bool %s: pendingAck\." % name, card), \
+            "%s is no longer derived from pendingAck -- the state has split again" % name
+        assert not re.search(r"^\s+%s = " % name, card, re.M), \
+            "%s is assigned directly; it must go through beginAck/settleAck" % name
+
+    # restartSession is where #40 bit. It must clear EVERY kind, not a list.
+    restart = _block(card, card.index("function restartSession"))
+    assert "clearAcks()" in restart, "restartSession does not clear the ack state"
+    for name in ("trustPending", "permissionModePending", "steeringPending"):
+        assert name not in restart, \
+            "restartSession still names %s -- a per-kind reset is what #44 removes" % name
+
+    # One branch, not five.
+    for dead in ('event.type === "trust"', 'event.type === "trust_error"',
+                 'event.type === "steered"', 'event.type === "steering_error"',
+                 'event.type === "permission_mode_error"'):
+        assert dead not in card, "a per-kind branch survives: " + dead
+    assert 'event.type === "ack"' in card, "the card no longer handles the ack event"
+
+    bridge = open(os.path.join(ROOT, "bridge", "bridge.js")).read()
+    for dead in ('type: "trust"', 'type: "trust_error"', 'type: "steered"',
+                 'type: "steering_error"', 'type: "permission_mode_error"'):
+        assert dead not in bridge, "the bridge still emits " + dead
+
+    print("  ok  one ack shape, one place to clear it")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
