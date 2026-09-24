@@ -59,9 +59,19 @@ Approved decisions, carried over so this file stands alone:
    cancel.
    -> verify by the explanation naming the mechanism, not just the outcome.
 
-7. `bridge/trust-policy.test.js`: add cases asserting (a) the generated `ask`
+7. **DEVIATION, found during implementation.** `docs/index.html:126` and `:180`
+   carry the same unqualified claim on the *published site*, which this plan did
+   not name -- it listed five locations and there are six. Both corrected in the
+   same commit as the code, per the workflow. Also found: `README.md:173`
+   already documented the read allowance but scoped it to "In Mechanic", when it
+   applies to both levels; that sentence is the drift this issue is about and is
+   now corrected to say both.
+   -> verify by `grep -rn 'cancels every permission request' README.md docs/`
+   returning only qualified instances.
+
+8. `bridge/trust-policy.test.js`: add cases asserting (a) the generated `ask`
    list contains a `Read(`, a `Grep(` and a `Glob(` entry for the same path,
-   (b) `SECRET_PATHS.length` is at least 16 so the list cannot silently shrink,
+   (b) `SECRET_PATHS.length` is at least 18 so the list cannot silently shrink,
    (c) `allow` is unchanged for guide and mechanic. The existing behavioural
    harness already asserts what the bridge sends at `newSession`, so the
    generated object is checked as transmitted, not just as constructed.
