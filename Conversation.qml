@@ -984,6 +984,14 @@ Item {
     submit()
   }
 
+  // A handed-over question that must not be sent for the user: it waits in
+  // the prompt until they press Enter (nixi#37).
+  function setPrompt(text) {
+    prompt.text = String(text)
+    prompt.cursorPosition = prompt.text.length
+    Qt.callLater(function() { prompt.forceActiveFocus() })
+  }
+
   function appendReply(text, messageId) {
     if (activeReply < 0 || activeReply >= messages.count || text === "") return
     var pinTail = root.composerPinsTail
