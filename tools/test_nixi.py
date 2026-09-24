@@ -467,7 +467,20 @@ def test_nixi_launcher():
             assert "notify" in calls and "Setup > Plugins" in r.stderr, name + ": failed silently"
         r, calls = run(on, answers=False)
         assert r.returncode == 1 and "toggle" not in calls and "not answering" in r.stderr, (r.stderr, calls)
+        # --ask summons (never toggles) with the question as JSON the card can
+        # parse back exactly, quotes, backslash, newline and tab included (nixi#37).
+        question = 'say "hi" \\ back\nnow\tthen'
+        r, calls = run(on, args=("--ask", question))
+        marker = "shell summon %s " % card
+        summons = [l.partition(marker)[2] for l in calls.splitlines() if marker in l]
+        assert r.returncode == 0 and len(summons) == 1 and "toggle" not in calls, (r, calls)
+        assert json.loads(summons[0]) == {"action": "ask", "prompt": question}, summons[0]
+        r, calls = run(off, args=("--ask", "x"))
+        assert r.returncode == 1 and "summon" not in calls, (r, calls)
+        r, calls = run(on, args=("--ask",))
+        assert r.returncode == 64 and "summon" not in calls, (r, calls)
         print("  ok  nixi explains a card that is off instead of doing nothing")
+        print("  ok  nixi --ask hands the card a question as exact JSON")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
