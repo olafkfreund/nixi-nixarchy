@@ -6,6 +6,8 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+// Pure display formatting, unit tested under node (bridge/text-format.test.js).
+import "TextFormat.js" as TextFormat
 
 Item {
   id: root
@@ -134,38 +136,14 @@ Item {
     return Math.round(humanSize - (humanSize - agentSize) * progress)
   }
 
-  // Qt renders consecutive Markdown paragraphs with no vertical gap at all,
-  // and folds a whitespace-only line away as blank. A paragraph holding one
-  // non-breaking space survives and reads as a single blank line, so those are
-  // inserted at paragraph breaks for display only; the stored message is not
-  // touched. Fenced code is copied verbatim, where such a line would become
-  // part of the code.
+  // Agent replies render as TextEdit.MarkdownText, and Qt loads remote images
+  // in a Markdown document through QQuickPixmap -- measured on Qt 6.11.2,
+  // which fetched an http:// image with its query string intact, on render,
+  // with no user action (#42). TextFormat rewrites any image that is not a
+  // contained local file to its alt text before it can reach the renderer.
+  readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
   function spacedMarkdown(text) {
-    var value = String(text || "")
-    if (value.indexOf("\n") < 0) return value
-    var lines = value.split("\n")
-    var out = []
-    var fenced = false
-    var pendingBreak = false
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-      var fence = /^\s{0,3}(```|~~~)/.test(line)
-      if (fence) fenced = !fenced
-      if (!fenced && !fence && line.trim() === "") {
-        if (out.length > 0) pendingBreak = true
-        continue
-      }
-      if (pendingBreak) {
-        pendingBreak = false
-        // A blank line before a list item marks a loose list. A paragraph
-        // inserted there would split the list in two and restart ordered
-        // numbering, so the original break is emitted unchanged instead.
-        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) out.push("")
-        else out.push("", "\u00a0", "")
-      }
-      out.push(line)
-    }
-    return out.join("\n")
+    return TextFormat.spacedMarkdown(text, root.imageRoot)
   }
 
   function open(payloadJson) {
@@ -953,22 +931,35 @@ Item {
     queuedPrompt = ""
   }
 
+  // submit() clears prompt.text before calling this, so a silent return means
+  // the user watches /mechanic vanish with no explanation (#40). Unlike a
+  // prompt, a trust command is not queued and replayed -- saying so is enough.
   function setTrust(level) {
-    if (trustPending) return
-    if (agent.running && bridgeReady) {
-      trustPending = true
-      statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
-      agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
+    if (trustPending) {
+      statusText = "Still switching trust…"
+      return
     }
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    trustPending = true
+    statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
+    agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }
 
   function setPermissionMode(mode) {
-    if (permissionModePending) return
-    var next = mode === "yolo" ? "yolo" : "permission"
-    if (agent.running && bridgeReady) {
-      permissionModePending = true
-      agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
+    if (permissionModePending) {
+      statusText = "Still switching permission mode…"
+      return
     }
+    var next = mode === "yolo" ? "yolo" : "permission"
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    permissionModePending = true
+    agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
   }
 
   // A message from Nixi itself (a tour step), rendered like an agent reply --
@@ -982,6 +973,14 @@ Item {
   function askQuestion(text) {
     prompt.text = String(text)
     submit()
+  }
+
+  // A handed-over question that must not be sent for the user: it waits in
+  // the prompt until they press Enter (nixi#37).
+  function setPrompt(text) {
+    prompt.text = String(text)
+    prompt.cursorPosition = prompt.text.length
+    Qt.callLater(function() { prompt.forceActiveFocus() })
   }
 
   function appendReply(text, messageId) {
@@ -1108,6 +1107,13 @@ Item {
     queuedPrompt = ""
     steeringSupported = false
     steeringPending = false
+    // These gate setTrust() and setPermissionMode() and are cleared only by a
+    // trust/permission_mode event. A bridge that died mid-change never sends
+    // one, so without this the trust and YOLO controls are dead no-ops for the
+    // life of the conversation. close() does not need them: it destroys the
+    // object (Ask.qml:394), so its flags are never read again.
+    trustPending = false
+    permissionModePending = false
     statusText = "Starting agent…"
     agent.running = true
   }
@@ -1352,7 +1358,15 @@ Item {
                 selectByMouse: true
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
-                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                // The URL and its visible label are both agent-authored, so the
+                // label need not describe where it goes, and xdg-open dispatches
+                // any other scheme to a registered handler (#42). Refusing
+                // silently would be worse than opening it: the user could not
+                // tell whether the click registered.
+                onLinkActivated: function(link) {
+                  if (TextFormat.openableLink(link)) Qt.openUrlExternally(link)
+                  else root.statusText = "Nixi did not open that link: only http and https links can be opened."
+                }
                 Keys.onPressed: function(event) {
                   if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }

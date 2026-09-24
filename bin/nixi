@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # omarchy:summary=Open the Nixi card (toggle show/hide)
-# omarchy:args=[--tui] [--tour]
+# omarchy:args=[--tui] [--tour] [--ask <question>]
 # Nixi: your nixarchy guide, as a native Omarchy overlay.
 #
 # The shell owns the card, so this is a toggle over its IPC -- no browser, no
@@ -42,12 +42,24 @@ case "${1:-}" in
     card_ready || exit 1
     exec omarchy-shell shell summon "$PLUGIN" '{"action":"tour"}'
     ;;
+  --ask)
+    # Open the card with a question asked (nixi#37). summon, not toggle, so an
+    # open card is never closed. JSON-escaped here in bash: jq is not on this
+    # script's pinned PATH. Backslash first, then quote, newline and tab.
+    [[ -n "${2:-}" ]] || { echo "usage: nixi --ask <question>" >&2; exit 64; }
+    card_ready || exit 1
+    q=${2//\\/\\\\}
+    q=${q//\"/\\\"}
+    q=${q//$'\n'/\\n}
+    q=${q//$'\t'/\\t}
+    exec omarchy-shell shell summon "$PLUGIN" "{\"action\":\"ask\",\"prompt\":\"$q\"}"
+    ;;
   "")
     card_ready || exit 1
     exec omarchy-shell shell toggle "$PLUGIN" '{}'
     ;;
   *)
-    echo "usage: nixi [--tui] [--tour]" >&2
+    echo "usage: nixi [--tui] [--tour] [--ask <question>]" >&2
     exit 64
     ;;
 esac
