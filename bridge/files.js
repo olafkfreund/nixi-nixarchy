@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
-import { FileFinder } from "@ff-labs/fff-node";
 import { createInterface } from "node:readline";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const home = process.env.HOME || process.cwd();
-// `@` is a general file finder, so its scope is the whole home directory. The
-// fd fallback and repository discovery use exactly the same root so results do
-// not change scope while the primary index warms.
+// `@` is a general file finder, so its scope is the whole home directory.
+// plocate, the fd scan and repository discovery all use exactly the same root
+// so results never change scope between them.
 const basePath = resolve(home);
 const searchRoots = [basePath];
 const existingRoots = (names) => names.map((name) => join(basePath, name)).filter((path) => existsSync(path));
@@ -27,15 +27,6 @@ try {
 const repoSearchDepth = Number.isFinite(configuredRepoDepth)
   ? (configuredRepoDepth <= 0 ? 0 : Math.max(1, Math.min(128, Math.round(configuredRepoDepth))))
   : 6;
-const created = FileFinder.create({
-  basePath,
-  aiMode: false,
-  disableMmapCache: true,
-  disableContentIndexing: true,
-  enableHomeDirScanning: true,
-});
-const finder = created.ok ? created.value : null;
-let ready = false;
 let repos = [];
 let reposReady = false;
 let latestRequestId = 0;
@@ -147,17 +138,6 @@ function emit(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
-async function initialize() {
-  if (!finder) return;
-  while (!ready) {
-    const completed = await finder.waitForScan(30_000).catch(() => null);
-    ready = Boolean(completed && completed.ok && completed.value === true);
-    if (!ready) await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-}
-
-initialize();
-discoverRepos();
 
 function emitSearch(message, query, rows, totalMatched = rows.length, capped = false,
     complete = true) {
@@ -189,33 +169,33 @@ function emitProgressively(message, query, result) {
   }, index * 35)));
 }
 
-function strictFileMatch(item, query) {
-  const value = `${item.fileName || ""} ${item.relativePath || ""}`.toLowerCase();
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return terms.length > 0 && terms.every((term) => value.includes(term));
-}
-
-function usefulFuzzyMatch(item, score, query) {
-  if (strictFileMatch(item, query)) return true;
-  // Punctuation-heavy searches such as `.png` express a literal extension,
-  // not a request to fuzzily combine p+n+g from unrelated path components.
-  if (/[^a-z0-9\s_-]/i.test(query)) return false;
-  const length = query.replace(/[^a-z0-9]/gi, "").length;
-  return length >= 3 && score
-    && Number(score.filenameBonus || 0) >= 3
-    && Number(score.baseScore || 0) >= length * 5;
+// fd takes one regex, so the query's terms become `.*`-joined literals. Strip
+// everything that is neither a path character nor a word character: a metachar
+// reaching fd would be an injected pattern, not a search for that character.
+function filePattern(query) {
+  return query.trim().split(/\s+/).map((part) => part.replace(/[^A-Za-z0-9._-]/g, ""))
+    .filter(Boolean).join(".*");
 }
 
 async function fallbackFiles(query, signal) {
   try {
-    // plocate gives a fast whole-home cold-start path on Omarchy while FFF's
-    // in-memory index is still scanning. Its database can be stale, so verify
-    // every result and fall through to fd when it has no usable matches.
-    const located = await execFileAsync("plocate", [
-      "--ignore-case", "--limit", "300", query,
-    ], { timeout: 1200, maxBuffer: 2 * 1024 * 1024, signal })
+    // plocate answers from an index, so it is the fast path. Its database can
+    // be stale, so verify every result and fall through to fd when it has no
+    // usable matches.
+    const locate = (patterns) => execFileAsync("plocate",
+      ["--ignore-case", "--limit", "300", ...patterns],
+      { timeout: 1200, maxBuffer: 2 * 1024 * 1024, signal })
       .then((value) => value.stdout).catch(() => "");
-    const locatedPaths = locatedUnderBase(located, false);
+    // plocate emits database (path-alphabetical) order, so `.agents/` and
+    // `.claude/` exhaust the limit long before `Documents/` is reached. A path
+    // must match every PATTERN, so an extra root pattern gives the user-facing
+    // roots their own budget -- the same preference the fd scan below applies.
+    const [priorityOutputs, located] = await Promise.all([
+      Promise.all(priorityFileRoots.map((root) => locate([`${root}/`, query]))),
+      locate([query]),
+    ]);
+    const locatedPaths = [...new Set([...priorityOutputs, located]
+      .flatMap((output) => locatedUnderBase(output, false)))];
     if (locatedPaths.length > 0) return {
       rows: locatedPaths.slice(0, 100).map((path) => ({
         name: basename(path),
@@ -227,8 +207,7 @@ async function fallbackFiles(query, signal) {
       complete: located.split("\n").filter(Boolean).length < 300,
     };
 
-    const pattern = query.trim().split(/\s+/).map((part) => part.replace(/[^A-Za-z0-9._-]/g, ""))
-      .filter(Boolean).join(".*");
+    const pattern = filePattern(query);
     if (!pattern) return { rows: [], totalMatched: 0, capped: false, complete: true };
     const scan = (roots, timeout) => fdLines(["--type", "f", "--hidden", "--ignore-case",
       "--max-results", "101", "--exclude", ".cache", "--exclude", "node_modules", pattern],
@@ -259,51 +238,16 @@ async function search(message, signal) {
   }
   latestRepoQuery = query;
   emitCurrentRepos();
-  if (!finder || !ready) {
-    const result = await fallbackFiles(query, signal);
-    emitProgressively(message, query, result);
-    return;
-  }
-  const result = finder.fileSearch(query, { pageSize: 101 });
-  if (!result.ok) {
-    const fallback = await fallbackFiles(query, signal);
-    emitProgressively(message, query, fallback);
-    return;
-  }
-  // Ordinary launcher search should only advertise real textual matches;
-  // otherwise a huge home index makes almost any random subsequence look like
-  // "100+ files". Explicit @ mode retains FFF's typo-tolerant fuzzy search.
-  const indexedItems = result.value.items.filter((item, index) => message.focused === true
-    ? usefulFuzzyMatch(item, result.value.scores[index], query)
-    : strictFileMatch(item, query));
-  const fuzzyCapped = indexedItems.length > 100;
-  const visibleItems = indexedItems.slice(0, 100);
-  const rows = visibleItems.map((item) => ({
-      name: item.fileName,
-      relativePath: item.relativePath,
-      path: resolve(basePath, item.relativePath),
-    }));
-  // FFF can report its scan complete while a newly created file is still
-  // absent from its native index. Do not let an empty index result suppress a
-  // verified plocate/fd match.
-  if (rows.length === 0) {
-    const fallback = await fallbackFiles(query, signal);
-    emitProgressively(message, query, fallback);
-    return;
-  }
-  const candidatePageComplete = Number(result.value.totalMatched || 0)
-    <= result.value.items.length;
-  const progressive = {
-    rows,
-    totalMatched: rows.length,
-    capped: fuzzyCapped,
-    complete: fuzzyCapped || candidatePageComplete,
-  };
-  emitProgressively(message, query, progressive);
+  emitProgressively(message, query, await fallbackFiles(query, signal));
 }
 
-const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
-input.on("line", (line) => {
+// Only the launcher's `node files.js` scans the home directory and reads
+// stdin; importing the module (the tests do) must do neither.
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) discoverRepos();
+
+const input = isMain ? createInterface({ input: process.stdin, crlfDelay: Infinity }) : null;
+input?.on("line", (line) => {
   try {
     const message = JSON.parse(line);
     latestRequestId = Number(message.id) || 0;
@@ -331,8 +275,11 @@ function cancelPending() {
 
 function shutdown() {
   cancelPending();
-  try { finder?.destroy(); } catch {}
   process.exit(0);
 }
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
+if (isMain) {
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}
+
+export { locatedUnderBase, filePattern };
