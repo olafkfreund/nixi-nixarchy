@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -347,6 +347,70 @@ test("only Claude gets the settings restriction; the others get no meta at all (
     assert.equal(run.agent.find((e) => e.method === "newSession").meta, null,
       `${env.NIXI_AGENT} received Claude meta`);
   }
+});
+
+// #52 -- a write the user approves once, which then runs with nobody present:
+// a menu `when:` guard on the next reload, a post-boot.d hook at boot, a
+// PreToolUse hook on the agent's next tool call. `ask` cannot express this,
+// because Mechanic already asks for every write (see line 51). Only `deny` does.
+
+// Named here rather than imported, so a tool quietly dropped from the module's
+// list fails instead of moving the expectation with it.
+const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+
+test("every unattended-write path is denied for every write tool (#52)", () => {
+  const { deny } = claudePermissions(false);
+  for (const tool of WRITE_TOOLS)
+    for (const path of EXEC_WRITE_PATHS)
+      assert.ok(deny.includes(`${tool}(${path})`), `${tool}(${path})`);
+  // The #41 property, on the write side: the list is GENERATED over the tool
+  // names, so a path added later covers every tool automatically. A hand-written
+  // Write(...) list would leave Edit free to reach the same paths.
+  assert.equal(deny.length, WRITE_TOOLS.length * EXEC_WRITE_PATHS.length,
+    "deny is not the full cross product -- it was hand-listed, or a tool was dropped");
+});
+
+test("the unattended-write list cannot silently shrink (#52)", () => {
+  assert.ok(EXEC_WRITE_PATHS.length >= 8, `only ${EXEC_WRITE_PATHS.length} paths`);
+  // The three findings that motivated the rule. #66 closed the agent's own cwd
+  // by dropping project settings entirely; ~/.claude/** is the scope that still
+  // loads, so it is the one a path rule still has to cover.
+  for (const path of ["~/.claude/settings.json", "~/.claude/hooks/**",
+                      "~/.config/omarchy/hooks/**", "~/.config/omarchy/extensions/**"])
+    assert.ok(EXEC_WRITE_PATHS.includes(path), path);
+  // A rule pasted where a path belongs would generate Write(Write(...)).
+  for (const path of EXEC_WRITE_PATHS) assert.ok(!path.includes("("), path);
+});
+
+test("the deliberate exclusions stay excluded (#52)", () => {
+  // Denying everything that executes would ban the README's flagship Mechanic
+  // demo and contradict SKILL.md:90. The line is who pulls the trigger, and a
+  // keybinding waits for the user. If a later broadening takes hypr with it,
+  // this fails rather than shipping.
+  const { deny } = claudePermissions(false);
+  for (const excluded of ["~/.config/hypr/", "~/.config/omarchy/nixi.json", "/.bashrc", "/.zshrc"])
+    assert.ok(!deny.some((rule) => rule.includes(excluded)),
+      `${excluded} is denied; that was an explicit non-goal, so it needs its own approval`);
+  // Not a deny of the cwd's .claude: #66 removed the capability instead.
+  assert.ok(!EXEC_WRITE_PATHS.some((path) => path.startsWith("~/.config/nixi/")),
+    "policing a path whose capability settingSources already removed (#66)");
+});
+
+test("the deny reaches the session as transmitted, under both read settings (#52)", async () => {
+  // As transmitted at newSession, not as constructed: bridge.js must pass the
+  // whole permissions object through, deny included.
+  const plain = sentPermissions(await runBridge());
+  const strict = sentPermissions(await runBridge({ settings: { askBeforeReading: true } }));
+  for (const rules of [plain, strict]) {
+    assert.ok(Array.isArray(rules.deny), `deny never reached newSession: ${JSON.stringify(rules)}`);
+    for (const tool of WRITE_TOOLS)
+      assert.ok(rules.deny.includes(`${tool}(~/.config/omarchy/hooks/**)`), tool);
+    assert.ok(rules.deny.includes("Write(~/.claude/settings.json)"));
+  }
+  // askBeforeReading withdraws the read allow and must not disturb the deny.
+  assert.deepEqual(strict.deny, plain.deny);
+  assert.deepEqual(plain.allow, ["Read", "Grep", "Glob"]);
+  assert.deepEqual(strict.allow, []);
 });
 
 // #44 -- three request/ack/error triples became one ack shape. The point is not

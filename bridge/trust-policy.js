@@ -85,13 +85,57 @@ export const SECRET_PATHS = [
   "**/.env", "**/.env.*", "**/*.age",
 ];
 
+// Writes that will later run with nobody present (#52).
+//
+// `ask` would be a no-op here: Mechanic is Claude's `default` mode, where every
+// Write/Edit already prompts -- the test below asserts it. SECRET_PATHS above
+// works because it claws paths back out of a standing allow; there is no write
+// allow to claw back from. Only `deny` moves.
+//
+// The line is NOT "deny what executes". That would ban ~/.config/hypr/**, which
+// is the README's flagship Mechanic demo and which SKILL.md tells the agent to
+// edit -- it would deny the product's purpose. The line is WHO PULLS THE
+// TRIGGER. A keybinding runs when the user presses the key and a menu row when
+// the user picks it: a person is present, so those keep asking. A menu `when:`
+// guard runs on the next reload, a post-boot.d hook at boot, a PreToolUse hook
+// on the agent's next tool call. Nobody pulled anything. Those are denied.
+//
+// ~/.claude/** is here and ~/.config/nixi/.claude/** is not, which looks
+// backwards until you read #66: settingSources ["user"] already stops the cwd's
+// project settings loading at all, so denying that path would police a
+// capability that is gone -- but "user" is precisely the scope still loaded.
+//
+// ~/.local/bin is narrow where ~/.config/systemd/user is broad: every file in
+// the latter is a unit, unattended by definition, while a file in the former
+// only runs unattended if a unit names it. The pair holds together -- writing a
+// unit to reach some other binary is itself denied. Loosening either alone
+// opens both.
+export const EXEC_WRITE_PATHS = [
+  "~/.claude/settings.json",         // the agent's own permission rules (user scope)
+  "~/.claude/settings.local.json",
+  "~/.claude/hooks/**",              // PreToolUse: a shell command, no prompt
+  "~/.config/omarchy/hooks/**",      // post-boot.d runs at every boot
+  "~/.config/omarchy/extensions/**", // #52 as filed: `when:` guards are bash
+  "~/.config/omarchy/plugins/**",    // bridge scripts spawn on card load
+  "~/.config/systemd/user/**",       // units and drop-ins
+  "~/.local/bin/nixi-*",             // the binaries those units run at login
+];
+
 const READ_TOOLS = ["Read", "Grep", "Glob"];
 const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${tool}(${path})`));
+
+// Generated over the tool names for the reason #41 records: Claude matches a
+// rule per TOOL NAME, so a hand-written Write(...) list would leave Edit free to
+// reach the same paths. MultiEdit and NotebookEdit are named because naming a
+// tool that does not exist costs nothing, and omitting one that does is the bug.
+const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+const EXEC_WRITES = WRITE_TOOLS.flatMap((tool) => EXEC_WRITE_PATHS.map((path) => `${tool}(${path})`));
 
 export function claudePermissions(askBeforeReading) {
   return {
     allow: askBeforeReading ? [] : READ_TOOLS,
     ask: SECRET_READS,
+    deny: EXEC_WRITES,
   };
 }
 
