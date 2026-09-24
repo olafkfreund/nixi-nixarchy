@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 40
 intent: intent/2026-09-24-40-trust-pending-wedge.md
 ---
