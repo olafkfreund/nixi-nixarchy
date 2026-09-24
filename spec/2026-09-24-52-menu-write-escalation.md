@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 52
 intent: intent/2026-09-24-52-menu-write-escalation.md
 ---
