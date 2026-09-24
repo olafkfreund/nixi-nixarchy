@@ -40,7 +40,6 @@ from nixi_safeio import _dirfd, _write  # noqa: E402  (needs the path line above
 
 HOME = os.path.expanduser("~")
 DIR = os.path.join(HOME, ".config", "nixi")
-DATA = os.path.join(HOME, ".local", "share", "nixi")
 BIN = os.path.join(HOME, ".local", "bin")
 UNITS = os.path.join(HOME, ".config", "systemd", "user")
 SKILLS = os.path.join(HOME, ".claude", "skills", "nixi")
@@ -218,7 +217,6 @@ def src(*parts):
 
 
 def install_core(j, svc):
-    remove_old_widget(j, svc)
     for f in ("CLAUDE.md", "KNOWLEDGE.md", "faq.json", "AGENTS.md"):
         j.place(DIR, f, read_src(src("share", f)), dir_mode=0o700)
     for b in ("nixi", "nixi-context", "nixi-update-manual"):
@@ -237,31 +235,6 @@ def install_core(j, svc):
     if not os.path.realpath(ROOT).startswith(os.path.realpath(PLUGINS) + os.sep):
         log("card: this checkout is not in %s, so the shell will not load it; "
             "install it with `omarchy plugin add` (or use the Home Manager module)" % PLUGINS)
-
-
-# What a 0.9.x install placed and the overlay no longer uses. The server unit
-# must be stopped before its program disappears, or it restart-loops.
-OLD_FILES = ((BIN, "nixi-server"), (UNITS, "nixi.service"), (DIR, "ui.html"),
-             (os.path.join(DIR, "vendor"), "marked.min.js"),
-             (os.path.join(DIR, "vendor"), "purify.min.js"),
-             (os.path.join(DATA, "models"), "ggml-base.en.bin"),
-             (os.path.join(DATA, "models"), "ggml-silero-v5.1.2.bin"))
-
-
-def remove_old_widget(j, svc):
-    if os.path.exists(os.path.join(UNITS, "nixi.service")) and is_enabled("nixi.service"):
-        svc.disable_now("nixi.service")
-    removed = [n for d, n in OLD_FILES if os.path.lexists(os.path.join(d, n))]
-    for d, n in OLD_FILES:
-        j.remove(d, n)
-    for d in (os.path.join(DIR, "vendor"), os.path.join(DATA, "models")):
-        try:
-            os.rmdir(d)
-        except OSError:
-            pass
-    if removed:
-        must(systemctl("daemon-reload"), "daemon-reload")
-        log("removed the old widget: " + ", ".join(removed))
 
 
 def install_bridge_deps():
@@ -309,27 +282,7 @@ def merge_menu(j):
     s = (cur or b"").decode("utf-8", "replace")
     import re
     if '"help"' in s:
-        # Upgrade path. The entry is the user's now, so it is left alone with
-        # one exception: the icon nixi itself wrote before 0.11 (help-circle,
-        # U+F0625) is swapped for sparkles in place. Scoped to the help entry's
-        # own braces so an identical glyph on a neighbouring row is not touched.
-        # Without this the new icon would only ever reach fresh installs.
-        b = s.find("{", s.index('"help"'))
-        depth, e = 0, b
-        while b != -1 and e < len(s):
-            if s[e] == "{":
-                depth += 1
-            elif s[e] == "}":
-                depth -= 1
-                if depth == 0:
-                    break
-            e += 1
-        entry = s[b:e + 1] if b != -1 and e < len(s) else ""
-        if "\U000f0625" in entry:
-            j.place(EXT_DIR, "omarchy-menu.jsonc.bak-nixi", s.encode())
-            j.place(EXT_DIR, "omarchy-menu.jsonc",
-                    (s[:b] + entry.replace("\U000f0625", "\U000f0674") + s[e + 1:]).encode())
-            log("menu: the Help icon is now sparkles")
+        # The entry is the user's now: nixi added it once and never rewrites it.
         return
     row = ('"help": {"icon": "\U000f0674", "label": "Help", '
            '"description": "Ask anything about nixarchy", "action": "nixi", '
