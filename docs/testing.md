@@ -157,6 +157,10 @@ opposed to YOLO.
      untouched.
    - **Existing actions:** `nixi --tour` still starts the tour.
 
+   When you test a changed plugin by re-pointing its symlink, run
+   `omarchy-restart-shell` first. The shell's plugin reload keeps the old
+   compiled QML, because the file URL does not change.
+
 ## Pinning and concurrency checklist
 
 1. Start a conversation and note its bridge PID.
