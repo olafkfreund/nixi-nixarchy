@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 40
 spec: spec/2026-09-24-40-trust-pending-wedge.md
 ---
