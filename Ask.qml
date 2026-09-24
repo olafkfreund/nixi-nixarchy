@@ -153,15 +153,6 @@ Item {
   function clampImpulse(value) { return Math.round(Math.max(80, Math.min(2000, value))) }
   function clampDeceleration(value) { return Math.round(Math.max(100, Math.min(5000, value))) }
 
-  function setKeyboardMotion(impulse, deceleration) {
-    var nextImpulse = clampImpulse(impulse)
-    var nextDeceleration = clampDeceleration(deceleration)
-    if (nextImpulse === keyboardLineImpulse && nextDeceleration === keyboardDeceleration) return
-    keyboardLineImpulse = nextImpulse
-    keyboardDeceleration = nextDeceleration
-    if (settingsLoaded) settingsSaveTimer.restart()
-  }
-
   function loadSettings(raw) {
     var data = {}
     try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
@@ -240,17 +231,6 @@ Item {
     interval: 200
     repeat: false
     onTriggered: root.flushSettings()
-  }
-
-  MotionTuner {
-    id: motionTuner
-    fontScale: root.fontScale
-    impulse: root.keyboardLineImpulse
-    deceleration: root.keyboardDeceleration
-    onMotionChanged: function(nextImpulse, nextDeceleration) {
-      root.setKeyboardMotion(nextImpulse, nextDeceleration)
-    }
-    onResetRequested: root.setKeyboardMotion(335, 608)
   }
 
   Loader {
@@ -377,7 +357,6 @@ Item {
       if (conversations[i] !== conversation) remaining.push(conversations[i])
     }
     conversations = remaining
-    if (remaining.length === 0) motionTuner.visible = false
     Qt.callLater(function() { conversation.destroy() })
   }
 
@@ -402,10 +381,8 @@ Item {
     conversation.harnessSelectorOpen = Qt.binding(function() {
       return harnessSelectorLoader.item && harnessSelectorLoader.item.visible
     })
-    conversation.motionTunerOpen = Qt.binding(function() { return motionTuner.visible })
     conversation.fontScaleStepRequested.connect(function(step) { root.adjustFontScale(step) })
     conversation.fontScaleResetRequested.connect(function() { root.setFontScale(1) })
-    conversation.motionTunerRequested.connect(function() { motionTuner.open() })
     conversation.harnessSelectorRequested.connect(function() { root.openHarnessSelector() })
     conversation.sessionRestartRequested.connect(function() {
       conversation.agentName = root.selectedAgent

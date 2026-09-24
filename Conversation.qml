@@ -64,7 +64,6 @@ Item {
   property real fontScale: 1
   signal fontScaleStepRequested(real step)
   signal fontScaleResetRequested()
-  signal motionTunerRequested()
   signal harnessSelectorRequested()
   signal sessionRestartRequested()
   property real keyboardLineImpulse: 335
@@ -72,7 +71,6 @@ Item {
   property real keyboardDeceleration: 608
   property var fileOpenCommand: []
   property var fileEditCommand: []
-  property bool motionTunerOpen: false
   property bool harnessSelectorOpen: false
   property string agentName: ""
   property string modelName: ""
@@ -98,10 +96,6 @@ Item {
     else closeFilePreview()
   }
   onSearchModeChanged: if (searchMode !== "@") closeFilePreview()
-  onMotionTunerOpenChanged: {
-    if (!motionTunerOpen && opened && !pinned)
-      Qt.callLater(function() { prompt.forceActiveFocus() })
-  }
   onHarnessSelectorOpenChanged: {
     if (!harnessSelectorOpen && opened && !pinned)
       Qt.callLater(function() { prompt.forceActiveFocus() })
@@ -668,7 +662,6 @@ Item {
     else if (ctrl && (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore)) fontScaleStepRequested(-0.1)
     else if (ctrl && event.key === Qt.Key_0) fontScaleResetRequested()
     else if (ctrl && event.key === Qt.Key_P) pinConversation()
-    else if (ctrl && event.key === Qt.Key_Comma) motionTunerRequested()
     else if ((event.modifiers & Qt.MetaModifier) !== 0 && event.key === Qt.Key_Comma) harnessSelectorRequested()
     else return false
     return true
@@ -879,7 +872,6 @@ Item {
     Shortcut { sequence: "Ctrl+-"; onActivated: conversation.fontScaleStepRequested(-0.1) }
     Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.fontScaleResetRequested() }
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
-    Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
     // Ctrl+1 … Ctrl+9, Ctrl+0 pick the matching visible row. Each Shortcut sits
     // in an Item so it stays in this window's item tree, which is how a
@@ -1252,7 +1244,7 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     // Let the auxiliary motion window become active without dismissing this
     // layer popup, then reclaim exclusive prompt focus when it closes.
-    WlrLayershell.keyboardFocus: root.motionTunerOpen || root.harnessSelectorOpen
+    WlrLayershell.keyboardFocus: root.harnessSelectorOpen
       ? WlrKeyboardFocus.OnDemand
       : WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
