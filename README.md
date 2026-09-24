@@ -30,7 +30,7 @@ session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
 | <img src="docs/media/01-search.png" alt="Typing install shows menu entries, files and repositories" width="420"> | **1. Open it.** Sam clicks the ✨ in the bar and types `install`. Before any AI is involved, the card matches Omarchy menu entries, apps, files and repositories. Enter sends the text as a question. |
 | <img src="docs/media/02-answer.png" alt="Nixi's answer to how do I install an app, leading with Install ▸ Packages" width="420"> | **2. Ask.** "How do I install an app?" The answer is nixarchy's, not `pacman -S`: the **Packages** panel (Install ▸ Packages), where picking an app only queues it until you apply, then the same in a terminal (`nixarchy pkg add`, `nixarchy apply`). Nixi checked the panel is on, and says its key isn't bound on this machine rather than naming one. |
 | <img src="docs/media/03-your-machine.png" alt="Nixi reporting the NixOS generation and disk use" width="420"> | **3. Ask about the machine.** "What generation am I on, how full is my disk?" Nixi runs read-only checks and answers with this laptop's numbers, which matched `readlink /nix/var/nix/profiles/system` and `df`. |
-| <img src="docs/media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of changing anything" width="420"> | **4. Guide changes nothing.** Asked to add btop, Nixi explains instead: btop is already installed. In Guide the bridge cancels every permission request. |
+| <img src="docs/media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of changing anything" width="420"> | **4. Guide changes nothing.** Asked to add btop, Nixi explains instead: btop is already installed. In Guide the bridge cancels every permission request it receives, so nothing changes; reading your config needs no prompt. |
 | <img src="docs/media/05-mechanic-asks.png" alt="Mechanic asking permission before a change" width="420"> | **5. Mechanic asks first.** After `/mechanic`, "put btop on SUPER+ALT+T" is done step by step, and each step needs your yes: **Y** or **Allow**. The prompt shows the whole command or change being approved. Most lookups no longer ask: reading files doesn't, except for secrets such as `~/.ssh`. |
 | <img src="docs/media/06-mechanic-done.png" alt="Nixi reporting the change and how it verified it" width="420"> | **6. Checked.** One line is added to `~/.config/hypr/bindings.lua`. Nixi reloads Hyprland, confirms the live binding, and says where the backup is. |
 | <img src="docs/media/07-undo.png" alt="Nixi restoring the file from its backup" width="420"> | **7. Undo.** "Now undo it." Nixi restores its backup and checks the binding is gone. `/guide` makes it read-only again. |
@@ -154,22 +154,28 @@ never shows that line; the bridge appends the fact to
 Two levels, so that neither claims a boundary it cannot enforce.
 
 - **Guide** *(default)* — explains and instructs. The bridge **cancels every
-  permission request** before it reaches you, and puts the agent in its most
-  restrictive mode as a second layer. Nothing on your machine changes.
+  permission request it receives**, and puts the agent in its most restrictive
+  mode as a second layer. Nothing on your machine changes. Reading and
+  searching are the exception, and deliberately so: Nixi may look at your
+  configuration without asking, because a guide that cannot read your machine
+  cannot explain it. Sensitive paths — keys, credentials, `.env` files — still
+  ask, in both levels.
 - **Mechanic** — every change the agent wants is shown in the card and needs
   your yes. Click **MECHANIC** in the corner to switch to **YOLO**
   (auto-approve); YOLO cannot be reached from Guide.
 
 | agent | Guide | Mechanic |
 |---|---|---|
-| Claude | `plan` mode, requests cancelled | `default` mode, asks |
-| Codex | `read-only`, requests cancelled | `read-only`, asks before each edit |
-| OpenCode | `plan`, requests cancelled | `build`, asks |
+| Claude | `plan` mode, requests cancelled (reads excepted) | `default` mode, asks |
+| Codex | `read-only`, requests cancelled (reads excepted) | `read-only`, asks before each edit |
+| OpenCode | `plan`, requests cancelled (reads excepted) | `build`, asks |
 
-In Mechanic, reading and searching files does not ask, so most prompts you see
-are for something that changes. With Claude that means its Read, Grep and Glob
-tools. Secrets still ask: `~/.ssh`, `~/.gnupg`, cloud and GitHub credentials,
-`/run/agenix`, `.env` and `*.age` files. Shell commands, even `grep` and `ls`,
+In **both** trust levels, reading and searching files does not ask, so the
+prompts you see in Mechanic are for something that changes. With Claude that
+means its Read, Grep and Glob tools. This is why Guide can answer questions
+about your own configuration: it reads, it just never writes. Secrets still
+ask, in both levels and for all three tools: `~/.ssh`, `~/.gnupg`, cloud and
+GitHub credentials, `/run/agenix`, `.env` and `*.age` files. Shell commands, even `grep` and `ls`,
 still ask. Nixi tells the agent to use its file tools for lookups, and it
 mostly does, but an occasional `grep` still arrives as a shell command. Adding
 one key binding typically takes two or three prompts: the live key list,

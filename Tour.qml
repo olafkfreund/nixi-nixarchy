@@ -128,6 +128,9 @@ Item {
     onLoaded: {
       try { root.learning = JSON.parse(text()) || {} } catch (error) { root.learning = {} }
     }
+    // watchChanges signals; it does not reload. Without this the file is read
+    // once at startup and progress written by another conversation never lands.
+    onFileChanged: reload()
     // Absent until something has been learned; an empty state is correct.
     onLoadFailed: { root.learning = {} }
   }
@@ -141,6 +144,8 @@ Item {
       root.defaultAgentSet = String(text() || "").trim() !== ""
       root.applyChecks()
     }
+    // Without this the watch fires and nothing re-reads, so step 1 waits forever.
+    onFileChanged: reload()
     onLoadFailed: { root.defaultAgentSet = false }
   }
 }

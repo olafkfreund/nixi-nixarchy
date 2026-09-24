@@ -123,7 +123,7 @@ NixOS 26.11), captured as it happened.</p>
     <div class="n">4 · Guide</div>
     <h3>Guide explains, and changes nothing</h3>
     <p>"Please add btop to my apps for me." Nixi starts in <strong>Guide</strong>, and in Guide the
-    bridge cancels every permission request before it reaches Sam. So it explains instead:
+    bridge cancels every permission request it receives, so nothing changes. So it explains instead:
     btop is already installed, and this is where it would go if it weren't.</p>
   </div>
 </section>
@@ -177,7 +177,7 @@ NixOS 26.11), captured as it happened.</p>
   <thead><tr><th></th><th>Guide (default)</th><th>Mechanic</th></tr></thead>
   <tbody>
     <tr><td>What it does</td><td>Explains and instructs. Nothing on your machine changes.</td><td>Makes the change, and every step needs your yes.</td></tr>
-    <tr><td>How it's enforced</td><td>The bridge cancels every permission request, and the agent runs in its most restrictive mode.</td><td>Requests are shown in the card. With Claude, reading and searching files does not ask, except for secrets; set <code>"askBeforeReading": true</code> in <code>~/.config/omarchy/nixi.json</code> to be asked for those too. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
+    <tr><td>How it's enforced</td><td>The bridge cancels every permission request it receives, and the agent runs in its most restrictive mode. Reading and searching are the exception, in both levels: they never produce a request, so Nixi can read your configuration to explain it. Secrets still ask.</td><td>Requests are shown in the card. With Claude, reading and searching files does not ask, except for secrets; set <code>"askBeforeReading": true</code> in <code>~/.config/omarchy/nixi.json</code> to be asked for those too. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
     <tr><td>Claude</td><td><code>plan</code> mode, requests cancelled</td><td><code>default</code> mode, asks</td></tr>
     <tr><td>Codex</td><td><code>read-only</code>, requests cancelled</td><td><code>read-only</code>, asks before each edit</td></tr>
     <tr><td>OpenCode</td><td><code>plan</code>, requests cancelled</td><td><code>build</code>, asks</td></tr>
