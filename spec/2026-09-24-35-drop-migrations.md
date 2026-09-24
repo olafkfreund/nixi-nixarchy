@@ -8,17 +8,19 @@ intent: intent/2026-09-24-35-drop-migrations.md
 
 ## Design
 
-Pure deletion, in six files. Nothing is rewritten, renamed or generalised.
+Pure deletion, in five files. Nothing is rewritten, renamed or generalised.
+
+**Two items from the review's list are excluded and stay in the tree.** See
+"Excluded from this deletion" below for the tag evidence; it is there so nobody
+deletes them again next quarter.
 
 ### 1. `install.py`
 
 - Delete `OLD_FILES` and `remove_old_widget()`.
 - Delete the `remove_old_widget(j, svc)` call from `install_core()`.
-- Delete the `'"help"' in s` upgrade branch of `merge_menu()`, and with it the
-  brace-scanning loop, the `OLD`/`NEW` glyph replacement and the
-  `"menu: the Help icon is now sparkles"` log line. What remains is an early
-  `return` when the entry already exists — `merge_menu()`'s documented
-  "the entry is the user's now" behaviour.
+- `merge_menu()` is **not** touched: its menu-icon migration is excluded (below).
+  Its in-code comment gains five lines carrying the tag evidence, so the next
+  reader cannot mistake it for 0.9.x-era code.
 
 Orphans that follow, and what happens to each:
 
@@ -51,13 +53,22 @@ blocks are independent (`entryBefore [ "checkLinkTargets" ]` vs
 
 ### 3. `tools/test_nixi.py`
 
-Delete `test_old_widget_stays_gone`, `test_old_plugin_dir_migration` and
-`test_menu_icon_migration`. The runner iterates `globals()` for `test_*`, so
-nothing else needs editing.
+Delete `test_old_plugin_dir_migration` only. `test_old_widget_stays_gone` and
+`test_menu_icon_migration` are excluded (below). The runner iterates `globals()`
+for `test_*`, so nothing else needs editing.
 
-Module-level imports are then re-checked: `tempfile`, `shutil`, `subprocess`,
-`re`, `json`, `os` all keep other readers (`test_enable_card`, the safe-IO
-tests, `_tracked`). `load()` keeps its readers. Left alone.
+`test_old_widget_stays_gone` is edited rather than deleted, in two ways that make
+it **stricter**:
+
+- the `ui\.html` alternative leaves its pattern, because this change removes the
+  last code that was allowed to name it;
+- `allowed` loses `".github/workflows/ci.yml"`, `"nix/package.nix"` and
+  `"install.py"`, whose only reason to be exempt was `ui.html`. It keeps
+  `docs/FORK.md`, `intent/`, `spec/`, `plan/` (prose) and `tools/test_nixi.py`
+  (which contains the pattern literal). Verified: with the exemptions dropped the
+  test still passes, and planting `8642` in `README.md` still fails it.
+
+Module-level imports keep their readers either way. Left alone.
 
 ### 4. `.github/workflows/ci.yml`
 
@@ -88,18 +99,50 @@ It is still the only coverage of the imperative install path end to end, and a
 mutation to `install_core` fails it. The job is not left vacuous, so it is kept
 rather than deleted.
 
+## Excluded from this deletion
+
+Both were on the review's list. Both were investigated, found misclassified, and
+kept. **Neither is 0.9.x-era upgrade code.**
+
+### `merge_menu()`'s menu-icon migration — a post-release migration, tag-verified
+
+`git show v0.10.0:install.py` writes `\U000f0625` (help-circle). Sparkles landed
+in `6d7a61b` on **2026-09-17**; `v0.10.0` was tagged **2026-09-15**. The glyph
+therefore changed *two days after the only release Nixi has ever made*, and
+`install.py` wrote help-circle continuously from `5be4010` (2026-09-02) until that
+commit, so the write span contains the tag.
+
+`merge_menu()` leaves an existing `"help"` entry alone by design — that is its
+documented contract — so this branch is the **only** thing that would ever replace
+the glyph on a machine that already has the entry. Deleting it ships a permanent
+question-mark icon to exactly the users who followed the documented install path.
+
+It is a *post*-release migration that happened to live next to the pre-release
+ones. The review's "never shipped under a tag" premise is not merely weak for
+this item; it is **false**. The same three sentences are now a comment in
+`install.py` beside the branch, because a spec nobody opens does not stop the next
+deletion.
+
+`test_menu_icon_migration` is its test and stays with it. No CI step exercised the
+migration directly — verified, `ci.yml` never names the glyph — so the test is the
+whole of its coverage, which is a further reason not to drop it.
+
+### `test_old_widget_stays_gone` — a dead-feature drift guard
+
+Seven of its eight patterns (`/voice`, `/listen/`, `pw-record`, `whisper`,
+`NIXI_WHISPER`, `8642`, `X-Nixi-Token`) have nothing to do with any migration:
+they stop the removed browser-widget and voice feature returning, and this is one
+of only **two** invariants of its class in the tree —
+`spec/2026-09-24-56-drift-traps.md:55` cites it by name when rejecting a second CI
+job as redundant. Only `ui\.html` was migration-related, and that one alternative
+is dropped. The test is left stricter than it was.
+
 ## Alternatives rejected
 
-**Keep `test_old_widget_stays_gone`, narrowing its pattern to the seven
-non-migration terms.** The honest shape: it is a dead-feature drift guard, not
-migration code, and it is the only one. Rejected here because the approved scope
-is the migration cluster and the named test is in it; unilaterally re-scoping a
-named deletion is worse than reporting it. Recorded as the intent's open
-question and flagged in the PR, so re-adding it is one revert.
-
-**Exempt the menu-icon migration**, which upgrades `v0.10.0` — the one released
-version — and not 0.9.x. Same reasoning, same escalation: raised in the intent
-and the PR rather than decided unilaterally.
+**Delete the two items above as originally scoped.** Done first, deliberately,
+and reported rather than silently re-scoped — which is what allowed the reasoning
+to be checked before merge instead of a user finding the icon defect. Reverted on
+review once both objections were independently verified against the tag.
 
 **Also drop `install_core`'s now-unused `svc` argument.** Rejected: see the
 table. It makes one piece function differ from the other six.
@@ -116,10 +159,9 @@ a real regression. See above.
 - **A pre-`v0.10.0` Home Manager install fails activation** on
   `checkLinkTargets` against the real plugin directory, with Home Manager's own
   collision error and no nixi-specific hint. Accepted.
-- **Every `v0.10.0` machine keeps the help-circle menu glyph forever.** Accepted,
-  and the one risk here that contradicts the review's stated premise.
-- **The browser-widget and voice code can silently return.** The only guard goes
-  with `test_old_widget_stays_gone`.
+Two risks that an earlier draft of this spec accepted are **no longer taken**:
+`v0.10.0` machines still get the sparkles glyph, and the browser-widget/voice
+drift guard still runs. Both items are excluded above.
 
 ## Verification
 
@@ -131,6 +173,8 @@ a real regression. See above.
 - `shellcheck -S warning bin/nixi install.sh hooks/*.hook` and `actionlint`
 - `grep` for every removed name across the tree: `OLD_FILES`,
   `remove_old_widget`, `migrate-plugin-dir`, `nixiOldPluginDir`,
-  `test_old_widget_stays_gone`, `test_old_plugin_dir_migration`,
-  `test_menu_icon_migration`, `nixi-server`, `ui.html`, `f0625`
+  `test_old_plugin_dir_migration`, `nixi-server`, `ui.html`
+- Mutation checks on both excluded guards: `8642` in `README.md` must fail
+  `test_old_widget_stays_gone`, and neutering the glyph swap must fail
+  `test_menu_icon_migration`
 - A simulated run of the trimmed CI installer step in a throwaway `$HOME`

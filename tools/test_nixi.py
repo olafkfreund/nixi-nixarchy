@@ -245,6 +245,73 @@ def test_lock_bundles_no_adapter():
     print("  ok  the bridge lock bundles no agent adapter")
 
 
+def test_old_widget_stays_gone():
+    """The browser widget, its server and voice input were removed (plan step
+    16). Only the fork record and the intent/spec/plan prose may name them.
+
+    This is a dead-feature drift guard, not migration code: seven of its seven
+    patterns are the removed voice and browser-widget surface, and this is one of
+    only two invariants of its class in the tree
+    (spec/2026-09-24-56-drift-traps.md). The `ui.html` alternative dropped out
+    with #35, which removed the last code allowed to name it."""
+    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py")
+    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|8642|X-Nixi-Token")
+    for f in _tracked():
+        if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
+            continue
+        text = open(os.path.join(ROOT, f), encoding="utf-8", errors="replace").read()
+        m = pattern.search(text)
+        assert not m, "the old widget is back in %s: %r" % (f, m.group(0))
+    print("  ok  the old widget, server and voice input stay gone")
+
+
+def test_menu_icon_migration():
+    """The icon change has to reach machines that already have a Help entry.
+    merge_menu leaves an existing entry alone, so it would otherwise only ever
+    land on fresh installs -- but nixi's own pre-0.11 icon is migrated, and a
+    matching glyph on somebody else's row is not."""
+    OLD, NEW = "\U000f0625", "\U000f0674"
+    root = tempfile.mkdtemp()
+    home = os.environ.get("HOME")
+    try:
+        # install.py anchors every write at $HOME and refuses paths outside it,
+        # so the fake home has to be in place before the module is loaded.
+        os.environ["HOME"] = root
+        nixi_install = load("nixi_install", "install.py")
+        ext = os.path.join(root, ".config", "omarchy", "extensions")
+        os.makedirs(ext, mode=0o700, exist_ok=True)
+
+        class Jail:
+            def __init__(self):
+                self.written = {}
+
+            def place(self, _d, name, data):
+                self.written[name] = data.decode()
+
+        def run(text):
+            open(os.path.join(ext, "omarchy-menu.jsonc"), "w").write(text)
+            j = Jail()
+            nixi_install.merge_menu(j)
+            return j.written.get("omarchy-menu.jsonc")
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Help", "action": "nixi"}\n}\n' % OLD)
+        assert out and NEW in out and OLD not in out, "an existing Help entry kept the old icon"
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Ayuda", "action": "nixi"}\n}\n' % OLD)
+        assert "Ayuda" in out, "a user's own label was discarded by the migration"
+
+        out = run('{\n  "help": {"icon": "%s", "label": "Help"},\n  "docs": {"icon": "%s"}\n}\n' % (OLD, OLD))
+        assert out.count(NEW) == 1 and out.count(OLD) == 1, "a glyph outside the help entry was rewritten"
+
+        assert run('{\n  "help": {"icon": "X", "label": "Help"}\n}\n') is None, \
+            "an entry nixi did not write was rewritten"
+        print("  ok  an existing Help entry is migrated to sparkles, and only it")
+    finally:
+        if home is not None:
+            os.environ["HOME"] = home
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_enable_card():
     """The card is enabled once per home (nixarchy#709), without ever costing
     the user their bar: a user shell.json REPLACES Omarchy's defaults, so the
