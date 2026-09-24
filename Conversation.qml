@@ -6,6 +6,8 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+// Pure display formatting, unit tested under node (bridge/text-format.test.js).
+import "TextFormat.js" as TextFormat
 
 Item {
   id: root
@@ -134,38 +136,14 @@ Item {
     return Math.round(humanSize - (humanSize - agentSize) * progress)
   }
 
-  // Qt renders consecutive Markdown paragraphs with no vertical gap at all,
-  // and folds a whitespace-only line away as blank. A paragraph holding one
-  // non-breaking space survives and reads as a single blank line, so those are
-  // inserted at paragraph breaks for display only; the stored message is not
-  // touched. Fenced code is copied verbatim, where such a line would become
-  // part of the code.
+  // Agent replies render as TextEdit.MarkdownText, and Qt loads remote images
+  // in a Markdown document through QQuickPixmap -- measured on Qt 6.11.2,
+  // which fetched an http:// image with its query string intact, on render,
+  // with no user action (#42). TextFormat rewrites any image that is not a
+  // contained local file to its alt text before it can reach the renderer.
+  readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
   function spacedMarkdown(text) {
-    var value = String(text || "")
-    if (value.indexOf("\n") < 0) return value
-    var lines = value.split("\n")
-    var out = []
-    var fenced = false
-    var pendingBreak = false
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-      var fence = /^\s{0,3}(```|~~~)/.test(line)
-      if (fence) fenced = !fenced
-      if (!fenced && !fence && line.trim() === "") {
-        if (out.length > 0) pendingBreak = true
-        continue
-      }
-      if (pendingBreak) {
-        pendingBreak = false
-        // A blank line before a list item marks a loose list. A paragraph
-        // inserted there would split the list in two and restart ordered
-        // numbering, so the original break is emitted unchanged instead.
-        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) out.push("")
-        else out.push("", "\u00a0", "")
-      }
-      out.push(line)
-    }
-    return out.join("\n")
+    return TextFormat.spacedMarkdown(text, root.imageRoot)
   }
 
   function open(payloadJson) {
@@ -1376,7 +1354,15 @@ Item {
                 selectByMouse: true
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
-                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                // The URL and its visible label are both agent-authored, so the
+                // label need not describe where it goes, and xdg-open dispatches
+                // any other scheme to a registered handler (#42). Refusing
+                // silently would be worse than opening it: the user could not
+                // tell whether the click registered.
+                onLinkActivated: function(link) {
+                  if (TextFormat.openableLink(link)) Qt.openUrlExternally(link)
+                  else root.statusText = "Nixi did not open that link: only http and https links can be opened."
+                }
                 Keys.onPressed: function(event) {
                   if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
