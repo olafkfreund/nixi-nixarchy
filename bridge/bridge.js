@@ -360,7 +360,7 @@ async function steer(text) {
   });
   const outcome = response?.outcome || "failed";
   if (outcome === "failed") throw new Error("The agent could not apply the steering prompt");
-  emit({ type: "steered", outcome });
+  ack("steer", true, { outcome });
 }
 
 function answerPermission(message) {
@@ -383,6 +383,19 @@ function select(options, id) {
   // already matched on .id -- select() must too.
   const option = options.find((item) => item.id === id);
   return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };
+}
+
+// #44: one acknowledgement shape for every request the card makes. There were
+// three near-identical triples -- trust/trust_error, permission_mode/
+// permission_mode_error, steered/steering_error -- each with its own pending
+// flag on the card and its own reset path. Two of the three forgot to reset,
+// which is #40. One shape means one place to clear, so that class of bug
+// cannot recur per-request-kind.
+//
+// `of` names the request being answered and matches the inbound message type,
+// so a reader can follow one word from the card's write to the bridge's reply.
+function ack(of, ok, extra = {}) {
+  emit({ type: "ack", of, ok, ...extra });
 }
 
 function choose(options, kind) {
@@ -480,7 +493,7 @@ input.on("line", (line) => {
     });
   } else if (message.type === "steer") {
     steer(String(message.text || "")).catch((error) => {
-      emit({ type: "steering_error", message: error.message || String(error) });
+      ack("steer", false, { message: error.message || String(error) });
     });
   } else if (message.type === "permission") {
     answerPermission(message);
@@ -489,27 +502,23 @@ input.on("line", (line) => {
     // Apply the ACP mode FIRST, then persist and publish. The old order set
     // `trust` before the mode call, so a failure reported the level the session
     // had NOT moved to (#40). On failure nothing is written and `trust` still
-    // holds the level actually in force, which is what trust_error carries.
+    // holds the level actually in force, which is what the failed ack carries.
     (async () => {
       if (connection && sessionId) await applyTrustMode(next);
       await mergeSettings({ trust: next });
       trust = next;
       // Leaving Mechanic must not leave an approval waiting in the card.
       if (trust === "guide") cancelAllPendingPermissions();
-      emit({ type: "trust", trust });
+      ack("trust", true, { trust });
     })().catch((error) => {
-      emit({ type: "trust_error", trust, message: `Could not change trust level: ${error.message}` });
+      ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
     });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
       if (permissionMode === "yolo") allowAllPendingPermissions();
-      emit({ type: "permission_mode", mode: permissionMode });
+      ack("permission_mode", true, { mode: permissionMode });
     }).catch((error) => {
-      emit({
-        type: "permission_mode_error",
-        mode: permissionMode,
-        message: `Could not save permission mode: ${error.message}`,
-      });
+      ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
     });
   } else if (message.type === "cancel" && connection && sessionId) {
     connection.cancel({ sessionId }).catch(() => {});
