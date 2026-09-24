@@ -23,6 +23,25 @@ Item {
   // window — reads one value and a single writer persists it.
   readonly property real minFontScale: 0.7
   readonly property real maxFontScale: 2
+
+  // Nothing in this repo, or in Omarchy's Style singleton, reads the display:
+  // Style scales off the theme's [font] base-size, which is a static number.
+  // So the card was a fixed 540x560 logical-pixel box on every monitor, at 21%
+  // of a 1440p screen's width and 28% of a 1080p one -- it shrank when moved to
+  // the larger display (#38).
+  //
+  // 1080p is the baseline, so a 1080p panel is exactly 1 and nothing changes
+  // there. The largest screen wins on a mixed setup: the geometry clamps bound
+  // every surface to its own panel's height anyway, so an over-large scale
+  // cannot overflow the smaller monitor, while an under-large one leaves the
+  // big screen unreadable. Per-monitor scale is the follow-up, not this.
+  readonly property real displayScale: {
+    var tallest = 1080
+    var screens = Quickshell.screens || []
+    for (var i = 0; i < screens.length; i++)
+      if (screens[i] && screens[i].height > tallest) tallest = screens[i].height
+    return Math.max(1, Math.min(maxFontScale, Math.round((tallest / 1080) * 100) / 100))
+  }
   readonly property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/nixi.json"
   property real fontScale: 1
   // How long typing has to pause before the menu search recomputes. Matching
@@ -149,10 +168,14 @@ Item {
     if (!data || typeof data !== "object") data = {}
     settingsOnDisk = data
     persistedPermissionMode = data.permissionMode === "yolo" ? "yolo" : "permission"
-    var scale = Number(data.fontScale)
-    fontScale = (isFinite(scale) && scale > 0)
+    // Presence, then value. Number(undefined) is NaN, so testing the coerced
+    // value alone made an absent key and a deliberate 1 indistinguishable --
+    // and a 4K user who had chosen 1 would have had it silently overridden.
+    var stored = data.fontScale
+    var scale = Number(stored)
+    fontScale = (stored !== undefined && stored !== null && isFinite(scale) && scale > 0)
       ? Math.max(minFontScale, Math.min(maxFontScale, scale))
-      : 1
+      : root.displayScale
     var debounce = Number(data.searchDebounceMs)
     searchDebounceMs = isFinite(debounce)
       ? Math.round(Math.max(minSearchDebounceMs, Math.min(maxSearchDebounceMs, debounce)))
@@ -221,6 +244,7 @@ Item {
 
   MotionTuner {
     id: motionTuner
+    fontScale: root.fontScale
     impulse: root.keyboardLineImpulse
     deceleration: root.keyboardDeceleration
     onMotionChanged: function(nextImpulse, nextDeceleration) {
@@ -247,6 +271,7 @@ Item {
   function openHarnessSelector() {
     var selector = harnessSelectorLoader.item
     if (!selector) return
+    selector.fontScale = Qt.binding(function() { return root.fontScale })
     selector.agent = selectedAgent
     selector.model = selectedModel
     selector.reasoningEffort = selectedReasoningEffort

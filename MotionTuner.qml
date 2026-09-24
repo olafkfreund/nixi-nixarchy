@@ -5,6 +5,10 @@ import qs.Commons
 
 PanelWindow {
   id: root
+
+  // Zoom (Ctrl+=) applied only to the transcript, so this window stayed at a
+  // fixed size while the conversation grew (#38). Supplied by Ask.qml.
+  property real fontScale: 1
   visible: false
   anchors { top: true; bottom: true; left: true; right: true }
   color: "transparent"
@@ -66,7 +70,7 @@ PanelWindow {
         text: "Scroll motion"
         color: Color.menu.text
         font.family: Style.font.family
-        font.pixelSize: Style.font.title
+        font.pixelSize: Style.font.title * root.fontScale
         font.bold: true
       }
 
@@ -75,7 +79,7 @@ PanelWindow {
         text: "Drag the endpoint. Right means a longer coast; up means farther travel. The curve is the viewport’s position after one navigation-key impulse."
         color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
         font.family: Style.font.family
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.body * root.fontScale
         wrapMode: Text.Wrap
       }
 
@@ -164,7 +168,7 @@ PanelWindow {
           text: "distance"
           color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.42)
           font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.caption * root.fontScale
         }
         Text {
           anchors.right: parent.right
@@ -174,7 +178,7 @@ PanelWindow {
           text: "time →"
           color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.42)
           font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.caption * root.fontScale
         }
       }
 
@@ -186,19 +190,19 @@ PanelWindow {
           text: "impulse  " + Math.round(root.impulse) + " px/s"
           color: Color.menu.text
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.body * root.fontScale
         }
         Text {
           text: "friction  " + Math.round(root.deceleration) + " px/s²"
           color: Color.menu.text
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.body * root.fontScale
         }
         Text {
           text: root.distance.toFixed(0) + " px · " + root.duration.toFixed(2) + " s"
           color: Color.accent
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.body * root.fontScale
         }
       }
 
@@ -216,7 +220,7 @@ PanelWindow {
             text: "Reset"
             color: Color.menu.text
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.body * root.fontScale
           }
           MouseArea {
             id: resetMouse

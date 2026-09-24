@@ -1192,10 +1192,14 @@ Item {
     BorderSurface {
       id: card
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      readonly property int maxHeight: Math.min(Style.space(560), parent.height - Style.gapsOut * 2)
+      // The text sizes above multiply by root.fontScale; these did not, so
+      // Ctrl+= crammed larger text into the same 540px box -- the opposite of
+      // what zooming is for (#38). The parent bound is untouched, so however
+      // large the scale, nothing can exceed the screen.
+      readonly property int maxHeight: Math.min(Style.space(560) * root.fontScale, parent.height - Style.gapsOut * 2)
       readonly property int frameInset: Style.spacing.panelPadding * 2
       readonly property int headerInset: Style.space(8)
-      width: root.pinned ? parent.width : Math.min(Style.space(540), parent.width - Style.gapsOut * 2)
+      width: root.pinned ? parent.width : Math.min(Style.space(540) * root.fontScale, parent.width - Style.gapsOut * 2)
       height: root.pinned ? parent.height : Math.min(maxHeight, stack.height + frameInset)
       anchors.horizontalCenter: parent.horizontalCenter
       // Optical centre, not the mathematical one. A card placed at exactly
@@ -1896,7 +1900,7 @@ Item {
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b,
               root.trust === "guide" ? 0.42 : 0.78)
         font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.caption * root.fontScale
 
         MouseArea {
           anchors.fill: parent
@@ -1924,7 +1928,7 @@ Item {
           ? root.accent
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.36)
         font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.body * root.fontScale
         z: 10
 
         MouseArea {
@@ -2139,7 +2143,7 @@ Item {
             textFormat: Text.PlainText
             color: root.foreground
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.body * root.fontScale
             wrapMode: Text.Wrap
             maximumLineCount: 5
             elide: Text.ElideRight
@@ -2171,7 +2175,7 @@ Item {
               wrapMode: TextEdit.WrapAnywhere
               color: root.foreground
               font.family: "JetBrainsMono Nerd Font"
-              font.pixelSize: Style.font.caption
+              font.pixelSize: Style.font.caption * root.fontScale
             }
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
@@ -2184,7 +2188,7 @@ Item {
             textFormat: Text.PlainText
             color: Color.urgent
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap
           }
 
@@ -2194,7 +2198,7 @@ Item {
             text: root.permissionQueue.length + " more permission request" + (root.permissionQueue.length === 1 ? "" : "s") + " queued"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
           }
 
           Row {
@@ -2207,7 +2211,7 @@ Item {
               bordered: true
               foreground: root.foreground
               fontFamily: Style.font.family
-              fontSize: Style.font.body
+              fontSize: Style.font.body * root.fontScale
               onClicked: root.answerPermission(false)
             }
 
@@ -2218,7 +2222,7 @@ Item {
               selected: true
               foreground: root.accent
               fontFamily: Style.font.family
-              fontSize: Style.font.body
+              fontSize: Style.font.body * root.fontScale
               onClicked: root.answerPermission(true)
             }
           }
@@ -2229,7 +2233,7 @@ Item {
             text: "Clear the message box to answer with Y or N"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap
           }
         }
@@ -2244,9 +2248,12 @@ Item {
     visible: root.opened && root.pinned
     title: root.windowTitle
     color: root.background
-    implicitWidth: 760
-    implicitHeight: 800
-    minimumSize: Qt.size(480, 420)
+    // The only unscaled pixel literals of consequence in the repo: they bypassed
+    // both Style.space() and fontScale, so on a 4K panel this was a postage
+    // stamp and at a large theme base-size the contents outgrew the frame (#38).
+    implicitWidth: Style.space(760) * root.fontScale
+    implicitHeight: Style.space(800) * root.fontScale
+    minimumSize: Qt.size(Style.space(480), Style.space(420))
 
     onVisibleChanged: {
       if (visible) {

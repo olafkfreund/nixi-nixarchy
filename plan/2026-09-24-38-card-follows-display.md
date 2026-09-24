@@ -122,6 +122,35 @@ scale reflects wherever it first appeared. This is consistent with `fontScale`
 being a single persisted value and is accepted for this change; per-monitor
 scale is the deferred follow-up named in the spec.
 
+## Deviations, found during implementation
+
+1. **`panel.screen.height` was not reachable where the default is decided.**
+   `fontScale` is owned and persisted by `Ask.qml`, whose only `PanelWindow` is
+   the copy toast, and `loadSettings()` runs before any conversation panel
+   exists. `displayScale` therefore derives from `Quickshell.screens` --
+   confirmed against `quickshell-core.qmltypes` that `ShellScreen` carries
+   `width`/`height`/`physicalPixelDensity`/`logicalPixelDensity`, and notably
+   **no `devicePixelRatio`**, so the approved `screen.height` option was the
+   only one of the two that was available at all. The tallest screen wins on a
+   mixed setup: the geometry clamps bound every surface to its own panel, so an
+   over-large scale cannot overflow the smaller monitor, while an under-large
+   one leaves the big screen unreadable.
+
+2. **The font sites were 23 by the spec's count and 23 in fact, but in three
+   shapes, not one.** Besides `font.pixelSize: Style.font.*`, `HarnessSelector`
+   has a `Chip` component with `property real textSize` and `Conversation` has
+   two `fontSize:` button properties. All are scaled. `MotionTuner` and
+   `HarnessSelector` are separate windows, so each gained a `fontScale`
+   property bound from `Ask.qml` -- the Loader-hosted selector through
+   `Qt.binding` in `openHarnessSelector()`.
+
+3. **Tests A and B were run as pure logic, not on a live desktop.** The
+   seeding decision is plain ECMAScript, so it was exercised directly, including
+   a side-by-side with the OLD expression to show the trap was real: under it,
+   unset and a deliberate `1` both yield `1`. The remaining runtime checks
+   (actual on-screen proportions on 1440p vs 1080p) still need a rebuilt plugin
+   and are listed as outstanding.
+
 ## Rollback
 
 `git revert` the implementation commit.
