@@ -65,7 +65,8 @@ Approved decisions, carried over so this file stands alone:
    -> verify by step 9 and runtime check 1.
 
 8. `Conversation.qml:2261-2279`: the option buttons get
-   `enabled: root.permissionSettled`.
+   `enabled: root.permissionSettled` **and** an opacity bound to it (see
+   Deviations).
    -> verify by step 9 and runtime check 2.
 
 9. `tools/test_nixi.py`: extend `test_permission_keys_guard` for the composer's
@@ -98,7 +99,16 @@ Runtime, after rebuild and `omarchy-restart-shell`:
 
 ## Deviations, found during implementation
 
-None so far; recorded here rather than left implied.
+**1. `enabled` alone is invisible, so the buttons also bind opacity.** The spec
+justifies extending the settle window to the mouse partly on the greyed button
+being *feedback* -- the visible signal that this is a new question. `Button`
+comes from `qs.Ui` and is a `BorderSurface` with a `MouseArea`; `enabled: false`
+propagates and does block the click, but the component paints **no disabled
+state at all**, so the card would have looked identical while refusing clicks --
+which is the "broken app" reading the spec argued against. Step 8 therefore also
+sets `opacity: root.permissionSettled ? 1 : 0.45`, and the selfcheck asserts it,
+so the claim the decision rests on is itself checked. One line; the alternative
+was to drop the justification, which would have left the decision unargued.
 
 ## Rollback
 
