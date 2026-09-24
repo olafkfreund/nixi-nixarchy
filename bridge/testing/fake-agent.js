@@ -74,7 +74,15 @@ new AgentSideConnection((conn) => ({
       const outcome = await conn.requestPermission({
         sessionId: params.sessionId,
         toolCall,
-        options: [
+        // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
+        // claude-agent-acp and codex-acp both do. Behind a flag so the existing
+        // tests' two-option expectations are untouched (#53).
+        options: process.env.FAKE_AGENT_OPTIONS === "always" ? [
+          { optionId: "allow", name: "Allow", kind: "allow_once" },
+          { optionId: "allow-all", name: "Allow always", kind: "allow_always" },
+          { optionId: "reject", name: "Reject", kind: "reject_once" },
+          { optionId: "reject-all", name: "Never allow", kind: "reject_always" },
+        ] : [
           { optionId: "allow", name: "Allow", kind: "allow_once" },
           { optionId: "reject", name: "Reject", kind: "reject_once" },
         ],

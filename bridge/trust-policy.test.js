@@ -52,7 +52,7 @@ test("Mechanic: default mode, the request is shown, and a no is a no", async () 
   const { agent, events } = await runBridge({
     settings: { trust: "mechanic" },
     messages: [write],
-    onPermission: (event) => ({ type: "permission", id: event.id, allow: false }),
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
   });
   assert.equal(agent.find((e) => e.method === "setSessionMode")?.modeId, "default");
   assert.ok(events.some((e) => e.type === "permission"), "Mechanic did not ask");
@@ -64,7 +64,7 @@ test("Mechanic: a yes is a yes", async () => {
   const { agent } = await runBridge({
     settings: { trust: "mechanic" },
     messages: [write],
-    onPermission: (event) => ({ type: "permission", id: event.id, allow: true }),
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "allow" }),
   });
   assert.deepEqual(agent.find((e) => e.method === "permissionOutcome").outcome,
     { outcome: "selected", optionId: "allow" });
@@ -134,7 +134,7 @@ test("Mechanic: the prompt carries what is being approved, whole", async () => {
   const { events } = await runBridge({
     settings: { trust: "mechanic" },
     messages: [edit, run],
-    onPermission: (event) => ({ type: "permission", id: event.id, allow: false }),
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
   });
   const shown = events.filter((e) => e.type === "permission");
   assert.equal(shown.length, 2);
@@ -259,4 +259,68 @@ test("Guide and Mechanic still grant the same reads; only askBeforeReading withd
   assert.deepEqual(claudePermissions(true).allow, []);
   assert.deepEqual(claudePermissions(true).ask, claudePermissions(false).ask,
     "secrets stay guarded whether or not reads are allowed");
+});
+
+// #53 -- the agent offers allow_always and both installed adapters send it
+// (claude-agent-acp 21 references, codex-acp 25). The card used to answer with
+// a boolean, which collapsed every choice to allow_once and discarded it.
+
+const always = { FAKE_AGENT_OPTIONS: "always" };
+
+test("the chosen option reaches the agent, not a derived one (#53)", async () => {
+  for (const [optionId, expected] of [["allow-all", "allow-all"], ["reject-all", "reject-all"],
+                                      ["allow", "allow"], ["reject", "reject"]]) {
+    const run = await runBridge({
+      env: always, settings: { trust: "mechanic" }, messages: [write],
+      onPermission: (event) => ({ type: "permission", id: event.id, optionId }),
+    });
+    const outcome = run.agent.find((e) => e.method === "permissionOutcome").outcome;
+    assert.deepEqual(outcome, { outcome: "selected", optionId: expected },
+      `chose ${optionId}, agent got ${JSON.stringify(outcome)}`);
+  }
+});
+
+test("the card is offered every option the agent sends, with its own labels (#53)", async () => {
+  let seen = null;
+  await runBridge({
+    env: always, settings: { trust: "mechanic" }, messages: [write],
+    onPermission: (event) => { seen = event.options; return { type: "permission", id: event.id, optionId: "reject" }; },
+  });
+  assert.equal(seen.length, 4, "the card did not receive every option");
+  assert.deepEqual(seen.map((o) => o.kind),
+    ["allow_once", "allow_always", "reject_once", "reject_always"]);
+  // The label is the agent's own wording -- Nixi must not invent a scope it
+  // was never told. And a kind we do not know must still be offered.
+  assert.equal(seen.find((o) => o.kind === "allow_always").label, "Allow always");
+  assert.ok(seen.every((o) => o.id && o.label), "an option arrived without id or label");
+});
+
+// NOT tested, because it is not reachable: ACP enumerates the four permission
+// kinds and the SDK rejects anything else with "Invalid params" before the
+// request leaves the agent. Measured -- a fifth option with an invented kind
+// fails the whole turn, so the card can never be offered one.
+
+test("an optionId the agent never offered cancels rather than guessing (#53)", async () => {
+  const run = await runBridge({
+    env: always, settings: { trust: "mechanic" }, messages: [write],
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "not-a-real-option" }),
+  });
+  assert.deepEqual(run.agent.find((e) => e.method === "permissionOutcome").outcome,
+    { outcome: "cancelled" }, "a bogus optionId was resolved to something");
+});
+
+test("YOLO still auto-selects allow_once, never allow_always (#53)", async () => {
+  const run = await runBridge({
+    env: always, settings: { trust: "mechanic", permissionMode: "yolo" }, messages: [write],
+  });
+  assert.deepEqual(run.agent.find((e) => e.method === "permissionOutcome").outcome,
+    { outcome: "selected", optionId: "allow" }, "YOLO reached for a persistent option");
+  assert.ok(!run.events.some((e) => e.type === "permission"), "YOLO showed a prompt");
+});
+
+test("Guide still cancels, and is offered no option at all (#53)", async () => {
+  const run = await runBridge({ env: always, messages: [write] });
+  assert.deepEqual(run.agent.find((e) => e.method === "permissionOutcome").outcome,
+    { outcome: "cancelled" });
+  assert.ok(!run.events.some((e) => e.type === "permission"), "Guide showed a permission prompt");
 });

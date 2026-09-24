@@ -74,6 +74,33 @@ Runtime, after rebuild and `omarchy-restart-shell`:
    triggers a persistent choice.
 4. **Guide.** Still cancels; no permission card appears at all.
 
+## Deviations, found during implementation
+
+**1. The SDK renames the fields between agent and client.** The spec said
+options arrive as `{ optionId, name, kind }`. They do not: the agent *sends*
+those names, and the SDK delivers `{ id, label, kind }` to the client. Only the
+ACP response back to the agent uses `optionId`.
+
+`choose()` already knew this and matched on `.id`; my `select()` matched on
+`.optionId` and found nothing, so every answer resolved to `cancelled`. The QML
+would have rendered **blank buttons** for the same reason. Caught only by
+running against the real bridge -- reading the code did not reveal it, because
+the two names are both plausible and both appear in the file.
+
+**2. An unknown permission `kind` is not reachable, so its test was removed.**
+The spec listed "an unknown kind is passed through when chosen" as a case, and
+the risks section worried about unknown kinds breaking the card. ACP enumerates
+the four kinds and the SDK rejects anything else with `Invalid params` **before
+the request leaves the agent** -- measured: a fifth option with an invented kind
+fails the whole turn, so the card can never be offered one. The concern is void
+and a test for it would have asserted an impossibility. The reason is recorded
+in the test file where the case used to be.
+
+**3. The status line read a field that no longer arrives.** `answerPermission`
+emitted `message.allow ? "Working…" : "Tool denied"`, which after step 2 is
+always undefined and so always said "Tool denied". It now derives from the
+chosen option's kind.
+
 ## Rollback
 
 `git revert` the implementation commit.
