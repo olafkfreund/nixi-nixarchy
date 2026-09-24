@@ -423,13 +423,32 @@ Item {
       var payload = JSON.parse(payloadJson || "{}")
       if (payload && payload.action === "tour") root.startTour(conversation)
       else if (payload && payload.action === "learn") root.teachNext(conversation)
+      else if (payload && payload.action === "ask") root.askFromSummon(conversation, payload)
     } catch (error) {}
     reconcileShortcutSubmap()
     return conversation
   }
 
+  // A question handed over by another program (`nixi --ask`, the nixarchy
+  // menu) asks like typing, but never runs a slash command -- /guide and
+  // /mechanic change trust, /tour and /learn start flows -- and never steers
+  // or interrupts a running turn. Those cases only fill the prompt (nixi#37).
+  function askFromSummon(conversation, payload) {
+    var text = payload && typeof payload.prompt === "string" ? payload.prompt.trim() : ""
+    if (text === "") return
+    if (conversation.waiting || text.charAt(0) === "/") conversation.setPrompt(text)
+    else conversation.askQuestion(text)
+  }
+
   function open(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned) return
+    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned) {
+      // An open card ignores a summons, except a handed-over question.
+      try {
+        var payload = JSON.parse(payloadJson || "{}")
+        if (payload && payload.action === "ask") root.askFromSummon(activeOverlay, payload)
+      } catch (error) {}
+      return
+    }
     createConversation(payloadJson)
   }
 
