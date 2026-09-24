@@ -325,11 +325,24 @@ function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
-  pending.resolve(choose(pending.options, message.allow ? "allow_once" : "reject_once"));
-  emit({ type: "status", text: message.allow ? "Working…" : "Tool denied" });
+  pending.resolve(select(pending.options, String(message.optionId || "")));
+  const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
 
 // The ACP answer for the option of this kind, or cancelled if there is none.
+// Honour the option the user actually picked. choose() below selects a KIND on
+// the user's behalf, which is right for YOLO and the allow-all path and wrong
+// for an answer -- collapsing every answer to allow_once is what discarded the
+// agent's "allow always" entirely (#53).
+function select(options, id) {
+  // The SDK delivers options to the client as { id, label, kind }; only the
+  // ACP response back to the agent calls the field optionId. choose() below
+  // already matched on .id -- select() must too.
+  const option = options.find((item) => item.id === id);
+  return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };
+}
+
 function choose(options, kind) {
   const option = options.find((item) => item.kind === kind);
   return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };

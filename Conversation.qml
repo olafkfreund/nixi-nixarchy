@@ -44,7 +44,7 @@ Item {
   property string queuedPrompt: ""
   // The request on screen. noPermission (id "") means none, so bindings can
   // read its fields without a null check.
-  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0 })
+  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0, options: [] })
   property var pendingPermission: noPermission
   property var permissionQueue: []
   property string permissionMode: "permission"
@@ -843,8 +843,19 @@ Item {
     // the conversation is handed in rather than reached through its id.
     required property Item conversation
     // Y and N answer a permission prompt, but never over typed text (#20).
-    Shortcut { sequence: "Y"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(true) }
-    Shortcut { sequence: "N"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(false) }
+    // Deliberately only the one-shot choices. #27 showed repeated prompting
+    // trains Allow into a reflex, and a held key that grants STANDING approval
+    // is the worst possible target for one -- so "always" is mouse-only (#53).
+    Shortcut {
+      sequence: "Y"
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("allow_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("allow_once"))
+    }
+    Shortcut {
+      sequence: "N"
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("reject_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("reject_once"))
+    }
     Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(-1, false) }
     Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(1, false) }
     Shortcut { sequence: "Ctrl+J"; onActivated: conversation.scrollActiveSurface(1, false) }
@@ -1118,16 +1129,37 @@ Item {
     agent.running = true
   }
 
-  function answerPermission(allow) {
+  // The agent offers the choices; the card renders them and reports back which
+  // one was picked. It used to send a boolean, which collapsed every answer to
+  // allow_once and threw away "allow always" entirely (#53).
+  function answerPermission(optionId) {
     if (pendingPermission.id === "" || !agent.running) return
-    var answeredId = pendingPermission.id
+    var option = root.optionById(optionId)
+    if (!option) return
     agent.write(JSON.stringify({
       type: "permission",
-      id: answeredId,
-      allow: allow
+      id: pendingPermission.id,
+      optionId: option.id
     }) + "\n")
     showNextPermission()
-    statusText = allow ? "Working…" : "Tool denied"
+    statusText = String(option.kind || "").indexOf("allow") === 0 ? "Working…" : "Tool denied"
+  }
+
+  function optionById(optionId) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].id === optionId) return options[i]
+    return null
+  }
+
+  // The id of the option with this kind, or "" when the agent offers none.
+  // Y and N bind through this rather than to button positions, so they stay on
+  // the one-shot choices however many options arrive.
+  function optionIdForKind(kind) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].kind === kind) return options[i].id
+    return ""
   }
 
   ListModel { id: messages }
@@ -2215,29 +2247,36 @@ Item {
             font.pixelSize: Style.font.caption * root.fontScale
           }
 
+          // One button per option the AGENT offered, in its own words. Only
+          // the agent knows what "always" scopes to -- this tool, this command
+          // pattern, this session, a persisted rule -- so inventing a label
+          // would assert a scope Nixi was never told (#53). An agent offering
+          // just allow_once/reject_once renders exactly the two buttons this
+          // card has always had.
           Row {
             width: parent.width
             spacing: Style.space(12)
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "N  Deny"
-              bordered: true
-              foreground: root.foreground
-              fontFamily: Style.font.family
-              fontSize: Style.font.body * root.fontScale
-              onClicked: root.answerPermission(false)
-            }
+            Repeater {
+              model: root.pendingPermission.options || []
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "Y  Allow"
-              bordered: true
-              selected: true
-              foreground: root.accent
-              fontFamily: Style.font.family
-              fontSize: Style.font.body * root.fontScale
-              onClicked: root.answerPermission(true)
+              Button {
+                required property var modelData
+                readonly property int count: Math.max(1, (root.pendingPermission.options || []).length)
+                readonly property bool isAllow: String(modelData.kind || "").indexOf("allow") === 0
+                readonly property bool isOnce: String(modelData.kind || "").indexOf("_once") > 0
+                width: (parent.width - parent.spacing * (count - 1)) / count
+                // Agent-authored, so plain text and bounded -- the same rule
+                // the detail pane above follows.
+                text: (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
+                  + String(modelData.label || modelData.id || "").slice(0, 48)
+                bordered: true
+                selected: isAllow && isOnce
+                foreground: isAllow && isOnce ? root.accent : root.foreground
+                fontFamily: Style.font.family
+                fontSize: Style.font.body * root.fontScale
+                onClicked: root.answerPermission(modelData.id)
+              }
             }
           }
 
