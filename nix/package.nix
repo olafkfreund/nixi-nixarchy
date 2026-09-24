@@ -1,8 +1,6 @@
 { lib
-, stdenv
 , stdenvNoCC
 , buildNpmPackage
-, autoPatchelfHook
 , nodejs-slim
 , gjs
 , fd
@@ -27,8 +25,9 @@ let
   version = (builtins.fromJSON (builtins.readFile ../manifest.json)).version;
 
   # The bridge's node_modules, built from the lockfile alone so that editing the
-  # bridge's JavaScript does not invalidate npmDepsHash. After the adapters were
-  # dropped every dependency is MIT or Apache-2.0.
+  # bridge's JavaScript does not invalidate npmDepsHash. After the adapters and
+  # the native file index were dropped, every dependency is MIT or Apache-2.0
+  # and none of them ships a binary, so nothing here needs patchelf.
   bridgeModules = buildNpmPackage {
     pname = "nixi-bridge-modules";
     inherit version;
@@ -36,13 +35,8 @@ let
       root = ../bridge;
       fileset = lib.fileset.unions [ ../bridge/package.json ../bridge/package-lock.json ];
     };
-    npmDepsHash = "sha256-mP8ZEQrwoNK2+OzSyDUJlWsXBKdN9eKF9BHdcR3Sm/U=";
+    npmDepsHash = "sha256-+hVJkMXXoTih3i/+IP73NUCPuunlhgweQtXaFH4tktw=";
     dontNpmBuild = true;
-    # @ff-labs/fff-node and @yuuang/ffi-rs ship prebuilt shared objects. They
-    # happen to load on a machine with nix-ld; autoPatchelf makes them load from
-    # the store without depending on that.
-    nativeBuildInputs = [ autoPatchelfHook ];
-    buildInputs = [ stdenv.cc.cc.lib ];
     installPhase = ''
       runHook preInstall
       mkdir -p $out
@@ -252,10 +246,10 @@ stdenvNoCC.mkDerivation {
       || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }
     ! grep -nE 'execFile(Async)?\("(fd|gdbus)"' $plugin/bridge/*.js \
       || { echo "a bare fd/gdbus call is left in the bridge"; exit 1; }
-    # The native file finder must actually load from the store, not just exist.
-    ( cd $plugin/bridge && ${nodejs-slim}/bin/node --input-type=module -e \
-        "const m = await import('@ff-labs/fff-node'); if (!m.binaryExists()) { console.error('fff native library not found'); process.exit(1) }" ) \
-      || { echo "@ff-labs/fff-node does not load from the store"; exit 1; }
+    # `@` file search is plocate and fd only: no prebuilt shared object may
+    # come back in without the patchelf machinery coming back with it.
+    ! find $plugin/bridge/node_modules -name '*.so' -o -name '*.node' | grep -q . \
+      || { echo "a native binary reappeared in the bridge's node_modules"; exit 1; }
   '';
 
   meta = {
