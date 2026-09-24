@@ -6,6 +6,8 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+// Pure display formatting, unit tested under node (bridge/text-format.test.js).
+import "TextFormat.js" as TextFormat
 
 Item {
   id: root
@@ -42,7 +44,7 @@ Item {
   property string queuedPrompt: ""
   // The request on screen. noPermission (id "") means none, so bindings can
   // read its fields without a null check.
-  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0 })
+  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0, options: [] })
   property var pendingPermission: noPermission
   property var permissionQueue: []
   property string permissionMode: "permission"
@@ -134,38 +136,14 @@ Item {
     return Math.round(humanSize - (humanSize - agentSize) * progress)
   }
 
-  // Qt renders consecutive Markdown paragraphs with no vertical gap at all,
-  // and folds a whitespace-only line away as blank. A paragraph holding one
-  // non-breaking space survives and reads as a single blank line, so those are
-  // inserted at paragraph breaks for display only; the stored message is not
-  // touched. Fenced code is copied verbatim, where such a line would become
-  // part of the code.
+  // Agent replies render as TextEdit.MarkdownText, and Qt loads remote images
+  // in a Markdown document through QQuickPixmap -- measured on Qt 6.11.2,
+  // which fetched an http:// image with its query string intact, on render,
+  // with no user action (#42). TextFormat rewrites any image that is not a
+  // contained local file to its alt text before it can reach the renderer.
+  readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
   function spacedMarkdown(text) {
-    var value = String(text || "")
-    if (value.indexOf("\n") < 0) return value
-    var lines = value.split("\n")
-    var out = []
-    var fenced = false
-    var pendingBreak = false
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-      var fence = /^\s{0,3}(```|~~~)/.test(line)
-      if (fence) fenced = !fenced
-      if (!fenced && !fence && line.trim() === "") {
-        if (out.length > 0) pendingBreak = true
-        continue
-      }
-      if (pendingBreak) {
-        pendingBreak = false
-        // A blank line before a list item marks a loose list. A paragraph
-        // inserted there would split the list in two and restart ordered
-        // numbering, so the original break is emitted unchanged instead.
-        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) out.push("")
-        else out.push("", "\u00a0", "")
-      }
-      out.push(line)
-    }
-    return out.join("\n")
+    return TextFormat.spacedMarkdown(text, root.imageRoot)
   }
 
   function open(payloadJson) {
@@ -865,8 +843,19 @@ Item {
     // the conversation is handed in rather than reached through its id.
     required property Item conversation
     // Y and N answer a permission prompt, but never over typed text (#20).
-    Shortcut { sequence: "Y"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(true) }
-    Shortcut { sequence: "N"; enabled: conversation.permissionKeysLive; onActivated: conversation.answerPermission(false) }
+    // Deliberately only the one-shot choices. #27 showed repeated prompting
+    // trains Allow into a reflex, and a held key that grants STANDING approval
+    // is the worst possible target for one -- so "always" is mouse-only (#53).
+    Shortcut {
+      sequence: "Y"
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("allow_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("allow_once"))
+    }
+    Shortcut {
+      sequence: "N"
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("reject_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("reject_once"))
+    }
     Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(-1, false) }
     Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(1, false) }
     Shortcut { sequence: "Ctrl+J"; onActivated: conversation.scrollActiveSurface(1, false) }
@@ -953,22 +942,35 @@ Item {
     queuedPrompt = ""
   }
 
+  // submit() clears prompt.text before calling this, so a silent return means
+  // the user watches /mechanic vanish with no explanation (#40). Unlike a
+  // prompt, a trust command is not queued and replayed -- saying so is enough.
   function setTrust(level) {
-    if (trustPending) return
-    if (agent.running && bridgeReady) {
-      trustPending = true
-      statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
-      agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
+    if (trustPending) {
+      statusText = "Still switching trust…"
+      return
     }
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    trustPending = true
+    statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
+    agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }
 
   function setPermissionMode(mode) {
-    if (permissionModePending) return
-    var next = mode === "yolo" ? "yolo" : "permission"
-    if (agent.running && bridgeReady) {
-      permissionModePending = true
-      agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
+    if (permissionModePending) {
+      statusText = "Still switching permission mode…"
+      return
     }
+    var next = mode === "yolo" ? "yolo" : "permission"
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    permissionModePending = true
+    agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
   }
 
   // A message from Nixi itself (a tour step), rendered like an agent reply --
@@ -982,6 +984,14 @@ Item {
   function askQuestion(text) {
     prompt.text = String(text)
     submit()
+  }
+
+  // A handed-over question that must not be sent for the user: it waits in
+  // the prompt until they press Enter (nixi#37).
+  function setPrompt(text) {
+    prompt.text = String(text)
+    prompt.cursorPosition = prompt.text.length
+    Qt.callLater(function() { prompt.forceActiveFocus() })
   }
 
   function appendReply(text, messageId) {
@@ -1108,20 +1118,48 @@ Item {
     queuedPrompt = ""
     steeringSupported = false
     steeringPending = false
+    // These gate setTrust() and setPermissionMode() and are cleared only by a
+    // trust/permission_mode event. A bridge that died mid-change never sends
+    // one, so without this the trust and YOLO controls are dead no-ops for the
+    // life of the conversation. close() does not need them: it destroys the
+    // object (Ask.qml:394), so its flags are never read again.
+    trustPending = false
+    permissionModePending = false
     statusText = "Starting agent…"
     agent.running = true
   }
 
-  function answerPermission(allow) {
+  // The agent offers the choices; the card renders them and reports back which
+  // one was picked. It used to send a boolean, which collapsed every answer to
+  // allow_once and threw away "allow always" entirely (#53).
+  function answerPermission(optionId) {
     if (pendingPermission.id === "" || !agent.running) return
-    var answeredId = pendingPermission.id
+    var option = root.optionById(optionId)
+    if (!option) return
     agent.write(JSON.stringify({
       type: "permission",
-      id: answeredId,
-      allow: allow
+      id: pendingPermission.id,
+      optionId: option.id
     }) + "\n")
     showNextPermission()
-    statusText = allow ? "Working…" : "Tool denied"
+    statusText = String(option.kind || "").indexOf("allow") === 0 ? "Working…" : "Tool denied"
+  }
+
+  function optionById(optionId) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].id === optionId) return options[i]
+    return null
+  }
+
+  // The id of the option with this kind, or "" when the agent offers none.
+  // Y and N bind through this rather than to button positions, so they stay on
+  // the one-shot choices however many options arrive.
+  function optionIdForKind(kind) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].kind === kind) return options[i].id
+    return ""
   }
 
   ListModel { id: messages }
@@ -1192,10 +1230,14 @@ Item {
     BorderSurface {
       id: card
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      readonly property int maxHeight: Math.min(Style.space(560), parent.height - Style.gapsOut * 2)
+      // The text sizes above multiply by root.fontScale; these did not, so
+      // Ctrl+= crammed larger text into the same 540px box -- the opposite of
+      // what zooming is for (#38). The parent bound is untouched, so however
+      // large the scale, nothing can exceed the screen.
+      readonly property int maxHeight: Math.min(Style.space(560) * root.fontScale, parent.height - Style.gapsOut * 2)
       readonly property int frameInset: Style.spacing.panelPadding * 2
       readonly property int headerInset: Style.space(8)
-      width: root.pinned ? parent.width : Math.min(Style.space(540), parent.width - Style.gapsOut * 2)
+      width: root.pinned ? parent.width : Math.min(Style.space(540) * root.fontScale, parent.width - Style.gapsOut * 2)
       height: root.pinned ? parent.height : Math.min(maxHeight, stack.height + frameInset)
       anchors.horizontalCenter: parent.horizontalCenter
       // Optical centre, not the mathematical one. A card placed at exactly
@@ -1348,7 +1390,15 @@ Item {
                 selectByMouse: true
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
-                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                // The URL and its visible label are both agent-authored, so the
+                // label need not describe where it goes, and xdg-open dispatches
+                // any other scheme to a registered handler (#42). Refusing
+                // silently would be worse than opening it: the user could not
+                // tell whether the click registered.
+                onLinkActivated: function(link) {
+                  if (TextFormat.openableLink(link)) Qt.openUrlExternally(link)
+                  else root.statusText = "Nixi did not open that link: only http and https links can be opened."
+                }
                 Keys.onPressed: function(event) {
                   if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
@@ -1896,7 +1946,7 @@ Item {
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b,
               root.trust === "guide" ? 0.42 : 0.78)
         font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.caption * root.fontScale
 
         MouseArea {
           anchors.fill: parent
@@ -1924,7 +1974,7 @@ Item {
           ? root.accent
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.36)
         font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.body * root.fontScale
         z: 10
 
         MouseArea {
@@ -2139,7 +2189,7 @@ Item {
             textFormat: Text.PlainText
             color: root.foreground
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.body * root.fontScale
             wrapMode: Text.Wrap
             maximumLineCount: 5
             elide: Text.ElideRight
@@ -2171,7 +2221,7 @@ Item {
               wrapMode: TextEdit.WrapAnywhere
               color: root.foreground
               font.family: "JetBrainsMono Nerd Font"
-              font.pixelSize: Style.font.caption
+              font.pixelSize: Style.font.caption * root.fontScale
             }
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
@@ -2184,7 +2234,7 @@ Item {
             textFormat: Text.PlainText
             color: Color.urgent
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap
           }
 
@@ -2194,32 +2244,39 @@ Item {
             text: root.permissionQueue.length + " more permission request" + (root.permissionQueue.length === 1 ? "" : "s") + " queued"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
           }
 
+          // One button per option the AGENT offered, in its own words. Only
+          // the agent knows what "always" scopes to -- this tool, this command
+          // pattern, this session, a persisted rule -- so inventing a label
+          // would assert a scope Nixi was never told (#53). An agent offering
+          // just allow_once/reject_once renders exactly the two buttons this
+          // card has always had.
           Row {
             width: parent.width
             spacing: Style.space(12)
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "N  Deny"
-              bordered: true
-              foreground: root.foreground
-              fontFamily: Style.font.family
-              fontSize: Style.font.body
-              onClicked: root.answerPermission(false)
-            }
+            Repeater {
+              model: root.pendingPermission.options || []
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "Y  Allow"
-              bordered: true
-              selected: true
-              foreground: root.accent
-              fontFamily: Style.font.family
-              fontSize: Style.font.body
-              onClicked: root.answerPermission(true)
+              Button {
+                required property var modelData
+                readonly property int count: Math.max(1, (root.pendingPermission.options || []).length)
+                readonly property bool isAllow: String(modelData.kind || "").indexOf("allow") === 0
+                readonly property bool isOnce: String(modelData.kind || "").indexOf("_once") > 0
+                width: (parent.width - parent.spacing * (count - 1)) / count
+                // Agent-authored, so plain text and bounded -- the same rule
+                // the detail pane above follows.
+                text: (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
+                  + String(modelData.label || modelData.id || "").slice(0, 48)
+                bordered: true
+                selected: isAllow && isOnce
+                foreground: isAllow && isOnce ? root.accent : root.foreground
+                fontFamily: Style.font.family
+                fontSize: Style.font.body * root.fontScale
+                onClicked: root.answerPermission(modelData.id)
+              }
             }
           }
 
@@ -2229,7 +2286,7 @@ Item {
             text: "Clear the message box to answer with Y or N"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap
           }
         }
@@ -2244,9 +2301,12 @@ Item {
     visible: root.opened && root.pinned
     title: root.windowTitle
     color: root.background
-    implicitWidth: 760
-    implicitHeight: 800
-    minimumSize: Qt.size(480, 420)
+    // The only unscaled pixel literals of consequence in the repo: they bypassed
+    // both Style.space() and fontScale, so on a 4K panel this was a postage
+    // stamp and at a large theme base-size the contents outgrew the frame (#38).
+    implicitWidth: Style.space(760) * root.fontScale
+    implicitHeight: Style.space(800) * root.fontScale
+    minimumSize: Qt.size(Style.space(480), Style.space(420))
 
     onVisibleChanged: {
       if (visible) {

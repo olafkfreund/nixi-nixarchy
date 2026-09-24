@@ -9,6 +9,7 @@
 , glib
 , python3
 , bash
+, jq
 , makeWrapper
   # Agent adapters are NOT bundled (see bridge/harness-policy.js resolveAdapter).
   # Pass nixpkgs' claude-agent-acp / codex-acp here to pin them; left null, the
@@ -126,6 +127,7 @@ stdenvNoCC.mkDerivation {
     done
     # Tour logic shared with the node tests, and the tour/learning data.
     install -Dm644 TourModel.js $plugin/TourModel.js
+    install -Dm644 TextFormat.js $plugin/TextFormat.js
     install -Dm644 share/tour.json $plugin/share/tour.json
     install -Dm644 share/learn.json $plugin/share/learn.json
     # The FAQ is searchable from the card, so it ships beside the QML.
@@ -200,7 +202,7 @@ stdenvNoCC.mkDerivation {
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
-    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js TextFormat.js \
              share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
@@ -209,6 +211,12 @@ stdenvNoCC.mkDerivation {
       test -s "$out/share/omarchy/plugins/${pluginId}-button/$f" \
         || { echo "the bar button plugin is missing $f"; exit 1; }
     done
+    # manifest.json is the single source `version` above is derived from; the
+    # button's copy is hand-maintained and nothing read it, so it was free to go
+    # stale at the next release (#56).
+    button_version=$(${jq}/bin/jq -r .version "$out/share/omarchy/plugins/${pluginId}-button/manifest.json")
+    [ "$button_version" = "${version}" ] \
+      || { echo "button/manifest.json says $button_version, the package is ${version}"; exit 1; }
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
     # Omarchy's validator rejects any symlink inside a plugin folder.
     links=$(find $plugin -type l)

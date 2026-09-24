@@ -408,6 +408,69 @@ def test_enable_card():
             path, mark, before, _, out = case(name, raw=raw)
             assert open(path).read() == before and not os.path.exists(mark), name + " file was edited"
 
+        # ---- #55 -------------------------------------------------------
+        # A malformed Omarchy defaults file is not the user's doing and must
+        # never fail their rebuild: return 0, write nothing, say what to do.
+        bad = os.path.join(root, "bad-defaults.json")
+        open(bad, "w").write("{not json")
+        d = os.path.join(root, "bad-src"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        run = subprocess.run([sys.executable, script, path, mark, card, button, bad],
+                             capture_output=True, text=True)
+        assert run.returncode == 0, "a malformed defaults file failed the activation"
+        assert not os.path.exists(path) and "Setup > Plugins" in run.stdout, run.stdout
+
+        # An unreadable argv, a missing argument, anything at all: still 0.
+        run = subprocess.run([sys.executable, script], capture_output=True, text=True)
+        assert run.returncode == 0 and "could not enable the card" in run.stdout, run.stdout
+
+        # barWidget.enable off, then on: the button must appear the second time.
+        # It was one-shot -- the marker was checked before the ids were looked at.
+        d = os.path.join(root, "button-later"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        json.dump(json.loads(json.dumps(user)), open(path, "w"), indent=2)
+        base = [sys.executable, script, path, mark, card]
+        subprocess.run(base + [""], check=True, capture_output=True)
+        after = json.load(open(path))
+        assert {"id": card} in after["plugins"] and {"id": button} not in after["bar"]["layout"]["center"]
+        subprocess.run(base + [button], check=True, capture_output=True)
+        after = json.load(open(path))
+        assert {"id": button} in after["bar"]["layout"]["center"], "barWidget.enable is still one-shot"
+
+        # The backup holds the bytes from BEFORE nixi first wrote, and is
+        # written once -- not overwritten with a copy nixi itself produced.
+        backup = path + ".bak-nixi"
+        assert os.path.exists(backup), "no backup was written"
+        assert json.loads(open(backup).read()) == user, "backup is not the original"
+
+        # A legacy marker means the card was handled. It must NOT be read as
+        # "nothing done": that would re-enable a card the user turned off.
+        d = os.path.join(root, "legacy-off"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        off = json.loads(json.dumps(user))
+        json.dump(off, open(path, "w"), indent=2)
+        os.makedirs(os.path.dirname(mark))
+        open(mark, "w").write("enabled once; delete to let nixi enable the card again\n")
+        before = open(path).read()
+        subprocess.run([sys.executable, script, path, mark, card, button], check=True, capture_output=True)
+        assert open(path).read() == before, "a legacy marker re-enabled a card the user turned off"
+
+        # ...but with the card still ON, a legacy marker plus a newly requested
+        # button does add the button. That is the #55 fix for existing machines.
+        d = os.path.join(root, "legacy-on"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        on = json.loads(json.dumps(user)); on["plugins"].append({"id": card})
+        json.dump(on, open(path, "w"), indent=2)
+        os.makedirs(os.path.dirname(mark))
+        open(mark, "w").write("enabled once; delete to let nixi enable the card again\n")
+        subprocess.run([sys.executable, script, path, mark, card, button], check=True, capture_output=True)
+        assert {"id": button} in json.load(open(path))["bar"]["layout"]["center"], \
+            "a legacy marker blocked the button for a card that is on"
+
+        # NOT covered by a test: the mtime re-check before atomic_write. It
+        # needs a write landing between two syscalls inside the script, which a
+        # subprocess test cannot interleave. Verified by reading the code only.
+
         d = os.path.join(root, "linked"); os.makedirs(d)
         real = os.path.join(root, "real.json"); json.dump(user, open(real, "w"))
         os.symlink(real, os.path.join(d, "shell.json"))
@@ -461,7 +524,20 @@ def test_nixi_launcher():
             assert "notify" in calls and "Setup > Plugins" in r.stderr, name + ": failed silently"
         r, calls = run(on, answers=False)
         assert r.returncode == 1 and "toggle" not in calls and "not answering" in r.stderr, (r.stderr, calls)
+        # --ask summons (never toggles) with the question as JSON the card can
+        # parse back exactly, quotes, backslash, newline and tab included (nixi#37).
+        question = 'say "hi" \\ back\nnow\tthen'
+        r, calls = run(on, args=("--ask", question))
+        marker = "shell summon %s " % card
+        summons = [l.partition(marker)[2] for l in calls.splitlines() if marker in l]
+        assert r.returncode == 0 and len(summons) == 1 and "toggle" not in calls, (r, calls)
+        assert json.loads(summons[0]) == {"action": "ask", "prompt": question}, summons[0]
+        r, calls = run(off, args=("--ask", "x"))
+        assert r.returncode == 1 and "summon" not in calls, (r, calls)
+        r, calls = run(on, args=("--ask",))
+        assert r.returncode == 64 and "summon" not in calls, (r, calls)
         print("  ok  nixi explains a card that is off instead of doing nothing")
+        print("  ok  nixi --ask hands the card a question as exact JSON")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -683,6 +759,60 @@ def test_tools_route():
     finally:
         shutil.rmtree(data, ignore_errors=True)
         shutil.rmtree(conf, ignore_errors=True)
+
+
+def test_unit_parity():
+    """CONTRIBUTING.md:52 makes install.py and nix/hm-module.nix parity a rule
+    and asks for a job that checks it. This is that check, in the place CI
+    already runs (checks.selfcheck) rather than a new job.
+
+    ExecStart and PATH are deliberately NOT compared: one path installs to
+    ~/.local/bin and the other to a store path, and no parity rule should
+    collapse that. What must match is ordering and restart policy -- the fields
+    that decide whether the unit works, and the ones that had drifted (#56)."""
+    units = os.path.join(ROOT, "systemd")
+    module = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+
+    def field(text, key):
+        m = re.search(r"^%s=(.*)$" % re.escape(key), text, re.M)
+        return m.group(1).strip() if m else None
+
+    watch = open(os.path.join(units, "nixi-watch.service")).read()
+    # The file version started at default.target, so the watcher ran before the
+    # shell existed, failed, and burned its start limit -- dead for the session.
+    for key, want in (("PartOf", "graphical-session.target"),
+                      ("After", "graphical-session.target"),
+                      ("WantedBy", "graphical-session.target"),
+                      ("Restart", "on-failure"),
+                      ("RestartSec", "2"),
+                      ("Type", "exec")):
+        got = field(watch, key)
+        assert got == want, "nixi-watch.service %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    timer = open(os.path.join(units, "nixi-manual.timer")).read()
+    for key, want in (("Persistent", "true"), ("RandomizedDelaySec", "6h"),
+                      ("WantedBy", "timers.target")):
+        got = field(timer, key)
+        assert got == want, "nixi-manual.timer %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    manual = open(os.path.join(units, "nixi-manual.service")).read()
+    assert field(manual, "Type") == "oneshot" and '"oneshot"' in module
+
+    # The button's version is hand-maintained beside the package's single
+    # source; nix/package.nix asserts they match at build time, and this catches
+    # it before a build is even attempted.
+    top = json.load(open(os.path.join(ROOT, "manifest.json")))
+    button = json.load(open(os.path.join(ROOT, "button", "manifest.json")))
+    assert top["version"] == button["version"], \
+        "button/manifest.json is %s, manifest.json is %s" % (button["version"], top["version"])
+
+    # A comment describing an assertion that does not exist is worse than none.
+    flake = open(os.path.join(ROOT, "flake.nix")).read()
+    assert "assets non-empty" not in flake, "flake.nix claims an assertion that is not there"
+
+    print("  ok  the two unit definitions agree, and the versions do too")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 # omarchy:hidden=true
 """Grounding for the Nixi overlay.
 
-The overlay's bridge runs this before each prompt and prepends what it prints,
+The overlay's bridge runs this before each prompt and appends what it prints,
 so most questions are answered from the local nixarchy + Omarchy manual copy
 without the agent spending tool calls searching for it. Prints nothing, and
 exits 0, when nothing matches well enough -- a bad excerpt is worse than none.
