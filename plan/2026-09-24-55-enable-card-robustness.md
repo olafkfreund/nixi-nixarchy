@@ -75,6 +75,40 @@ Runtime, on a live machine:
    `home-manager switch` must succeed with a message. Before this change the
    whole activation fails.
 
+## Deviations, found during implementation
+
+**The spec's migration reasoning was wrong, and the existing test caught it.**
+
+The spec said "migration falls out of idempotency: an old prose marker does not
+parse, so it compares unequal and triggers exactly one harmless re-run". It is
+not harmless. `enable()` is idempotent only while the card is still ON. The
+marker is what makes turning the card OFF in Setup stick (nixarchy#709), so
+re-running against a user who disabled it **re-enables it** --
+`tools/test_nixi.py:398` asserts exactly that must not happen, and it failed.
+
+Three changes followed:
+
+1. **Three marker states, not two.** `None` (no marker), `LEGACY_MARKER` (written
+   by an older nixi), or a set of ids. A legacy marker means "the card was
+   handled", which is what the old code actually recorded.
+2. **An explicit header, not a guessed format.** The first attempt inferred "no
+   spaces means an id list", which read the test's dummy `x` marker as an id and
+   re-enabled the card. Markers now start `nixi-enabled-ids-v1`; anything else
+   is legacy. The spec's "no version field" decision was wrong -- inferring the
+   shape of a file the user relies on is how a safety marker becomes a bug.
+3. **The button follows the card.** With a legacy marker and a newly requested
+   button, the card must not be re-added -- but adding its bar button to a card
+   the user turned off is equally wrong, and a button for a disabled card is
+   useless anyway. The button is added only when the card is being added or is
+   already in `plugins`. `enable()` gained a `card` guard so it can skip it,
+   mirroring the guard `button` already had.
+
+**One test was removed for being vacuous.** A "raced" block asserted
+`"raced" in raced_before`, which is trivially true -- coverage in appearance
+only. The mtime re-check is genuinely untestable from a subprocess test, since
+it needs a write landing between two syscalls inside the script, and that gap is
+now recorded in the test file rather than papered over.
+
 ## Rollback
 
 `git revert` the implementation commit. Two tails to know about:
