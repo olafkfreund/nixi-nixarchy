@@ -72,6 +72,19 @@ Item {
   property var fileOpenCommand: []
   property var fileEditCommand: []
   property bool harnessSelectorOpen: false
+
+  // #38: has anything in this conversation earned a wider card? Set from the
+  // text, never from geometry, and never cleared mid-conversation -- close()
+  // resets it. A one-line exchange stays compact; a long prompt, a fenced code
+  // block or a table gets the room it needs.
+  property bool contentWantsRoom: false
+  readonly property int roomyThreshold: 420
+  function noteContentWidth(body) {
+    if (contentWantsRoom) return
+    var text = String(body || "")
+    if (text.length > roomyThreshold || text.indexOf("```") >= 0 || text.indexOf("\n|") >= 0)
+      contentWantsRoom = true
+  }
   property string agentName: ""
   property string modelName: ""
   property string reasoningEffort: ""
@@ -210,6 +223,7 @@ Item {
     searchMode = ""
     prompt.text = ""
     messages.clear()
+    contentWantsRoom = false
     closed()
   }
 
@@ -642,6 +656,7 @@ Item {
     onBrowseRequested: function(mode, query) { root.enterSearchMode(mode, query) }
     onFaqAnswered: function(question, answer) {
       messages.append({ role: "You", body: question })
+      noteContentWidth(question)
       root.showNixiMessage(answer)
     }
     onNixiActionRequested: function(action) {
@@ -911,6 +926,7 @@ Item {
       statusText = "Steering…"
       prompt.text = ""
       messages.append({ role: "You", body: text })
+      noteContentWidth(text)
       activeReply = messages.count
       activeReplyMessageId = ""
       messages.append({ role: "Claude", body: "" })
@@ -926,6 +942,7 @@ Item {
     queuedPrompt = text
     prompt.text = ""
     messages.append({ role: "You", body: text })
+    noteContentWidth(text)
     var promptIndex = messages.count - 1
     activeReply = messages.count
     activeReplyMessageId = ""
@@ -1006,7 +1023,9 @@ Item {
       messages.append({ role: "Claude", body: "" })
     }
     if (nextMessageId !== "") activeReplyMessageId = nextMessageId
-    messages.setProperty(activeReply, "body", (messages.get(activeReply).body || "") + text)
+    var grown = (messages.get(activeReply).body || "") + text
+    messages.setProperty(activeReply, "body", grown)
+    root.noteContentWidth(grown)
     if (pinTail) root.pinComposerToEnd()
     else if (followTail) Qt.callLater(root.scrollToEnd)
   }
@@ -1268,10 +1287,23 @@ Item {
       // Ctrl+= crammed larger text into the same 540px box -- the opposite of
       // what zooming is for (#38). The parent bound is untouched, so however
       // large the scale, nothing can exceed the screen.
-      readonly property int maxHeight: Math.min(Style.space(560) * root.fontScale, parent.height - Style.gapsOut * 2)
+          // #38: the ceiling follows the screen instead of a fixed 560, so a long
+      // answer on a 1440p or 2160p panel is not squeezed into a third of it.
+      readonly property int maxHeight: Math.min(Math.round(parent.height * 0.85), parent.height - Style.gapsOut * 2)
+      readonly property int compactWidth: Style.space(540) * root.fontScale
+      readonly property int roomyWidth: Math.min(Style.space(1000) * root.fontScale,
+                                                 Math.round(parent.width * 0.7))
       readonly property int frameInset: Style.spacing.panelPadding * 2
       readonly property int headerInset: Style.space(8)
-      width: root.pinned ? parent.width : Math.min(Style.space(540) * root.fontScale, parent.width - Style.gapsOut * 2)
+      // Width grows only when the CONTENT asks for it, never from a measured
+      // height. Measuring would loop: wider wraps less, so the card shortens,
+      // so it would narrow, so it lengthens again. root.contentWantsRoom is
+      // computed from the message text itself, so the layout cannot feed back
+      // into it -- and it is monotonic within a conversation, so the card
+      // cannot oscillate even at a threshold.
+      width: root.pinned ? parent.width
+        : Math.min(root.contentWantsRoom ? roomyWidth : compactWidth, parent.width - Style.gapsOut * 2)
+      Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
       height: root.pinned ? parent.height : Math.min(maxHeight, stack.height + frameInset)
       anchors.horizontalCenter: parent.horizontalCenter
       // Optical centre, not the mathematical one. A card placed at exactly
