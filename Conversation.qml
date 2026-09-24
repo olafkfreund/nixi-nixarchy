@@ -1062,6 +1062,17 @@ Item {
         steeringPending = false
         statusText = String(event.message || "Could not steer the active turn")
         Qt.callLater(function() { prompt.forceActiveFocus() })
+      } else if (event.type === "learned") {
+        // The tutor recorded something about this machine. The write used to be
+        // invisible: hidden from the transcript, appended to LEARNED.md, and
+        // fed back into every later prompt with no way for the user to notice
+        // or correct it (#51). Agent-authored text, so it renders through the
+        // same spacedMarkdown path as a reply -- bounded at 300 chars by
+        // learned.js, with uncontained images and non-http links already
+        // stripped there (#42).
+        var facts = event.facts || []
+        for (var f = 0; f < facts.length; f++)
+          showNixiMessage("Noted: " + String(facts[f]))
       } else if (event.type === "status") {
         statusText = String(event.text || "Working…")
       } else if (event.type === "tool") {
