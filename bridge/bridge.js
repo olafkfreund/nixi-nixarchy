@@ -149,8 +149,24 @@ else if (agentName === "claude")
   childEnvironment.CLAUDE_CODE_EXECUTABLE = startupValue(() => resolveExecutable(agentName));
 // Replaces any value from the environment: Nixi's permission rules are what
 // make Guide safe with OpenCode, so the user's env must not be able to weaken them.
-if (agentName === "opencode")
+if (agentName === "opencode") {
   childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(opencodePermissions(askBeforeReading));
+  // ...and the cwd must not be able to weaken them either (#63). The agent's
+  // cwd is ~/.config/nixi, which is unmanaged, so OpenCode was reading a second
+  // config layer from a directory the agent can write to. Nixi's rules do not
+  // win against it: an `opencode.json` there introduces `bash`/`edit`/`write`,
+  // the keys the `"*": "ask"` wildcard never names, and a named key beats the
+  // wildcard -- while a `.opencode/agent/*.md` permission block is appended
+  // AFTER Nixi's rules, and the last matching rule is the one that applies, so
+  // it overrides even `plan_exit: "deny"`. Both make a write produce no
+  // permission request at all, which is precisely what Guide cannot cancel.
+  //
+  // This is #66's answer in OpenCode's dialect: remove the capability rather
+  // than police a path. It drops only the cwd-derived layer -- the user's own
+  // ~/.opencode and ~/.config/opencode still load, so it constrains the AGENT
+  // against itself and leaves what the PERSON configured alone.
+  childEnvironment.OPENCODE_DISABLE_PROJECT_CONFIG = "1";
+}
 if (agentName === "codex") {
   let codexConfig = {};
   try { codexConfig = JSON.parse(process.env.CODEX_CONFIG || "{}"); } catch {}
