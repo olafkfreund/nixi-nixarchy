@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 76
 intent: intent/2026-09-25-76-pin-adapter-commands.md
 ---
@@ -57,8 +57,10 @@ unconditional and there is no code path around it.
 
 ## A more severe instance of the same defect, found while specifying this
 
-**This is a scope question for the approver. It is not covered by the approved
-intent and is not included in the change above.**
+**Resolved by the approver on 2026-09-25: option 2 — filed as its own issue and
+done next. It stays out of this change.** Kept here because it is the reason
+that issue exists, and because a reviewer of this diff should know what it
+deliberately does not close.
 
 `Conversation.qml:178-192` resolves the command that runs the bridge:
 
@@ -86,12 +88,12 @@ touches it. Closing it needs a change in `Conversation.qml` — either ignoring
 the variable when the substituted default is present, or gating it behind the
 same `HUGINN_INTERNAL` style internal marker already in that argv.
 
-Three ways forward, for the approver to pick:
+Three ways forward were considered; **option 2 was chosen**:
 
 1. **Fold into this change.** One issue, one fix, but the diff stops being a
    four-word Nix change and needs a QML change plus a `tools/test_nixi.py`
    string assertion, since CI never executes QML.
-2. **Separate issue, done next.** Keeps this change trivially reviewable.
+2. **Separate issue, done next. CHOSEN.** Keeps this change trivially reviewable.
    Recommended — it is a different file, a different mechanism and a different
    test strategy, and leaving it unfixed does not make the Nix pin wrong.
 3. **Leave it.** Only defensible under the "anything that writes `~/.bashrc`
