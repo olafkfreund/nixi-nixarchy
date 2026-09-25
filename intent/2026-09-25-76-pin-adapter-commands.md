@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 76
 author: olafkfreund
 ---
@@ -72,22 +72,31 @@ adapter with a message naming what to install.
 
 ## Open questions
 
-1. **Does `NIXI_ACP_COMMAND` stay honoured?** It is the any-agent wildcard and
-   is what the test harness uses. `nix/package.nix` never sets it, so hard
-   pinning the three per-agent variables already makes it dead on a Nix
-   deployment (the per-agent name is checked first in
-   `harness-policy.js:adapterOverride`). Leaving it in place keeps the tests
-   working unchanged. The alternative — honouring it only when no per-agent
-   variable is set — is what the code already does, so I believe the answer is
-   "no change needed", but it deserves an explicit yes.
+All three answered by the approver on 2026-09-25; recorded here so the spec
+carries them without reopening the discussion.
 
-2. **Does `NIXI_CONTEXT_COMMAND` get the same treatment?** I think yes and the
-   issue does not ask for it, which is why it is a question rather than an
-   assumption.
+1. **Does `NIXI_ACP_COMMAND` stay honoured?** **Yes, unchanged.** It is the
+   any-agent wildcard and the one the test harness uses. `nix/package.nix`
+   never sets it, and `harness-policy.js:adapterOverride` checks the per-agent
+   name first, so hard-pinning the three per-agent variables already makes the
+   wildcard unreachable on a Nix deployment. It keeps working for `PATH`-based
+   installs, which is the documented escape route anyway. No code change, and
+   `bridge/testing/run-bridge.js` keeps its injection mechanism.
 
-3. **Is losing the env-var route for adapter development acceptable?** This is
-   the real cost and the reason the current code chose otherwise. A developer
-   would use `services.nixi.package = pkgs.nixi.override { claudeAcp = …; }`.
+2. **Does `NIXI_CONTEXT_COMMAND` get the same treatment?** **Yes, pin it too.**
+   Same mechanism, and the more insidious of the two: it replaces
+   `nixi-context`, so it does not change who the agent is, it changes what the
+   agent is told is true. The issue does not mention it; it came out of reading
+   the built wrapper. Fixing three doors of four would be odd.
+
+3. **Is losing the env-var route for adapter development acceptable?**
+   **Yes — accepted, with the substitute documented.** Adapter developers use
+   `services.nixi.package = pkgs.nixi.override { claudeAcp = myBuild; }`, which
+   is where every other Nix-level choice is already made. An opt-in
+   `allowCommandOverride` escape hatch was considered and **rejected**: a
+   setting whose only purpose is to reopen a security hole gets switched on and
+   forgotten, and it would leave a conditional path through the guarantee. The
+   pin is unconditional.
 
 ## Note on severity
 
