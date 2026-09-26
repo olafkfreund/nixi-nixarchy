@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 79
 intent: intent/2026-09-26-79-drop-huginn-internal.md
 ---
