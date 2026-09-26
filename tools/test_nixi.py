@@ -962,6 +962,40 @@ def test_one_ack_shape():
     print("  ok  one ack shape, one place to clear it")
 
 
+def test_bridge_command_is_pinned():
+    """#77: the environment cannot choose what runs the bridge.
+
+    The bridge is where trust-policy.js is applied and where Guide cancels
+    permissions, so substituting its interpreter does not change what is
+    enforced -- it removes the enforcement while the card keeps showing the
+    trust badge. CI never executes QML, so this string check is the only guard
+    there is.
+    """
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    command = re.search(r"^\s*readonly property var bridgeCommand:.*?\]$",
+                        card, re.M | re.S).group(0)
+
+    # --replace-fail in nix/package.nix needs this literal to substitute. If it
+    # moves, the build fails rather than silently shipping an unpinned card.
+    assert '"node"' in command, \
+        "bridgeCommand lost its bare node literal -- nix/package.nix cannot pin it"
+
+    for forbidden in ("NIXI_BRIDGE_COMMAND", "Quickshell.env", "JSON.parse"):
+        assert forbidden not in command, \
+            "bridgeCommand reads %r -- the environment must not choose the interpreter" % forbidden
+
+    # Ignoring it silently would make a deployment's behaviour change a mystery,
+    # so the card has to say so. The variable is named in the notice and in the
+    # read-only property that feeds it; what matters is that it is stated
+    # somewhere and reaches no command.
+    assert "NIXI_BRIDGE_COMMAND" in card, \
+        "nothing mentions NIXI_BRIDGE_COMMAND -- an ignored override must be stated, not forgotten"
+    assert "ignoredBridgeOverride" in card, \
+        "the card no longer reports an ignored NIXI_BRIDGE_COMMAND"
+
+    print("  ok  the bridge command is pinned by the build")
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -161,6 +161,12 @@ Item {
   // with no user action (#42). TextFormat rewrites any image that is not a
   // contained local file to its alt text before it can reach the renderer.
   readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
+
+  // Read only so the card can SAY it ignored this, never to build a command
+  // from it (#77). A deployment that set it would otherwise change behaviour
+  // with no signal; naming the variable turns that into a message.
+  readonly property string ignoredBridgeOverride:
+    String(Quickshell.env("NIXI_BRIDGE_COMMAND") || "").trim()
   function spacedMarkdown(text) {
     return TextFormat.spacedMarkdown(text, root.imageRoot)
   }
@@ -175,21 +181,25 @@ Item {
     agent.running = true
   }
 
-  readonly property var bridgeCommand: {
-    var raw = String(Quickshell.env("NIXI_BRIDGE_COMMAND") || "").trim()
-    var prefix = []
-    if (raw !== "") {
-      try { prefix = JSON.parse(raw) } catch (error) { prefix = [] }
-    }
-    // Preserve the historical PATH lookup when no platform command is
-    // supplied. Omarchy deployments can provide any argv prefix explicitly.
-    if (!Array.isArray(prefix) || prefix.length === 0) prefix = ["node"]
-    return ["env", "HUGINN_INTERNAL=1", "NIXI_AGENT=" + agentName,
-      "NIXI_MODEL=" + modelName,
-      "NIXI_REASONING_EFFORT=" + reasoningEffort].concat(prefix).concat([
-      root.bridgeScript("bridge.js")
-    ])
-  }
+  // The interpreter is fixed by the install: nix/package.nix substitutes the
+  // bare node literal below with the pinned bridge/nixi-node, exactly as it
+  // does for MenuSearch.qml. Keep it bare and quoted -- --replace-fail is what
+  // stops the pin being lost silently, and it fails the build if it moves.
+  // (Written without quotes here on purpose: the substitution rewrites every
+  // occurrence in this file, including ones inside comments.)
+  //
+  // NIXI_BRIDGE_COMMAND is deliberately NOT honoured (#77). It replaced this
+  // prefix outright, and the bridge is what applies trust-policy.js and
+  // cancels permissions in Guide, so substituting it does not change what is
+  // enforced -- it removes the enforcement while the card goes on displaying
+  // the trust badge. No escape hatch is offered, because anything the card can
+  // read from its environment an rc file can set: the card and the shell share
+  // one. A deployment needing a different interpreter overrides the package,
+  // the same answer as the adapter commands (#76).
+  readonly property var bridgeCommand: ["env", "HUGINN_INTERNAL=1",
+    "NIXI_AGENT=" + agentName, "NIXI_MODEL=" + modelName,
+    "NIXI_REASONING_EFFORT=" + reasoningEffort,
+    "node", root.bridgeScript("bridge.js")]
 
   function requestCompletionAttention() {
     // FloatingWindow is a Quickshell wrapper, not a QWindow. The standard
@@ -956,7 +966,9 @@ Item {
     messages.append({ role: "Claude", body: "" })
     if (followTail) Qt.callLater(function() { root.anchorPrompt(promptIndex) })
     if (bridgeReady) sendQueuedPrompt()
-    else statusText = "Starting agent…"
+    else statusText = root.ignoredBridgeOverride === ""
+      ? "Starting agent…"
+      : "Ignoring NIXI_BRIDGE_COMMAND: the bridge command is fixed by this install."
   }
 
   function sendQueuedPrompt() {
