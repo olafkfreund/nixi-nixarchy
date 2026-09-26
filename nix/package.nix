@@ -46,15 +46,32 @@ let
   };
 
   # The node the plugin runs everything with. When adapters are given, their
-  # store paths become the bridge's defaults; --set-default keeps NIXI_* from the
-  # environment in charge.
+  # store paths are PINNED with --set, not offered as defaults: the environment
+  # cannot redirect what Nixi launches as the agent (#76).
+  #
+  # --set-default writes `export VAR=${VAR-store-path}`, which any exported
+  # variable beats -- a line in ~/.bashrc, ~/.zshrc or ~/.config/environment.d
+  # is enough. That does not merely change a setting: trust levels, the rules in
+  # bridge/trust-policy.js and Guide's cancel are all enforced by the bridge
+  # against whatever it spawned, and none of them constrain a substituted binary,
+  # because that binary decides what to report back.
+  #
+  # To develop an adapter locally, override the package rather than the
+  # environment: services.nixi.package = pkgs.nixi.override { claudeAcp = …; }.
+  # There is deliberately no option to re-enable the environment route; a
+  # setting whose only purpose is to reopen this gets switched on and left on.
+  #
+  # NIXI_ACP_COMMAND is untouched. nothing here sets it, and adapterOverride in
+  # bridge/harness-policy.js reads the per-agent name first, so pinning these
+  # makes the wildcard unreachable on a Nix deployment while it keeps working
+  # for PATH installs and for bridge/testing/run-bridge.js.
   adapterFlags = lib.concatStringsSep " " (
     lib.optional (claudeAcp != null)
-      "--set-default NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
+      "--set NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
     ++ lib.optional (codexAcp != null)
-      "--set-default NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
+      "--set NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
     ++ lib.optional (opencodeAcp != null)
-      "--set-default NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
+      "--set NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
   );
 in
 stdenvNoCC.mkDerivation {
@@ -156,7 +173,7 @@ stdenvNoCC.mkDerivation {
     # NIXI_CONTEXT_COMMAND: the Omarchy shell's PATH does not include this
     # package, so the bridge is told where its grounding CLI is.
     makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags} \
-      --set-default NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
+      --set NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
 
     # The bar button is a SECOND plugin: Omarchy gives a third-party plugin
     # either a bar widget or an overlay, never both (shell.qml
@@ -238,6 +255,18 @@ stdenvNoCC.mkDerivation {
     ! test -e $plugin/bridge/testing || { echo "bridge/testing leaked into the plugin"; exit 1; }
     grep -q 'NIXI_CONTEXT_COMMAND' $plugin/bridge/nixi-node \
       || { echo "the bridge is not told where nixi-context is"; exit 1; }
+    # ...and told UNCONDITIONALLY (#76). The check above passes for both
+    # spellings, because --set and --set-default both emit the variable name;
+    # only --set-default emits the shell default-expansion form, so `=[$][{]`
+    # is what tells them apart. Without this, reverting to --set-default would
+    # reopen the hole with every test still green.
+    #
+    # The character classes are not decoration. Written `=''${`, the `$` is an
+    # ERE anchor and `{` opens an interval, so the pattern matches NOTHING and
+    # the check silently passes whatever the wrapper says. That is exactly the
+    # failure this guards against, and only a negative test caught it.
+    ! grep -qE 'NIXI_(CLAUDE_ACP|CODEX_ACP|OPENCODE|CONTEXT)_COMMAND=[$][{]' $plugin/bridge/nixi-node \
+      || { echo "an adapter or context command is still overridable from the environment"; exit 1; }
     # Every program launched by name was pinned.
     ! grep -nE '"(node|gjs)"' $plugin/*.qml \
       || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }
