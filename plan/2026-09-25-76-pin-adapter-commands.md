@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 76
 spec: spec/2026-09-25-76-pin-adapter-commands.md
 ---
