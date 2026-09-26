@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 77
 intent: intent/2026-09-26-77-pin-bridge-command.md
 ---
