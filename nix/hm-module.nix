@@ -47,7 +47,23 @@ in
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
       defaultText = lib.literalExpression "nixi.packages.\${system}.nixi";
-      description = "The Nixi package to use.";
+      description = ''
+        The Nixi package to use.
+
+        This is also where a locally built ACP adapter goes. The adapter and
+        grounding commands are pinned into the package at build time and
+        cannot be redirected with `NIXI_*_COMMAND` environment variables
+        (#76): the environment must not be able to change what Nixi launches
+        as the agent, because the trust levels and permission rules are
+        enforced by the bridge against whatever it spawned.
+
+        ```nix
+        services.nixi.package = pkgs.nixi.override { claudeAcp = myBuild; };
+        ```
+
+        An install that resolves its adapter from `PATH` rather than from Nix
+        is unaffected.
+      '';
     };
 
     agents = lib.mkOption {
