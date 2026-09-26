@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 79
 author: olafkfreund
 ---
@@ -83,13 +83,29 @@ behaviour changes, because nothing read it.
 
 ## Open questions
 
-1. **Does anything outside this repository read it?** Upstream Omarchy is the
-   place to check. If something does, this becomes "document it at both sites"
-   rather than "remove it", and that is a different change.
-2. **Is `env` still needed in the argv?** With the marker gone the prefix still
-   carries `NIXI_AGENT`, `NIXI_MODEL` and `NIXI_REASONING_EFFORT`, so yes —
-   but worth stating so nobody removes the wrapper along with the variable.
-3. **Does the test assertion belong here at all?** Asserting the *absence* of a
-   string is a weak test that will annoy someone later. The alternative is to
-   delete it and rely on review. I lean towards including it, because CI cannot
-   see QML at all and this file has now been edited three times in two days.
+Answered before the spec, on 2026-09-26.
+
+1. **Does anything outside this repository read it?** **No.** Two independent
+   trees searched, each with a positive control so a silent miss would show:
+   - `omarchy-4.0.4` as packaged — **1489 files, 0 matches**, case-insensitive.
+   - the resolved shell tree quickshell actually runs (`$OMARCHY_PATH`,
+     following symlinks) — **1407 files, 0 matches**; control: 90 of the first
+     200 files match `omarchy`, so the search was really reading them.
+
+   This matters because my first attempt at this check searched the unresolved
+   tree, which is a symlink farm of **2 entries**, and reported a clean "no
+   matches" that meant nothing. A second attempt then used `grep -l … -L`,
+   where `-L` silently inverts `-l` and lists files *without* the match — it
+   printed two filenames that looked like hits and were the opposite. Both are
+   recorded because the conclusion here is a negative, and a negative is only
+   as good as the instrument that produced it.
+
+   So: remove, not document.
+
+2. **Is the `env` prefix still needed?** Yes. It still carries `NIXI_AGENT`,
+   `NIXI_MODEL` and `NIXI_REASONING_EFFORT`. Only the one assignment goes.
+
+3. **Does the absence assertion belong in `tools/test_nixi.py`?** Yes.
+   Asserting a string is absent is a weak test, but CI cannot execute QML at
+   all, and `Conversation.qml` has been edited three times in two days. The
+   cost is one line; the thing it prevents is the marker quietly coming back.
