@@ -41,6 +41,12 @@ Implementable without opening the intent or spec.
    concatenated — or `--replace-fail` at `nix/package.nix:175` fails the build.
    → verify by step 5's build and by `grep -c '"node"' Conversation.qml` ≥ 1.
 
+   **Second deviation.** The comment above the expression must not contain the
+   quoted literal either: `substituteInPlace` rewrites *every* occurrence in
+   the file, so a comment mentioning it verbatim ends up quoting a store path
+   in the shipped plugin. The comment says so, and refers to the literal
+   without quoting it.
+
 2. **`Conversation.qml` — add the read-only property** next to the other
    environment reads (near `imageRoot`, around `:163`):
 
@@ -77,8 +83,18 @@ Implementable without opening the intent or spec.
      `--replace-fail` still has its anchor;
    - it contains none of `NIXI_BRIDGE_COMMAND`, `Quickshell.env`, `JSON.parse`,
      so no environment value can reach the command;
-   - `Conversation.qml` mentions `NIXI_BRIDGE_COMMAND` exactly **once** — the
-     notice — so the ignore is stated rather than forgotten.
+   - `Conversation.qml` still mentions `NIXI_BRIDGE_COMMAND` **somewhere** and
+     defines `ignoredBridgeOverride`, so the ignore is stated rather than
+     forgotten.
+
+   **Deviation from the drafted plan, recorded here per the workflow.** This
+   bullet originally said "exactly once — the notice". Implementing it, the
+   variable is legitimately named three times: the read-only property that
+   feeds the message, the comment explaining why it is not honoured, and the
+   message itself. A count assertion would forbid explaining the decision in a
+   comment, which is the opposite of what this change wants. What matters is
+   that it is *stated somewhere* and *reaches no command*, and the two
+   assertions above already pin the second half.
 
    → verify by step 7, including the negative test.
 
