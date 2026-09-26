@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 74
 author: olafkfreund
 ---
@@ -66,18 +66,37 @@ does not exist.
 
 ## Open questions
 
-1. **Refuse to start, or warn and continue?** Refusing is the stronger
-   guarantee and the ruder default; warning keeps the card usable while making
-   the situation visible. The file is inert unless the directory is also
-   trusted, which argues for warning — but the warning is only useful if
-   someone reads it, and the card's `diagnostic` stream is not prominent.
-2. **Warn for every agent, or only Codex?** Only codex reads that path, so a
-   warning under Claude or OpenCode is noise — but a file appearing there is
-   worth knowing about whichever agent is selected, precisely because it is
-   unexplained.
-3. **Does the check belong at the same place as the residual variables?**
-   `NIXI_DIR`, `NIXI_FALLBACK_DIR`, `NIXI_DATA` and `NIXI_CWD` remain
-   environment-settable after #76 and #77. If the cwd is redirected by
-   `NIXI_CWD`, this check follows it, which is correct — but it is worth
-   deciding whether those variables deserve the same treatment rather than
-   leaving them noted in a spec nobody reopens.
+Answered by the approver on 2026-09-26.
+
+1. **Refuse to start, or warn and continue?** **Warn and continue.** The file
+   is inert unless the directory is also trusted, so refusing would block
+   sessions that are provably safe. A `diagnostic` naming the path, once, at
+   startup.
+
+2. **Every agent, or only Codex?** **Every agent.** Only codex reads that path,
+   but a file appearing in a directory Nixi owns and never writes is worth
+   surfacing whichever agent is selected — and it is one branch fewer.
+
+3. **Do the residual path variables get the same treatment?** **Yes — folded
+   into this change**, rather than filed separately as I proposed:
+   `NIXI_DIR`, `NIXI_FALLBACK_DIR`, `NIXI_DATA`, `NIXI_CWD`.
+
+   **Correction to what I told the approver while asking.** I said `NIXI_CWD`
+   is used by `bridge/testing/run-bridge.js` and that pinning it "needs care".
+   It is not: `grep -c NIXI_CWD bridge/testing/run-bridge.js` is **0**, and the
+   only reader is `bridge.js:43`. The heavy `NIXI_CWD` use during this
+   investigation was in ad-hoc probes, not the test suite, and I conflated the
+   two while writing the option. The caution was attached to the option that
+   was chosen, so it is corrected here rather than quietly dropped.
+
+   The real constraints, checked:
+   - `NIXI_DIR` and `NIXI_DATA` **are** set by `tools/test_nixi.py:81,767`,
+     but that test imports `bin/nixi-context` as a module and sets them in its
+     own process — a wrapper `--set` never reaches it.
+   - `NIXI_FALLBACK_DIR` is the only one the wrapper sets today
+     (`--set-default`, `nix/package.nix:115`).
+   - `NIXI_CWD`, `NIXI_DIR` and `NIXI_DATA` are set by nothing in the build.
+
+   So the spec has to decide, per variable, whether the build should pin a
+   value at all — which is a different question from flipping an existing
+   `--set-default`, and is the substance of this half.
