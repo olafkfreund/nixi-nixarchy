@@ -196,7 +196,7 @@ Item {
   // read from its environment an rc file can set: the card and the shell share
   // one. A deployment needing a different interpreter overrides the package,
   // the same answer as the adapter commands (#76).
-  readonly property var bridgeCommand: ["env", "HUGINN_INTERNAL=1",
+  readonly property var bridgeCommand: ["env",
     "NIXI_AGENT=" + agentName, "NIXI_MODEL=" + modelName,
     "NIXI_REASONING_EFFORT=" + reasoningEffort,
     "node", root.bridgeScript("bridge.js")]
