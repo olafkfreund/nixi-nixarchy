@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 77
 author: olafkfreund
 ---
@@ -102,19 +102,24 @@ working exactly as now.
 
 ## Open questions
 
+All three answered by the approver on 2026-09-26.
+
 1. **Ignore the variable entirely, or keep an explicit deployment escape?**
-   Deleting the branch makes `Conversation.qml` match `MenuSearch.qml` and is
-   the smallest, most consistent change. Keeping an escape means designing one
-   that an rc file cannot reach, which on a desktop session is hard to do
-   honestly — the card and the shell share an environment.
+   **Ignore it entirely.** The branch is deleted and the interpreter comes from
+   the substituted `"node"` literal, exactly as `MenuSearch.qml` already does.
+   No escape is designed: on a desktop session the card and the shell share an
+   environment, so an "escape an rc file cannot reach" cannot be built honestly.
+   A deployment that needs a different interpreter overrides the package, the
+   same answer #76 settled on.
 
-2. **If ignored, should it be silent or visible?** A deployment that sets it
-   today would change behaviour with no signal. A `diagnostic` event naming the
-   ignored variable costs little and turns a mystery into a message.
+2. **If ignored, silent or visible?** **Visible.** A deployment that sets the
+   variable today would otherwise change behaviour with no signal. The card
+   says once that it ignored it, naming the variable, so the behaviour is a
+   message rather than a mystery.
 
-3. **Does `HUGINN_INTERNAL` get removed here or separately?** It is unrelated
-   dead code that happens to sit in the same expression. My inclination is to
-   leave it and file it, so this change stays about the security boundary.
+3. **Does `HUGINN_INTERNAL` get removed here or separately?** **Separately.**
+   It is unrelated dead code that happens to share the expression, and this
+   change stays about the security boundary. Filed as its own issue.
 
 ## Note
 
