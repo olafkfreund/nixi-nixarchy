@@ -112,7 +112,7 @@ stdenvNoCC.mkDerivation {
     # The overlay's bridge runs nixi-context before every prompt; with nothing
     # in ~/.config/nixi it must still find the bundled knowledge.
     wrapProgram $out/bin/nixi-context \
-      --set-default NIXI_FALLBACK_DIR $out/share/nixi
+      --set NIXI_FALLBACK_DIR $out/share/nixi
 
     install -Dm755 bin/nixi $out/bin/nixi
     # `nixi` only asks the running Omarchy shell to open the card, so it needs
@@ -267,6 +267,12 @@ stdenvNoCC.mkDerivation {
     # failure this guards against, and only a negative test caught it.
     ! grep -qE 'NIXI_(CLAUDE_ACP|CODEX_ACP|OPENCODE|CONTEXT)_COMMAND=[$][{]' $plugin/bridge/nixi-node \
       || { echo "an adapter or context command is still overridable from the environment"; exit 1; }
+    # Same property for the grounding fallback (#74). It is a store path, so
+    # the build can pin it; NIXI_DIR, NIXI_DATA and NIXI_CWD cannot be pinned
+    # at all -- two are HOME-relative and NIXI_CWD is derived at runtime -- so
+    # the bridge reports those instead of the build fixing them.
+    ! grep -qE 'NIXI_FALLBACK_DIR=[$][{]' $out/bin/nixi-context \
+      || { echo "the grounding fallback is still overridable from the environment"; exit 1; }
     # Every program launched by name was pinned.
     ! grep -nE '"(node|gjs)"' $plugin/*.qml \
       || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }

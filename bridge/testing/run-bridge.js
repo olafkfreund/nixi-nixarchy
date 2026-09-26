@@ -16,6 +16,7 @@ function executable(path, body) {
 
 // options.context: text the stub nixi-context prints (null = no stub on PATH)
 // options.configDir: create ~/.config/nixi before starting
+// options.codexProjectDir: also create ~/.config/nixi/.codex
 // options.messages: stdin messages sent in order, each after the previous turn
 export async function runBridge(options = {}) {
   const home = mkdtempSync(join(tmpdir(), "nixi-bridge-"));
@@ -30,6 +31,9 @@ export async function runBridge(options = {}) {
       `#!/bin/sh\nprintf '%s\\n' "$*" > "${join(home, "context-args")}"\ncat <<'NIXI_EOF'\n${options.context}\nNIXI_EOF\n`);
   }
   if (options.configDir) mkdirSync(join(home, ".config", "nixi"), { recursive: true });
+  // options.codexProjectDir: plant <cwd>/.codex, the directory codex reads a
+  // project config layer from and Nixi never creates (#74).
+  if (options.codexProjectDir) mkdirSync(join(home, ".config", "nixi", ".codex"), { recursive: true });
   if (options.settings) {
     mkdirSync(join(home, ".config", "omarchy"), { recursive: true });
     writeFileSync(join(home, ".config", "omarchy", "nixi.json"), JSON.stringify(options.settings));

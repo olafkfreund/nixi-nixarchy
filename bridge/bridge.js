@@ -43,6 +43,28 @@ const nixiConfigDir = join(process.env.HOME || "", ".config", "nixi");
 const cwd = process.env.NIXI_CWD
   || (process.env.HOME && existsSync(nixiConfigDir) ? nixiConfigDir : "")
   || process.env.HOME || process.cwd();
+// Nixi chose this directory and never writes .codex into it, so the directory
+// being there is always either a mistake or someone else's doing. codex loads
+// <cwd>/.codex/config.toml as a project config layer when the directory is
+// trusted in the user's own ~/.codex/config.toml, and an mcp_servers entry
+// there runs AT SESSION START, outside any permission request -- so neither
+// Guide nor Mechanic ever sees it (#74).
+//
+// Not parsed. Whether a given file is dangerous is codex's business, and its
+// config format and trust rules both move; existence is the durable signal.
+// A diagnostic rather than a refusal: the file is inert unless the directory
+// is ALSO trusted, so refusing would block sessions that are provably safe.
+function noticeUnaccountedEnvironment() {
+  if (existsSync(join(cwd, ".codex")))
+    emit({ type: "diagnostic", text: `Unexpected .codex directory in ${cwd} — Nixi never creates one. If you did not put it there, remove it: codex can run commands from it at session start.` });
+  // These three cannot be pinned by the build -- two are HOME-relative and
+  // NIXI_CWD is derived from whether ~/.config/nixi exists -- so saying they
+  // are set is the honest equivalent of pinning them (#74, after #76/#77).
+  for (const name of ["NIXI_CWD", "NIXI_DIR", "NIXI_DATA"])
+    if (process.env[name])
+      emit({ type: "diagnostic", text: `${name} is set in the environment; Nixi does not set it. It changes where the agent runs or what it is told.` });
+}
+
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
 const settingsPath = join(settingsDir, "nixi.json");
 
@@ -296,6 +318,11 @@ async function start() {
   configOptions = session.configOptions || [];
   await applyRequestedModel(configOptions);
   await applyTrustMode();
+  // Before ready, not after: the card reads this stdout from the moment it
+  // spawns the bridge, so there is nothing to wait for -- and anything emitted
+  // after ready races every consumer that treats ready as "the session is up
+  // and I can look at what arrived".
+  noticeUnaccountedEnvironment();
   emit({
     type: "ready",
     steeringSupported,
