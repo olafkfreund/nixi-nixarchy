@@ -31,21 +31,6 @@ let
     "%h/.local/bin"
   ];
 
-  mkService = { description, exec, ... }: {
-    Unit = {
-      Description = description;
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      Type = "exec";
-      Environment = [ "PATH=${unitPath}" ];
-      ExecStart = exec;
-      Restart = "on-failure";
-      RestartSec = 2;
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
 in
 {
   imports = [
@@ -62,7 +47,23 @@ in
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
       defaultText = lib.literalExpression "nixi.packages.\${system}.nixi";
-      description = "The Nixi package to use.";
+      description = ''
+        The Nixi package to use.
+
+        This is also where a locally built ACP adapter goes. The adapter and
+        grounding commands are pinned into the package at build time and
+        cannot be redirected with `NIXI_*_COMMAND` environment variables
+        (#76): the environment must not be able to change what Nixi launches
+        as the agent, because the trust levels and permission rules are
+        enforced by the bridge against whatever it spawned.
+
+        ```nix
+        services.nixi.package = pkgs.nixi.override { claudeAcp = myBuild; };
+        ```
+
+        An install that resolves its adapter from `PATH` rather than from Nix
+        is unaffected.
+      '';
     };
 
     agents = lib.mkOption {
@@ -71,7 +72,6 @@ in
       # actually build each one is a separate question, asked and reported by
       # nix/adapters.nix rather than folded invisibly into this list (#16).
       default = [ "claude" "codex" ];
-      defaultText = lib.literalExpression ''[ "claude" "codex" ]'';
       example = [ "claude" "codex" "opencode" ];
       description = ''
         Agents whose ACP adapters are pinned into Nixi from your `pkgs`:
@@ -195,14 +195,6 @@ in
         "nixi/SKILL.md".source = "${share}/skills/SKILL.md";
       };
 
-      # A 0.9.x install left a real directory where the plugin link now goes,
-      # which would fail checkLinkTargets; see the script for what it removes.
-      home.activation.nixiOldPluginDir =
-        lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-          DRY_RUN=''${DRY_RUN:+1} ${pkgs.bash}/bin/bash ${./migrate-plugin-dir.sh} \
-            "${config.xdg.configHome}/omarchy/plugins/${pluginId}"
-        '';
-
       # Enable the card once (nixarchy#709); see the script for the rules.
       home.activation.nixiEnableCard = lib.mkIf cfg.autoEnable
         (lib.hm.dag.entryAfter [ "linkGeneration" ] ''
@@ -247,9 +239,20 @@ in
     })
 
     (lib.mkIf cfg.watcher.enable {
-      systemd.user.services.nixi-watch = mkService {
-        description = "Nixi tip watcher (at most one suggestion per day)";
-        exec = "${nixiPkg}/bin/nixi-watch";
+      systemd.user.services.nixi-watch = {
+        Unit = {
+          Description = "Nixi tip watcher (at most one suggestion per day)";
+          PartOf = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          Type = "exec";
+          Environment = [ "PATH=${unitPath}" ];
+          ExecStart = "${nixiPkg}/bin/nixi-watch";
+          Restart = "on-failure";
+          RestartSec = 2;
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
       };
     })
 

@@ -6,6 +6,8 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+// Pure display formatting, unit tested under node (bridge/text-format.test.js).
+import "TextFormat.js" as TextFormat
 
 Item {
   id: root
@@ -29,7 +31,14 @@ Item {
   property bool waiting: false
   property bool bridgeReady: false
   property bool steeringSupported: false
-  property bool steeringPending: false
+  // #44: one place for "a request is in flight", keyed by the request kind.
+  // There used to be three booleans with three reset paths, and two of the
+  // three forgot to reset -- that is #40. The three names below are derived,
+  // so every existing binding and guard keeps working while the state itself
+  // has exactly one home, and clearAcks() cannot clear one kind and miss
+  // another.
+  property var pendingAck: ({})
+  readonly property bool steeringPending: pendingAck.steer === true
   property bool composerTailPinned: false
   property bool resultsRevealPending: false
   property bool outsideDismissArmed: false
@@ -40,22 +49,28 @@ Item {
   property int activeReply: -1
   property string activeReplyMessageId: ""
   property string queuedPrompt: ""
-  property string pendingPermissionId: ""
-  property string pendingPermissionTitle: ""
+  // The request on screen. noPermission (id "") means none, so bindings can
+  // read its fields without a null check.
+  readonly property var noPermission: ({ id: "", title: "", detail: "", omitted: 0, options: [] })
+  property var pendingPermission: noPermission
   property var permissionQueue: []
+  // False for the first 400 ms a request is on screen, so it cannot be answered
+  // before it has been seen (#50). answerPermission() is the single gate; this
+  // also disarms the keys and greys the buttons, which is the visible signal
+  // that the card in front of you is a NEW question.
+  property bool permissionSettled: false
   property string permissionMode: "permission"
-  property bool permissionModePending: false
+  readonly property bool permissionModePending: pendingAck.permission_mode === true
   // Nixi trust level, owned by the bridge (see bridge/trust-policy.js). Guide
   // explains and never changes the machine; Mechanic asks before each change.
   property string trust: "guide"
-  property bool trustPending: false
+  readonly property bool trustPending: pendingAck.trust === true
 
   // Font scale is owned by the manager so every conversation and both window
   // modes share one value, and so a single writer persists it.
   property real fontScale: 1
   signal fontScaleStepRequested(real step)
   signal fontScaleResetRequested()
-  signal motionTunerRequested()
   signal harnessSelectorRequested()
   signal sessionRestartRequested()
   property real keyboardLineImpulse: 335
@@ -63,49 +78,44 @@ Item {
   property real keyboardDeceleration: 608
   property var fileOpenCommand: []
   property var fileEditCommand: []
-  property bool motionTunerOpen: false
   property bool harnessSelectorOpen: false
+
+  // #38: has anything in this conversation earned a wider card? Set from the
+  // text, never from geometry, and never cleared mid-conversation -- close()
+  // resets it. A one-line exchange stays compact; a long prompt, a fenced code
+  // block or a table gets the room it needs.
+  property bool contentWantsRoom: false
+  readonly property int roomyThreshold: 420
+  function noteContentWidth(body) {
+    if (contentWantsRoom) return
+    var text = String(body || "")
+    if (text.length > roomyThreshold || text.indexOf("```") >= 0 || text.indexOf("\n|") >= 0)
+      contentWantsRoom = true
+  }
   property string agentName: ""
   property string modelName: ""
   property string reasoningEffort: ""
-  property bool fileBrowserOpen: false
   property string searchMode: ""
-  property string fileBrowserMode: "files"
-  property string fileBrowserQuery: ""
-  property int fileBrowserIndex: 0
-  property int fileShortcutFirst: -1
-  property int fileShortcutLast: -1
   property string lastVisibleShortcut: ""
+  readonly property bool permissionKeysLive: pendingPermission.id !== "" && permissionSettled && prompt.text.length === 0
   property string hoverPreviewPath: ""
   property bool filePreviewVisible: false
   property int filePreviewRequestId: 0
   property string filePreviewThumbnail: ""
   property string filePreviewName: ""
   property string filePreviewText: ""
-  readonly property var fileBrowserRows: fileBrowserMode === "repos"
-    ? menuSearch.repoRows
-    : menuSearch.fileRows
-  onFileBrowserIndexChanged: {
-    if (!fileBrowserOpen || fileBrowserMode !== "files") return
-    if (fileBrowserIndex < 0 || fileBrowserIndex >= fileBrowserRows.length) return
-    scheduleFilePreview(fileBrowserRows[fileBrowserIndex].path)
-  }
   onMenuIndexChanged: {
     if (root.searchMode !== "@" || menuIndex < 0
         || menuIndex >= menuSearch.rows.length) {
-      if (!root.fileBrowserOpen) closeFilePreview()
+      closeFilePreview()
       return
     }
     var row = menuSearch.rows[menuIndex]
     if (row && row.isPath && !row.isRepository)
       scheduleFilePreview(row.absolutePath)
-    else if (!root.fileBrowserOpen) closeFilePreview()
+    else closeFilePreview()
   }
-  onSearchModeChanged: if (searchMode !== "@" && !fileBrowserOpen) closeFilePreview()
-  onMotionTunerOpenChanged: {
-    if (!motionTunerOpen && opened && !pinned)
-      Qt.callLater(function() { prompt.forceActiveFocus() })
-  }
+  onSearchModeChanged: if (searchMode !== "@") closeFilePreview()
   onHarnessSelectorOpenChanged: {
     if (!harnessSelectorOpen && opened && !pinned)
       Qt.callLater(function() { prompt.forceActiveFocus() })
@@ -145,38 +155,20 @@ Item {
     return Math.round(humanSize - (humanSize - agentSize) * progress)
   }
 
-  // Qt renders consecutive Markdown paragraphs with no vertical gap at all,
-  // and folds a whitespace-only line away as blank. A paragraph holding one
-  // non-breaking space survives and reads as a single blank line, so those are
-  // inserted at paragraph breaks for display only; the stored message is not
-  // touched. Fenced code is copied verbatim, where such a line would become
-  // part of the code.
+  // Agent replies render as TextEdit.MarkdownText, and Qt loads remote images
+  // in a Markdown document through QQuickPixmap -- measured on Qt 6.11.2,
+  // which fetched an http:// image with its query string intact, on render,
+  // with no user action (#42). TextFormat rewrites any image that is not a
+  // contained local file to its alt text before it can reach the renderer.
+  readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
+
+  // Read only so the card can SAY it ignored this, never to build a command
+  // from it (#77). A deployment that set it would otherwise change behaviour
+  // with no signal; naming the variable turns that into a message.
+  readonly property string ignoredBridgeOverride:
+    String(Quickshell.env("NIXI_BRIDGE_COMMAND") || "").trim()
   function spacedMarkdown(text) {
-    var value = String(text || "")
-    if (value.indexOf("\n") < 0) return value
-    var lines = value.split("\n")
-    var out = []
-    var fenced = false
-    var pendingBreak = false
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-      var fence = /^\s{0,3}(```|~~~)/.test(line)
-      if (fence) fenced = !fenced
-      if (!fenced && !fence && line.trim() === "") {
-        if (out.length > 0) pendingBreak = true
-        continue
-      }
-      if (pendingBreak) {
-        pendingBreak = false
-        // A blank line before a list item marks a loose list. A paragraph
-        // inserted there would split the list in two and restart ordered
-        // numbering, so the original break is emitted unchanged instead.
-        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) out.push("")
-        else out.push("", "\u00a0", "")
-      }
-      out.push(line)
-    }
-    return out.join("\n")
+    return TextFormat.spacedMarkdown(text, root.imageRoot)
   }
 
   function open(payloadJson) {
@@ -189,21 +181,25 @@ Item {
     agent.running = true
   }
 
-  readonly property var bridgeCommand: {
-    var raw = String(Quickshell.env("NIXI_BRIDGE_COMMAND") || "").trim()
-    var prefix = []
-    if (raw !== "") {
-      try { prefix = JSON.parse(raw) } catch (error) { prefix = [] }
-    }
-    // Preserve the historical PATH lookup when no platform command is
-    // supplied. Omarchy deployments can provide any argv prefix explicitly.
-    if (!Array.isArray(prefix) || prefix.length === 0) prefix = ["node"]
-    return ["env", "HUGINN_INTERNAL=1", "NIXI_AGENT=" + agentName,
-      "NIXI_MODEL=" + modelName,
-      "NIXI_REASONING_EFFORT=" + reasoningEffort].concat(prefix).concat([
-      root.bridgeScript("bridge.js")
-    ])
-  }
+  // The interpreter is fixed by the install: nix/package.nix substitutes the
+  // bare node literal below with the pinned bridge/nixi-node, exactly as it
+  // does for MenuSearch.qml. Keep it bare and quoted -- --replace-fail is what
+  // stops the pin being lost silently, and it fails the build if it moves.
+  // (Written without quotes here on purpose: the substitution rewrites every
+  // occurrence in this file, including ones inside comments.)
+  //
+  // NIXI_BRIDGE_COMMAND is deliberately NOT honoured (#77). It replaced this
+  // prefix outright, and the bridge is what applies trust-policy.js and
+  // cancels permissions in Guide, so substituting it does not change what is
+  // enforced -- it removes the enforcement while the card goes on displaying
+  // the trust badge. No escape hatch is offered, because anything the card can
+  // read from its environment an rc file can set: the card and the shell share
+  // one. A deployment needing a different interpreter overrides the package,
+  // the same answer as the adapter commands (#76).
+  readonly property var bridgeCommand: ["env",
+    "NIXI_AGENT=" + agentName, "NIXI_MODEL=" + modelName,
+    "NIXI_REASONING_EFFORT=" + reasoningEffort,
+    "node", root.bridgeScript("bridge.js")]
 
   function requestCompletionAttention() {
     // FloatingWindow is a Quickshell wrapper, not a QWindow. The standard
@@ -220,9 +216,7 @@ Item {
     outsideDismissArmed = false
     closeFilePreview()
     agent.running = false
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
+    transcriptPhysics.stop()
     entranceTimer.stop()
     cardFade.stop()
     veilFade.stop()
@@ -234,7 +228,7 @@ Item {
     waiting = false
     bridgeReady = false
     steeringSupported = false
-    steeringPending = false
+    clearAcks()
     sessionLost = false
     queuedPrompt = ""
     clearPermissions()
@@ -246,6 +240,7 @@ Item {
     searchMode = ""
     prompt.text = ""
     messages.clear()
+    contentWantsRoom = false
     closed()
   }
 
@@ -265,8 +260,6 @@ Item {
     onTriggered: root.outsideDismissArmed = true
   }
 
-  function toggle() { opened ? close() : open("{}") }
-
   function pinConversation() {
     if (!opened || pinned) return
     pinned = true
@@ -276,8 +269,7 @@ Item {
   function scrollToEnd() {
     // An anchor glide owns the viewport until it lands. Streaming chunks that
     // arrive mid-glide must not snap it to the end.
-    if (anchorScroll.running || keyboardCoast.running || trackpadCoast.running) return
-    horizontalScroll.stop()
+    if (anchorScroll.running || transcriptPhysics.running) return
     verticalScroll.stop()
     // Let the border absorb ordinary growth. Only scroll once the surface has
     // reached its height cap; scrolling during the growth animation makes the
@@ -298,11 +290,8 @@ Item {
     // caret below the fold or immediately pull the surface away again.
     anchorActive = false
     anchorScroll.stop()
-    horizontalScroll.stop()
     verticalScroll.stop()
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
+    transcriptPhysics.stop()
     surface.cancelFlick()
     Qt.callLater(function() {
       if (!root.composerPinsTail) return
@@ -349,29 +338,18 @@ Item {
     return maxY <= 0 || surface.contentY >= maxY - Style.space(18)
   }
 
-  function scrollBy(dx, dy) {
+  function scrollBy(dy) {
     // Steps accumulate onto a running animation's destination. Measuring from
     // the animated value instead would swallow most of a held key or a fast
     // wheel spin, because every event would restart from a half-finished move.
-    var maxX = Math.max(0, surface.contentWidth - surface.width)
     var maxY = Math.max(0, surface.contentHeight - surface.height)
-    var baseX = horizontalScroll.running ? horizontalScroll.to : surface.contentX
     var baseY = anchorScroll.running
       ? anchorScroll.to
       : (verticalScroll.running ? verticalScroll.to : surface.contentY)
     // Any deliberate scroll takes the viewport back from the glide.
     anchorScroll.stop()
-    keyboardVelocityY = 0
-    keyboardCoast.stop()
-    trackpadCoast.stop()
-    var nextX = Math.max(0, Math.min(maxX, baseX + dx))
+    transcriptPhysics.stop()
     var nextY = Math.max(0, Math.min(maxY, baseY + dy))
-    if (nextX !== baseX) {
-      horizontalScroll.stop()
-      horizontalScroll.from = surface.contentX
-      horizontalScroll.to = nextX
-      horizontalScroll.start()
-    }
     if (nextY !== baseY) {
       verticalScroll.stop()
       verticalScroll.from = surface.contentY
@@ -380,72 +358,15 @@ Item {
     }
   }
 
-  function scrollLine(dx, dy) {
-    scrollBy(dx * Style.space(44), dy * Style.space(44))
+  function scrollLine(dy) {
+    scrollBy(dy * Style.space(44))
   }
 
-  function scrollPage(direction) {
-    scrollBy(0, direction * Math.max(Style.space(44), surface.height * 0.85))
-  }
-
-  // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
-  // model repeated force impulses: restarting an eased position animation on
-  // every auto-repeat discards its time derivative, and inferring velocity
-  // from the remaining distance is invalid once the easing curve is not the
-  // constant-deceleration curve used by that inference.
-  property real keyboardVelocityY: 0
-  property double keyboardSampleTime: 0
-  function coastVertically(velocity) {
-    trackpadCoast.stop()
-    var speed = Math.min(surface.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * surface.flickDeceleration)
-    var maxY = Math.max(0, surface.contentHeight - surface.height)
-    var destination = Math.max(0, Math.min(maxY,
-      surface.contentY + direction * distance))
-    if (Math.abs(destination - surface.contentY) <= 1) return
-    trackpadCoast.from = surface.contentY
-    trackpadCoast.to = destination
-    // Preserve the sampled trackpad stopping distance while stretching its
-    // presentation enough for the final loss of momentum to remain legible.
-    trackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / surface.flickDeceleration)))
-    trackpadCoast.start()
-  }
-
-  function stopCoastAtBoundary(flickable, animation) {
-    if (!animation.running) return
-    var minY = flickable.originY
-    var maxY = Math.max(minY, minY + flickable.contentHeight - flickable.height)
-    if (animation.to <= minY && flickable.contentY <= minY + 0.75) {
-      animation.stop()
-      flickable.contentY = minY
-    } else if (animation.to >= maxY && flickable.contentY >= maxY - 0.75) {
-      animation.stop()
-      flickable.contentY = maxY
-    }
-  }
-
-  function scrollKeyImpulse(dx, dy, page) {
-    // The transcript is normally vertical, but retain the old horizontal
-    // behavior if a future delegate makes it wider than the viewport.
-    if (dx !== 0) scrollBy(dx * Style.space(44), 0)
-    if (dy === 0) return
-    horizontalScroll.stop()
+  function scrollKeyImpulse(dy, page) {
     verticalScroll.stop()
     anchorScroll.stop()
-    surface.cancelFlick()
-    trackpadCoast.stop()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    keyboardVelocityY = Math.max(-surface.maximumFlickVelocity,
-      Math.min(surface.maximumFlickVelocity, keyboardVelocityY + dy * impulse))
-    keyboardSampleTime = Date.now()
-    keyboardCoast.start()
+    transcriptPhysics.impulse(dy * (page ? root.keyboardPageImpulse : root.keyboardLineImpulse))
   }
-
-  function stepFontScale(step) { fontScaleStepRequested(step) }
-  function resetFontScale() { fontScaleResetRequested() }
 
   // Anchor the newest prompt to the top of the viewport. Called after the
   // model append so the delegate exists and the column has placed it.
@@ -460,12 +381,9 @@ Item {
     anchorY = item.y
     anchorActive = true
     Qt.callLater(function() {
-      horizontalScroll.stop()
       verticalScroll.stop()
       anchorScroll.stop()
-      keyboardVelocityY = 0
-      keyboardCoast.stop()
-      trackpadCoast.stop()
+      transcriptPhysics.stop()
       var maxY = Math.max(0, surface.contentHeight - surface.height)
       var target = Math.min(root.anchorY, maxY)
       if (Math.abs(target - surface.contentY) < 1) {
@@ -489,8 +407,6 @@ Item {
   property int menuIndex: -1
   property int menuShortcutFirst: -1
   property int menuShortcutLast: -1
-  property real menuKeyboardVelocityY: 0
-  property double menuKeyboardSampleTime: 0
   // The list opens under wherever the pointer happens to be resting, so a
   // bare `entered` would hand it the selection the instant it appears --
   // stealing it from the keyboard without anyone touching the mouse. Hover
@@ -510,9 +426,7 @@ Item {
   function menuMove(delta) {
     if (!root.menuOpen) return false
     root.menuMouseArmed = false
-    root.menuKeyboardVelocityY = 0
-    menuKeyboardCoast.stop()
-    menuTrackpadCoast.stop()
+    menuPhysics.stop()
     inlineResults.cancelFlick()
     var range = visibleMenuRange()
     var current = root.menuIndex
@@ -569,43 +483,12 @@ Item {
 
   function menuScrollKeyImpulse(direction, page) {
     if (!root.menuOpen || direction === 0) return
-    menuTrackpadCoast.stop()
-    inlineResults.cancelFlick()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    root.menuKeyboardVelocityY = Math.max(-inlineResults.maximumFlickVelocity,
-      Math.min(inlineResults.maximumFlickVelocity,
-        root.menuKeyboardVelocityY + direction * impulse))
-    root.menuKeyboardSampleTime = Date.now()
-    menuKeyboardCoast.start()
-  }
-
-  function menuScrollBounds() {
-    var minY = inlineResults.originY
-    return { min: minY, max: Math.max(minY,
-      minY + inlineResults.contentHeight - inlineResults.height) }
-  }
-
-  function coastMenuTrackpad(velocity) {
-    menuTrackpadCoast.stop()
-    var speed = Math.min(inlineResults.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * inlineResults.flickDeceleration)
-    var bounds = menuScrollBounds()
-    var destination = Math.max(bounds.min, Math.min(bounds.max,
-      inlineResults.contentY + direction * distance))
-    if (Math.abs(destination - inlineResults.contentY) <= 1) return
-    menuTrackpadCoast.from = inlineResults.contentY
-    menuTrackpadCoast.to = destination
-    menuTrackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / inlineResults.flickDeceleration)))
-    menuTrackpadCoast.start()
+    menuPhysics.impulse(direction * (page ? root.keyboardPageImpulse : root.keyboardLineImpulse))
   }
 
   function scrollActiveSurface(direction, page) {
     if (root.menuOpen) root.menuScrollKeyImpulse(direction, page)
-    else if (root.fileBrowserOpen) root.fileScrollKeyImpulse(direction, page)
-    else root.scrollKeyImpulse(0, direction, page)
+    else root.scrollKeyImpulse(direction, page)
   }
 
   function menuActivate(modifiers) {
@@ -634,19 +517,6 @@ Item {
   function selectVisibleSlot(slot) {
     if (slot < 0 || slot > 9) return false
     root.menuMouseArmed = false
-    if (root.fileBrowserOpen) {
-      var fileIndex = root.fileShortcutFirst + slot
-      if (root.fileShortcutFirst < 0 || fileIndex > root.fileShortcutLast) return false
-      var fileToken = "file:" + fileIndex
-      if (root.lastVisibleShortcut === fileToken) {
-        root.lastVisibleShortcut = ""
-        root.openFileBrowserSelection(Qt.NoModifier)
-        return true
-      }
-      root.lastVisibleShortcut = fileToken
-      root.fileBrowserIndex = fileIndex
-      return true
-    }
     var menuIndex = root.menuShortcutFirst + slot
     if (!root.menuOpen || root.menuShortcutFirst < 0
         || menuIndex > root.menuShortcutLast) return false
@@ -677,23 +547,6 @@ Item {
     return root.selectVisibleSlot(slot)
   }
 
-  function openFileBrowser(mode, query) {
-    closeFilePreview()
-    // The conversation card may still be in its entrance fade when a prefix
-    // opens the file browser. End that animation before switching surfaces so
-    // it cannot write opacity back onto the now-hidden card.
-    cardFade.stop()
-    card.opacity = 0
-    fileBrowserMode = mode === "repos" ? "repos" : "files"
-    fileBrowserQuery = String(query || "").replace(/^[@^]/, "").trim()
-    fileBrowserIndex = 0
-    fileBrowserOpen = true
-    Qt.callLater(function() {
-      root.updateFileShortcutRange()
-      filePrompt.forceActiveFocus()
-    })
-  }
-
   function isImagePath(path) {
     return /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i.test(String(path || ""))
   }
@@ -707,8 +560,7 @@ Item {
   }
 
   function scheduleFilePreview(path) {
-    if (root.fileBrowserOpen ? root.fileBrowserMode !== "files"
-        : root.searchMode !== "@") return
+    if (root.searchMode !== "@") return
     root.filePreviewVisible = false
     root.filePreviewThumbnail = ""
     root.filePreviewText = ""
@@ -787,13 +639,6 @@ Item {
     Quickshell.execDetached(command)
   }
 
-  function openFileBrowserSelection(modifiers) {
-    var rows = root.fileBrowserRows
-    if (fileBrowserIndex < 0 || fileBrowserIndex >= rows.length) return
-    var path = String(rows[fileBrowserIndex].path || "")
-    root.openPath(path, root.fileBrowserMode === "repos", modifiers)
-  }
-
   function revealInSystemFileBrowser(path) {
     // Delegate to the cross-desktop FileManager1 bridge. Ask must not assume a
     // particular file manager or rewrite machine-specific compositor config.
@@ -802,142 +647,6 @@ Item {
       root.bridgeScript("reveal.js"),
       String(path || "")
     ])
-  }
-
-  property real fileKeyboardVelocityY: 0
-  property double fileKeyboardSampleTime: 0
-
-  function fileScrollBounds() {
-    // INVARIANT: ListView's scroll origin is not guaranteed to be zero.
-    // Every file-list physics path (wheel, keyboard, coast, and collision)
-    // must clamp through these bounds or rapid paging can overshoot into an
-    // invalid blank viewport and make subsequent navigation appear stuck.
-    var minY = fileList.originY
-    return {
-      min: minY,
-      max: Math.max(minY, minY + fileList.contentHeight - fileList.height)
-    }
-  }
-
-  function visibleFileRange() {
-    // INVARIANT: this means *completely* visible rows. It intentionally
-    // excludes clipped rows because both off-screen arrow recovery and the
-    // viewport-relative Ctrl+1…0 labels consume this range.
-    if (root.fileBrowserRows.length === 0 || fileList.contentHeight <= 0)
-      return { first: -1, last: -1 }
-    var bounds = fileScrollBounds()
-    var topY = Math.max(bounds.min, fileList.contentY) + 1
-    var bottomY = Math.max(topY, Math.min(
-      bounds.min + fileList.contentHeight - 1,
-      fileList.contentY + fileList.height - 1))
-    var first = fileList.indexAt(1, topY)
-    var last = fileList.indexAt(1, bottomY)
-    // indexAt can land in a fractional-pixel seam between delegates. Probe a
-    // few pixels inward rather than allowing a transient -1 to move an
-    // otherwise visible selection.
-    for (var offset = 2; first < 0 && offset < 12; offset += 2)
-      first = fileList.indexAt(1, Math.min(bottomY, topY + offset))
-    for (var inset = 2; last < 0 && inset < 12; inset += 2)
-      last = fileList.indexAt(1, Math.max(topY, bottomY - inset))
-    // indexAt includes clipped slivers. Arrow recovery and Ctrl+# assignment
-    // deliberately use only rows whose entire delegate is inside the viewport.
-    var viewportTop = fileList.contentY
-    var viewportBottom = fileList.contentY + fileList.height
-    while (first >= 0 && first <= last) {
-      var firstItem = fileList.itemAtIndex(first)
-      if (!firstItem || firstItem.y >= viewportTop - 0.5) break
-      first++
-    }
-    while (last >= first) {
-      var lastItem = fileList.itemAtIndex(last)
-      if (!lastItem || lastItem.y + lastItem.height <= viewportBottom + 0.5) break
-      last--
-    }
-    if (first > last) return { first: -1, last: -1 }
-    return { first: first, last: last }
-  }
-
-  function updateFileShortcutRange() {
-    var range = visibleFileRange()
-    root.lastVisibleShortcut = ""
-    root.fileShortcutFirst = range.first
-    root.fileShortcutLast = range.last
-  }
-
-  function deferFileShortcutRange() {
-    // Clear once at the start of motion so stale numbers cannot target rows
-    // that have left the viewport. Repeated scroll frames only restart the
-    // single debounce timer; they do not update every delegate.
-    if (root.fileShortcutFirst !== -1 || root.fileShortcutLast !== -1) {
-      root.fileShortcutFirst = -1
-      root.fileShortcutLast = -1
-      root.lastVisibleShortcut = ""
-    }
-    fileShortcutAssignment.restart()
-  }
-
-  function moveFileSelection(direction) {
-    // A selection key changes mode from viewport motion to row navigation.
-    // Freeze the viewport first; otherwise the coast can carry the newly
-    // re-anchored row off-screen immediately after this function returns.
-    root.fileKeyboardVelocityY = 0
-    fileKeyboardCoast.stop()
-    fileTrackpadCoast.stop()
-    fileCoastTimer.stop()
-    fileTrackpadWheel.lastSampleTime = 0
-    fileTrackpadWheel.releaseVelocityY = 0
-    fileList.cancelFlick()
-    var range = visibleFileRange()
-    if (range.first < 0 || range.last < 0) return
-    var current = root.fileBrowserIndex
-    var target
-    if (current < range.first || current > range.last) {
-      // Preserve direction semantics when independent scrolling strands the
-      // selection off-screen: Down enters at the first fully visible row;
-      // Up enters at the last fully visible row.
-      target = direction > 0 ? range.first : range.last
-    } else {
-      // Once the selection is in view, arrows walk the complete result set.
-      // Crossing a viewport edge scrolls only enough to reveal the next row.
-      target = Math.max(0, Math.min(root.fileBrowserRows.length - 1,
-        current + direction))
-    }
-    root.lastVisibleShortcut = ""
-    root.fileBrowserIndex = target
-    // Contain is a no-op for an already visible delegate and minimally scrolls
-    // when selection crosses the top or bottom edge.
-    Qt.callLater(function() {
-      if (root.fileBrowserOpen && root.fileBrowserIndex === target)
-        fileList.positionViewAtIndex(target, ListView.Contain)
-    })
-  }
-
-  function fileScrollKeyImpulse(direction, page) {
-    if (direction === 0) return
-    fileTrackpadCoast.stop()
-    fileList.cancelFlick()
-    var impulse = page ? root.keyboardPageImpulse : root.keyboardLineImpulse
-    fileKeyboardVelocityY = Math.max(-fileList.maximumFlickVelocity,
-      Math.min(fileList.maximumFlickVelocity, fileKeyboardVelocityY + direction * impulse))
-    fileKeyboardSampleTime = Date.now()
-    fileKeyboardCoast.start()
-  }
-
-  function coastFileTrackpad(velocity) {
-    fileTrackpadCoast.stop()
-    var speed = Math.min(fileList.maximumFlickVelocity, Math.abs(velocity))
-    if (speed <= 40) return
-    var direction = velocity < 0 ? -1 : 1
-    var distance = speed * speed / (2 * fileList.flickDeceleration)
-    var bounds = fileScrollBounds()
-    var destination = Math.max(bounds.min, Math.min(bounds.max,
-      fileList.contentY + direction * distance))
-    if (Math.abs(destination - fileList.contentY) <= 1) return
-    fileTrackpadCoast.from = fileList.contentY
-    fileTrackpadCoast.to = destination
-    fileTrackpadCoast.duration = Math.max(900, Math.min(2800,
-      Math.round(speed * 1800 / fileList.flickDeceleration)))
-    fileTrackpadCoast.start()
   }
 
   // Assigned by Ask.qml, which the shell assigns in turn.
@@ -955,9 +664,6 @@ Item {
     query: root.searchMode + prompt.text
     appLibrary: root.appLibrary
     debounceMs: root.searchDebounceMs
-    fileMode: root.fileBrowserOpen && root.fileBrowserMode === "files"
-    repoMode: root.fileBrowserOpen && root.fileBrowserMode === "repos"
-    fileQueryOverride: root.fileBrowserQuery
     onQueryChanged: {
       root.armIncomingResultsReveal()
       root.menuIndex = -1
@@ -966,7 +672,8 @@ Item {
     onRowsChanged: root.revealIncomingResults()
     onBrowseRequested: function(mode, query) { root.enterSearchMode(mode, query) }
     onFaqAnswered: function(question, answer) {
-      root.messages.append({ role: "You", body: question })
+      messages.append({ role: "You", body: question })
+      noteContentWidth(question)
       root.showNixiMessage(answer)
     }
     onNixiActionRequested: function(action) {
@@ -978,35 +685,17 @@ Item {
     }
   }
 
-  function handleFontKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) { stepFontScale(0.1); return true }
-    if (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore) { stepFontScale(-0.1); return true }
-    if (event.key === Qt.Key_0) { resetFontScale(); return true }
-    return false
-  }
-
-  // Ctrl+P pins the live conversation into a normal window. Like the font
-  // keys, it runs from the shared key handlers because a focused TextEdit
-  // claims the key before a window shortcut can see it.
-  function handlePinKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key !== Qt.Key_P) return false
-    pinConversation()
-    return true
-  }
-
-  function handleMotionTunerKey(event) {
-    if ((event.modifiers & Qt.ControlModifier) === 0) return false
-    if (event.key !== Qt.Key_Comma) return false
-    motionTunerRequested()
-    return true
-  }
-
-  function handleHarnessSelectorKey(event) {
-    if ((event.modifiers & Qt.MetaModifier) === 0) return false
-    if (event.key !== Qt.Key_Comma) return false
-    harnessSelectorRequested()
+  // Ctrl+P pins the live conversation into a normal window. These keys run
+  // from the shared key handlers because a focused TextEdit claims the key
+  // before a window shortcut can see it.
+  function handleCardKey(event) {
+    var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
+    if (ctrl && (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal)) fontScaleStepRequested(0.1)
+    else if (ctrl && (event.key === Qt.Key_Minus || event.key === Qt.Key_Underscore)) fontScaleStepRequested(-0.1)
+    else if (ctrl && event.key === Qt.Key_0) fontScaleResetRequested()
+    else if (ctrl && event.key === Qt.Key_P) pinConversation()
+    else if ((event.modifiers & Qt.MetaModifier) !== 0 && event.key === Qt.Key_Comma) harnessSelectorRequested()
+    else return false
     return true
   }
 
@@ -1039,56 +728,197 @@ Item {
         menuScrollKeyImpulse(1, true); return true
       }
     }
-    if (ctrl && event.key === Qt.Key_K) { scrollKeyImpulse(0, -1, false); return true }
-    if (ctrl && event.key === Qt.Key_J) { scrollKeyImpulse(0, 1, false); return true }
-    if (ctrl && event.key === Qt.Key_H) { scrollKeyImpulse(-1, 0, false); return true }
-    if (ctrl && event.key === Qt.Key_L) { scrollKeyImpulse(1, 0, false); return true }
-    if (event.key === Qt.Key_PageUp || (ctrl && event.key === Qt.Key_U)) { scrollKeyImpulse(0, -1, true); return true }
-    if (event.key === Qt.Key_PageDown || (ctrl && event.key === Qt.Key_D)) { scrollKeyImpulse(0, 1, true); return true }
-    if (event.key === Qt.Key_Up) { scrollKeyImpulse(0, -1, false); return true }
-    if (event.key === Qt.Key_Down) { scrollKeyImpulse(0, 1, false); return true }
+    if (ctrl && event.key === Qt.Key_K) { scrollKeyImpulse(-1, false); return true }
+    if (ctrl && event.key === Qt.Key_J) { scrollKeyImpulse(1, false); return true }
+    if (event.key === Qt.Key_PageUp || (ctrl && event.key === Qt.Key_U)) { scrollKeyImpulse(-1, true); return true }
+    if (event.key === Qt.Key_PageDown || (ctrl && event.key === Qt.Key_D)) { scrollKeyImpulse(1, true); return true }
+    if (event.key === Qt.Key_Up) { scrollKeyImpulse(-1, false); return true }
+    if (event.key === Qt.Key_Down) { scrollKeyImpulse(1, false); return true }
     if (requireModifier) return false
-    if (event.key === Qt.Key_Left) { scrollKeyImpulse(-1, 0, false); return true }
-    if (event.key === Qt.Key_Right) { scrollKeyImpulse(1, 0, false); return true }
     return false
   }
 
   // Shortcuts reach only the window that declares them, so the overlay panel
   // and the pinned window each need their own copy of the scrolling and font
   // set. These cover the case where nothing in the card holds focus at all.
+  // Scroll motion for one vertical Flickable: keyboard impulses integrated
+  // frame by frame, and trackpad momentum. The transcript and the menu each
+  // own one; their WheelHandlers keep their own notched-wheel behaviour and
+  // hand pixel-delta (trackpad) events to track().
+  //
+  // Keyboard motion is integrated frame by frame. A NumberAnimation cannot
+  // model repeated force impulses: restarting an eased position animation on
+  // every auto-repeat discards its time derivative, and inferring velocity
+  // from the remaining distance is invalid once the easing curve is not the
+  // constant-deceleration curve used by that inference.
+  component ScrollPhysics: Item {
+    id: physics
+    required property Flickable flickable
+    property real deceleration: 608
+    property real velocity: 0
+    property double sampleTime: 0
+    property double lastWheelTime: 0
+    property real releaseVelocity: 0
+    readonly property bool running: keyTimer.running || momentum.running
+    readonly property real minY: flickable.originY
+    readonly property real maxY: Math.max(minY, minY + flickable.contentHeight - flickable.height)
+
+    function stop() {
+      velocity = 0
+      keyTimer.stop()
+      momentum.stop()
+    }
+
+    function impulse(amount) {
+      momentum.stop()
+      flickable.cancelFlick()
+      velocity = Math.max(-flickable.maximumFlickVelocity,
+        Math.min(flickable.maximumFlickVelocity, velocity + amount))
+      sampleTime = Date.now()
+      keyTimer.start()
+    }
+
+    // A precision-scroll gesture is not a pointer drag, so handing its
+    // sampled velocity back to Flickable.flick() is unreliable after
+    // cancelFlick(): on some Qt/Wayland paths the synthetic flick is
+    // discarded with the wheel sequence that just ended. Animate the
+    // stopping distance directly instead. The quint ease gives the coast a
+    // long, soft tail; distance derives from deceleration while the
+    // presentation duration is stretched enough to make that tail read.
+    function coast(release) {
+      momentum.stop()
+      var speed = Math.min(flickable.maximumFlickVelocity, Math.abs(release))
+      if (speed <= 40) return
+      var distance = speed * speed / (2 * flickable.flickDeceleration)
+      var destination = Math.max(minY, Math.min(maxY,
+        flickable.contentY + (release < 0 ? -1 : 1) * distance))
+      if (Math.abs(destination - flickable.contentY) <= 1) return
+      momentum.from = flickable.contentY
+      momentum.to = destination
+      momentum.duration = Math.max(900, Math.min(2800,
+        Math.round(speed * 1800 / flickable.flickDeceleration)))
+      momentum.start()
+    }
+
+    function release() {
+      releaseTimer.stop()
+      coast(-releaseVelocity)
+      lastWheelTime = 0
+      releaseVelocity = 0
+    }
+
+    // One pixel-delta wheel event: follow the fingers, sample the velocity,
+    // and coast once the gesture ends (or pauses past the release timer).
+    function track(wheel) {
+      stop()
+      flickable.cancelFlick()
+      var now = Date.now()
+      var first = wheel.phase === Qt.ScrollBegin || lastWheelTime === 0
+      if (first) { lastWheelTime = now; releaseVelocity = 0 }
+      if (wheel.phase === Qt.ScrollEnd) { release(); return }
+      var elapsed = first ? 16 : Math.max(1, Math.min(80, now - lastWheelTime))
+      var dy = wheel.pixelDelta.y
+      releaseVelocity = releaseVelocity * 0.55 + dy * 1000 / elapsed * 0.45
+      lastWheelTime = now
+      flickable.contentY = Math.max(minY, Math.min(maxY, flickable.contentY - dy))
+      releaseTimer.restart()
+    }
+
+    function stopAtBoundary() {
+      if (!momentum.running) return
+      if (momentum.to <= minY && flickable.contentY <= minY + 0.75) {
+        momentum.stop()
+        flickable.contentY = minY
+      } else if (momentum.to >= maxY && flickable.contentY >= maxY - 0.75) {
+        momentum.stop()
+        flickable.contentY = maxY
+      }
+    }
+
+    Timer {
+      id: keyTimer
+      interval: 16
+      repeat: true
+      onTriggered: {
+        var now = Date.now()
+        var elapsed = Math.max(1, Math.min(40, now - physics.sampleTime)) / 1000
+        physics.sampleTime = now
+        var v = physics.velocity
+        var flick = physics.flickable
+        var nextY = Math.max(physics.minY, Math.min(physics.maxY, flick.contentY + v * elapsed))
+        flick.contentY = nextY
+        if ((nextY <= physics.minY && v < 0) || (nextY >= physics.maxY && v > 0)) {
+          physics.velocity = 0
+          keyTimer.stop()
+          return
+        }
+        var loss = physics.deceleration * elapsed
+        if (Math.abs(v) <= loss) {
+          physics.velocity = 0
+          keyTimer.stop()
+        } else physics.velocity = v > 0 ? v - loss : v + loss
+      }
+    }
+    NumberAnimation {
+      id: momentum
+      target: physics.flickable
+      property: "contentY"
+      easing.type: Easing.OutQuint
+    }
+    Timer { id: releaseTimer; interval: 55; onTriggered: physics.release() }
+  }
+
   component WindowShortcuts: Item {
     // An inline component does not share the enclosing document's scope, so
     // the conversation is handed in rather than reached through its id.
     required property Item conversation
-    Shortcut { sequence: "Up"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(0, -1, false) }
-    Shortcut { sequence: "Down"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(0, 1, false) }
-    Shortcut { sequence: "Left"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
-    Shortcut { sequence: "Right"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
-    Shortcut { sequence: "Ctrl+H"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(-1, 0, false) }
-    Shortcut { sequence: "Ctrl+J"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, false) }
-    Shortcut { sequence: "Ctrl+K"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, false) }
-    Shortcut { sequence: "Ctrl+L"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollKeyImpulse(1, 0, false) }
-    Shortcut { sequence: "Ctrl+U"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, true) }
-    Shortcut { sequence: "Ctrl+D"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, true) }
-    Shortcut { sequence: "PageUp"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(-1, true) }
-    Shortcut { sequence: "PageDown"; enabled: !conversation.fileBrowserOpen; onActivated: conversation.scrollActiveSurface(1, true) }
-    Shortcut { sequence: "Ctrl+="; onActivated: conversation.stepFontScale(0.1) }
-    Shortcut { sequence: "Ctrl++"; onActivated: conversation.stepFontScale(0.1) }
-    Shortcut { sequence: "Ctrl+-"; onActivated: conversation.stepFontScale(-0.1) }
-    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen && !conversation.fileBrowserOpen; onActivated: conversation.resetFontScale() }
+    // Y and N answer a permission prompt, but never over typed text (#20).
+    // Deliberately only the one-shot choices. #27 showed repeated prompting
+    // trains Allow into a reflex, and a held key that grants STANDING approval
+    // is the worst possible target for one -- so "always" is mouse-only (#53).
+    // autoRepeat: false, so a HELD key answers once and never again -- exact,
+    // where a timer would have to outrun the compositor's repeat_delay, which
+    // is the user's setting and not ours (#50).
+    Shortcut {
+      sequence: "Y"
+      autoRepeat: false
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("allow_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("allow_once"))
+    }
+    Shortcut {
+      sequence: "N"
+      autoRepeat: false
+      enabled: conversation.permissionKeysLive && conversation.optionIdForKind("reject_once") !== ""
+      onActivated: conversation.answerPermission(conversation.optionIdForKind("reject_once"))
+    }
+    Shortcut { sequence: "Up"; onActivated: conversation.scrollKeyImpulse(-1, false) }
+    Shortcut { sequence: "Down"; onActivated: conversation.scrollKeyImpulse(1, false) }
+    Shortcut { sequence: "Ctrl+J"; onActivated: conversation.scrollActiveSurface(1, false) }
+    Shortcut { sequence: "Ctrl+K"; onActivated: conversation.scrollActiveSurface(-1, false) }
+    Shortcut { sequence: "Ctrl+U"; onActivated: conversation.scrollActiveSurface(-1, true) }
+    Shortcut { sequence: "Ctrl+D"; onActivated: conversation.scrollActiveSurface(1, true) }
+    Shortcut { sequence: "PageUp"; onActivated: conversation.scrollActiveSurface(-1, true) }
+    Shortcut { sequence: "PageDown"; onActivated: conversation.scrollActiveSurface(1, true) }
+    Shortcut { sequence: "Ctrl+="; onActivated: conversation.fontScaleStepRequested(0.1) }
+    Shortcut { sequence: "Ctrl++"; onActivated: conversation.fontScaleStepRequested(0.1) }
+    Shortcut { sequence: "Ctrl+-"; onActivated: conversation.fontScaleStepRequested(-0.1) }
+    Shortcut { sequence: "Ctrl+0"; enabled: !conversation.menuOpen; onActivated: conversation.fontScaleResetRequested() }
     Shortcut { sequence: "Ctrl+P"; onActivated: conversation.pinConversation() }
-    Shortcut { sequence: "Ctrl+,"; onActivated: conversation.motionTunerRequested() }
     Shortcut { sequence: "Meta+,"; onActivated: conversation.harnessSelectorRequested() }
-    Shortcut { sequence: "Ctrl+1"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(0) }
-    Shortcut { sequence: "Ctrl+2"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(1) }
-    Shortcut { sequence: "Ctrl+3"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(2) }
-    Shortcut { sequence: "Ctrl+4"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(3) }
-    Shortcut { sequence: "Ctrl+5"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(4) }
-    Shortcut { sequence: "Ctrl+6"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(5) }
-    Shortcut { sequence: "Ctrl+7"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(6) }
-    Shortcut { sequence: "Ctrl+8"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(7) }
-    Shortcut { sequence: "Ctrl+9"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(8) }
-    Shortcut { sequence: "Ctrl+0"; enabled: conversation.menuOpen || conversation.fileBrowserOpen; onActivated: conversation.selectVisibleSlot(9) }
+    // Ctrl+1 … Ctrl+9, Ctrl+0 pick the matching visible row. Each Shortcut sits
+    // in an Item so it stays in this window's item tree, which is how a
+    // Shortcut finds its window.
+    Repeater {
+      model: 10
+      Item {
+        required property int index
+        Shortcut {
+          sequence: "Ctrl+" + ((index + 1) % 10)
+          enabled: conversation.menuOpen
+          onActivated: conversation.selectVisibleSlot(index)
+        }
+      }
+    }
   }
 
   function submit() {
@@ -1109,10 +939,11 @@ Item {
     }
     if (waiting) {
       if (!steeringSupported || steeringPending || !bridgeReady || !agent.running) return
-      steeringPending = true
+      beginAck("steer")
       statusText = "Steering…"
       prompt.text = ""
       messages.append({ role: "You", body: text })
+      noteContentWidth(text)
       activeReply = messages.count
       activeReplyMessageId = ""
       messages.append({ role: "Claude", body: "" })
@@ -1128,13 +959,16 @@ Item {
     queuedPrompt = text
     prompt.text = ""
     messages.append({ role: "You", body: text })
+    noteContentWidth(text)
     var promptIndex = messages.count - 1
     activeReply = messages.count
     activeReplyMessageId = ""
     messages.append({ role: "Claude", body: "" })
     if (followTail) Qt.callLater(function() { root.anchorPrompt(promptIndex) })
     if (bridgeReady) sendQueuedPrompt()
-    else statusText = "Starting agent…"
+    else statusText = root.ignoredBridgeOverride === ""
+      ? "Starting agent…"
+      : "Ignoring NIXI_BRIDGE_COMMAND: the bridge command is fixed by this install."
   }
 
   function sendQueuedPrompt() {
@@ -1146,26 +980,58 @@ Item {
     queuedPrompt = ""
   }
 
+  // submit() clears prompt.text before calling this, so a silent return means
+  // the user watches /mechanic vanish with no explanation (#40). Unlike a
+  // prompt, a trust command is not queued and replayed -- saying so is enough.
   function setTrust(level) {
-    if (trustPending) return
-    if (agent.running && bridgeReady) {
-      trustPending = true
-      statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
-      agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
+    if (trustPending) {
+      statusText = "Still switching trust…"
+      return
     }
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    beginAck("trust")
+    statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
+    agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }
 
   function setPermissionMode(mode) {
-    if (permissionModePending) return
-    var next = mode === "yolo" ? "yolo" : "permission"
-    if (agent.running && bridgeReady) {
-      permissionModePending = true
-      agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
+    if (permissionModePending) {
+      statusText = "Still switching permission mode…"
+      return
     }
+    var next = mode === "yolo" ? "yolo" : "permission"
+    if (!agent.running || !bridgeReady) {
+      statusText = "The agent is still starting — try again in a moment."
+      return
+    }
+    beginAck("permission_mode")
+    agent.write(JSON.stringify({ type: "permission_mode", mode: next }) + "\n")
   }
 
   // A message from Nixi itself (a tour step), rendered like an agent reply --
   // only "You" is treated as human by the delegate.
+  function beginAck(kind) {
+    var next = {}
+    for (var k in pendingAck) next[k] = pendingAck[k]
+    next[kind] = true
+    pendingAck = next
+  }
+
+  function settleAck(kind) {
+    if (pendingAck[kind] !== true) return
+    var next = {}
+    for (var k in pendingAck) if (k !== kind) next[k] = pendingAck[k]
+    pendingAck = next
+  }
+
+  // Every kind at once. The reason this exists is #40: a session restart reset
+  // one flag and left two set, so the trust and YOLO controls were dead for the
+  // life of the conversation. One call cannot forget a kind.
+  function clearAcks() { pendingAck = ({}) }
+
   function showNixiMessage(text) {
     messages.append({ role: "Nixi", body: String(text) })
     Qt.callLater(root.scrollToEnd)
@@ -1175,6 +1041,14 @@ Item {
   function askQuestion(text) {
     prompt.text = String(text)
     submit()
+  }
+
+  // A handed-over question that must not be sent for the user: it waits in
+  // the prompt until they press Enter (nixi#37).
+  function setPrompt(text) {
+    prompt.text = String(text)
+    prompt.cursorPosition = prompt.text.length
+    Qt.callLater(function() { prompt.forceActiveFocus() })
   }
 
   function appendReply(text, messageId) {
@@ -1187,37 +1061,49 @@ Item {
       messages.append({ role: "Claude", body: "" })
     }
     if (nextMessageId !== "") activeReplyMessageId = nextMessageId
-    messages.setProperty(activeReply, "body", (messages.get(activeReply).body || "") + text)
+    var grown = (messages.get(activeReply).body || "") + text
+    messages.setProperty(activeReply, "body", grown)
+    root.noteContentWidth(grown)
     if (pinTail) root.pinComposerToEnd()
     else if (followTail) Qt.callLater(root.scrollToEnd)
   }
 
   function clearPermissions() {
-    pendingPermissionId = ""
-    pendingPermissionTitle = ""
+    pendingPermission = noPermission
     permissionQueue = []
+    permissionSettled = false
+    permissionSettle.stop()
   }
 
-  function enqueuePermission(id, title) {
-    var request = { id: String(id || ""), title: String(title || "Allow tool?") }
-    if (pendingPermissionId === "") {
-      pendingPermissionId = request.id
-      pendingPermissionTitle = request.title
-    } else {
-      permissionQueue = permissionQueue.concat([request])
-    }
+  // options is the agent's own list of choices and the card renders one button
+  // per entry, so dropping it here left the card with no buttons at all (#58
+  // rewired the card and its keys through it but never widened this).
+  function enqueuePermission(id, title, detail, omitted, options) {
+    var request = { id: String(id || ""), title: String(title || "Allow tool?"),
+                    detail: String(detail || ""), omitted: Number(omitted) || 0,
+                    options: options || [] }
+    permissionQueue = permissionQueue.concat([request])
+    if (pendingPermission.id === "") showNextPermission()
   }
 
   function showNextPermission() {
-    if (permissionQueue.length === 0) {
-      pendingPermissionId = ""
-      pendingPermissionTitle = ""
-      return
-    }
-    var request = permissionQueue[0]
+    pendingPermission = permissionQueue.length > 0 ? permissionQueue[0] : noPermission
     permissionQueue = permissionQueue.slice(1)
-    pendingPermissionId = request.id
-    pendingPermissionTitle = request.title
+    // The next request arrives in the same card, the same geometry, with Allow
+    // in the same pixel. Nothing may answer it until it has been on screen.
+    permissionSettled = false
+    if (pendingPermission.id !== "") permissionSettle.restart()
+    else permissionSettle.stop()
+  }
+
+  // 400 ms is Qt's own mouseDoubleClickInterval default, so the window covers
+  // exactly the pair of clicks the platform itself calls a double-click -- and
+  // is far below the ~1 s at which a UI is felt to have stalled (#50).
+  Timer {
+    id: permissionSettle
+    interval: 400
+    repeat: false
+    onTriggered: root.permissionSettled = true
   }
 
   function handleAgentLine(rawLine) {
@@ -1237,7 +1123,7 @@ Item {
         statusText = "Replying…"
       } else if (event.type === "done") {
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         statusText = ""
         activeReply = -1
         activeReplyMessageId = ""
@@ -1248,14 +1134,47 @@ Item {
         if (pinned)
           Qt.callLater(root.requestCompletionAttention)
         Qt.callLater(function() { prompt.forceActiveFocus() })
-      } else if (event.type === "steered") {
-        steeringPending = false
-        statusText = "Thinking…"
-        Qt.callLater(function() { prompt.forceActiveFocus() })
-      } else if (event.type === "steering_error") {
-        steeringPending = false
-        statusText = String(event.message || "Could not steer the active turn")
-        Qt.callLater(function() { prompt.forceActiveFocus() })
+      } else if (event.type === "ack") {
+        // #44: one branch for every request the card makes. The bridge answers
+        // trust, permission_mode and steer with the same shape, so the pending
+        // state is settled once, here, whatever the kind -- rather than in five
+        // branches that each had to remember.
+        var of = String(event.of || "")
+        settleAck(of)
+        if (of === "trust") {
+          trust = event.trust === "mechanic" ? "mechanic" : "guide"
+          if (event.ok) {
+            if (trust === "guide") clearPermissions()
+            statusText = trust === "mechanic"
+              ? "Mechanic: Nixi asks before each change"
+              : "Guide: Nixi explains, and changes nothing"
+          } else {
+            statusText = String(event.message || "Could not change trust level")
+          }
+        } else if (of === "permission_mode") {
+          permissionMode = event.mode === "yolo" ? "yolo" : "permission"
+          if (event.ok) {
+            if (permissionMode === "yolo") clearPermissions()
+            permissionModeConfirmed(permissionMode)
+          } else {
+            statusText = String(event.message || "Could not change permission mode")
+          }
+        } else if (of === "steer") {
+          statusText = event.ok ? "Thinking…"
+            : String(event.message || "Could not steer the active turn")
+          Qt.callLater(function() { prompt.forceActiveFocus() })
+        }
+      } else if (event.type === "learned") {
+        // The tutor recorded something about this machine. The write used to be
+        // invisible: hidden from the transcript, appended to LEARNED.md, and
+        // fed back into every later prompt with no way for the user to notice
+        // or correct it (#51). Agent-authored text, so it renders through the
+        // same spacedMarkdown path as a reply -- bounded at 300 chars by
+        // learned.js, with uncontained images and non-http links already
+        // stripped there (#42).
+        var facts = event.facts || []
+        for (var f = 0; f < facts.length; f++)
+          showNixiMessage("Noted: " + String(facts[f]))
       } else if (event.type === "status") {
         statusText = String(event.text || "Working…")
       } else if (event.type === "tool") {
@@ -1263,31 +1182,11 @@ Item {
         var toolStatus = String(event.status || "in_progress")
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
-        enqueuePermission(event.id, event.title)
-      } else if (event.type === "permission_mode") {
-        permissionMode = event.mode === "yolo" ? "yolo" : "permission"
-        permissionModePending = false
-        if (permissionMode === "yolo") clearPermissions()
-        permissionModeConfirmed(permissionMode)
-      } else if (event.type === "trust") {
-        trust = event.trust === "mechanic" ? "mechanic" : "guide"
-        trustPending = false
-        if (trust === "guide") clearPermissions()
-        statusText = trust === "mechanic"
-          ? "Mechanic: Nixi asks before each change"
-          : "Guide: Nixi explains, and changes nothing"
-      } else if (event.type === "trust_error") {
-        trust = event.trust === "mechanic" ? "mechanic" : "guide"
-        trustPending = false
-        statusText = String(event.message || "Could not change trust level")
-      } else if (event.type === "permission_mode_error") {
-        permissionMode = event.mode === "yolo" ? "yolo" : "permission"
-        permissionModePending = false
-        statusText = String(event.message || "Could not change permission mode")
+        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options)
       } else if (event.type === "error") {
         clearPermissions()
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         activeReply = -1
         activeReplyMessageId = ""
         statusText = String(event.message || "Agent error")
@@ -1297,7 +1196,7 @@ Item {
         bridgeReady = false
         sessionLost = true
         waiting = false
-        steeringPending = false
+        settleAck("steer")
         activeReply = -1
         activeReplyMessageId = ""
         statusText = String(event.message || "Session lost")
@@ -1311,21 +1210,48 @@ Item {
     sessionLost = false
     queuedPrompt = ""
     steeringSupported = false
-    steeringPending = false
+    // Every in-flight request, whatever kind. A bridge that died mid-change
+    // never sends its ack, so without this the trust and YOLO controls are
+    // dead no-ops for the life of the conversation (#40). That fix used to be
+    // "remember to reset two more flags"; since #44 there is one piece of
+    // state, so forgetting a kind is no longer possible. close() does not need
+    // it: it destroys the object (Ask.qml:394).
+    clearAcks()
     statusText = "Starting agent…"
     agent.running = true
   }
 
-  function answerPermission(allow) {
-    if (pendingPermissionId === "" || !agent.running) return
-    var answeredId = pendingPermissionId
+  // The agent offers the choices; the card renders them and reports back which
+  // one was picked. It used to send a boolean, which collapsed every answer to
+  // allow_once and threw away "allow always" entirely (#53).
+  function answerPermission(optionId) {
+    if (pendingPermission.id === "" || !permissionSettled || !agent.running) return
+    var option = root.optionById(optionId)
+    if (!option) return
     agent.write(JSON.stringify({
       type: "permission",
-      id: answeredId,
-      allow: allow
+      id: pendingPermission.id,
+      optionId: option.id
     }) + "\n")
     showNextPermission()
-    statusText = allow ? "Working…" : "Tool denied"
+    statusText = String(option.kind || "").indexOf("allow") === 0 ? "Working…" : "Tool denied"
+  }
+
+  function optionById(optionId) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].id === optionId) return options[i]
+    return null
+  }
+
+  // The id of the option with this kind, or "" when the agent offers none.
+  // Y and N bind through this rather than to button positions, so they stay on
+  // the one-shot choices however many options arrive.
+  function optionIdForKind(kind) {
+    var options = pendingPermission.options || []
+    for (var i = 0; i < options.length; i++)
+      if (options[i] && options[i].kind === kind) return options[i].id
+    return ""
   }
 
   ListModel { id: messages }
@@ -1362,13 +1288,10 @@ Item {
       root.statusText = "The agent connection closed. Start a new session or choose another harness."
     }
     stdout: SplitParser { onRead: function(line) { root.handleAgentLine(line) } }
-    stderr: SplitParser {
-      onRead: function(line) {
-        // The bridge keeps its machine-readable UI stream on stdout. stderr
-        // is reserved for bridge-level diagnostics and is intentionally quiet.
-      }
-    }
   }
+
+  ScrollPhysics { id: transcriptPhysics; flickable: surface; deceleration: root.keyboardDeceleration }
+  ScrollPhysics { id: menuPhysics; flickable: inlineResults; deceleration: root.keyboardDeceleration }
 
   PanelWindow {
     id: panel
@@ -1379,44 +1302,18 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     // Let the auxiliary motion window become active without dismissing this
     // layer popup, then reclaim exclusive prompt focus when it closes.
-    WlrLayershell.keyboardFocus: root.motionTunerOpen || root.harnessSelectorOpen
+    WlrLayershell.keyboardFocus: root.harnessSelectorOpen
       ? WlrKeyboardFocus.OnDemand
       : WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
 
-    // While browsing files, only the Ask card itself accepts pointer input.
-    // The rest of this transparent full-screen layer must be click-through so
-    // Sushi's adjacent preview controls remain usable.
-    mask: Region {
-      x: root.fileBrowserOpen ? fileCard.x : 0
-      y: root.fileBrowserOpen && root.filePreviewVisible
-        ? Math.min(fileCard.y, filePreviewCard.y) : (root.fileBrowserOpen ? fileCard.y : 0)
-      width: root.fileBrowserOpen && root.filePreviewVisible
-        ? filePreviewCard.x + filePreviewCard.width - fileCard.x
-        : (root.fileBrowserOpen ? fileCard.width : panel.width)
-      height: root.fileBrowserOpen && root.filePreviewVisible
-        ? Math.max(fileCard.y + fileCard.height,
-            filePreviewCard.y + filePreviewCard.height) - y
-        : (root.fileBrowserOpen ? fileCard.height : panel.height)
-    }
-
     Shortcut { sequence: "Escape"; onActivated: root.close() }
     WindowShortcuts { conversation: root }
-    Shortcut {
-      sequence: "Y"
-      enabled: root.pendingPermissionId !== ""
-      onActivated: root.answerPermission(true)
-    }
-    Shortcut {
-      sequence: "N"
-      enabled: root.pendingPermissionId !== ""
-      onActivated: root.answerPermission(false)
-    }
     Rectangle {
       id: veil
       anchors.fill: parent
       color: root.scrim
-      visible: root.layoutReady && !root.fileBrowserOpen
+      visible: root.layoutReady
       opacity: 0
     }
     NumberAnimation { id: veilFade; target: veil; property: "opacity"; from: 0; to: 1; duration: 150; easing.type: Easing.OutQuad }
@@ -1425,10 +1322,27 @@ Item {
     BorderSurface {
       id: card
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      readonly property int maxHeight: Math.min(Style.space(560), parent.height - Style.gapsOut * 2)
+      // The text sizes above multiply by root.fontScale; these did not, so
+      // Ctrl+= crammed larger text into the same 540px box -- the opposite of
+      // what zooming is for (#38). The parent bound is untouched, so however
+      // large the scale, nothing can exceed the screen.
+          // #38: the ceiling follows the screen instead of a fixed 560, so a long
+      // answer on a 1440p or 2160p panel is not squeezed into a third of it.
+      readonly property int maxHeight: Math.min(Math.round(parent.height * 0.85), parent.height - Style.gapsOut * 2)
+      readonly property int compactWidth: Style.space(540) * root.fontScale
+      readonly property int roomyWidth: Math.min(Style.space(1000) * root.fontScale,
+                                                 Math.round(parent.width * 0.7))
       readonly property int frameInset: Style.spacing.panelPadding * 2
       readonly property int headerInset: Style.space(8)
-      width: root.pinned ? parent.width : Math.min(Style.space(540), parent.width - Style.gapsOut * 2)
+      // Width grows only when the CONTENT asks for it, never from a measured
+      // height. Measuring would loop: wider wraps less, so the card shortens,
+      // so it would narrow, so it lengthens again. root.contentWantsRoom is
+      // computed from the message text itself, so the layout cannot feed back
+      // into it -- and it is monotonic within a conversation, so the card
+      // cannot oscillate even at a threshold.
+      width: root.pinned ? parent.width
+        : Math.min(root.contentWantsRoom ? roomyWidth : compactWidth, parent.width - Style.gapsOut * 2)
+      Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
       height: root.pinned ? parent.height : Math.min(maxHeight, stack.height + frameInset)
       anchors.horizontalCenter: parent.horizontalCenter
       // Optical centre, not the mathematical one. A card placed at exactly
@@ -1440,7 +1354,7 @@ Item {
         ? 0
         : Math.max(Style.gapsOut, Math.round((parent.height - height) * opticalCentre))
       color: root.background
-      visible: root.layoutReady && !root.fileBrowserOpen
+      visible: root.layoutReady
       radius: root.pinned ? 0 : Style.cornerRadius
       // A pinned surface is plain content. Hyprland owns its outer frame,
       // rounding and clipping; only the layer-shell overlay draws a frame.
@@ -1468,53 +1382,15 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         maximumFlickVelocity: 6000
         flickDeceleration: 650
-        onContentYChanged: root.stopCoastAtBoundary(surface, trackpadCoast)
+        onContentYChanged: transcriptPhysics.stopAtBoundary()
         onDraggingChanged: {
           if (!dragging) return
-          root.keyboardVelocityY = 0
-          keyboardCoast.stop()
-          horizontalScroll.stop()
+          transcriptPhysics.stop()
           verticalScroll.stop()
           anchorScroll.stop()
-          trackpadCoast.stop()
         }
 
-        Timer {
-          id: keyboardCoast
-          interval: 16
-          repeat: true
-          onTriggered: {
-            var now = Date.now()
-            var elapsed = Math.max(1, Math.min(40, now - root.keyboardSampleTime)) / 1000
-            root.keyboardSampleTime = now
-            var velocity = root.keyboardVelocityY
-            var maxY = Math.max(0, surface.contentHeight - surface.height)
-            var nextY = Math.max(0, Math.min(maxY, surface.contentY + velocity * elapsed))
-            surface.contentY = nextY
 
-            if ((nextY <= 0 && velocity < 0) || (nextY >= maxY && velocity > 0)) {
-              root.keyboardVelocityY = 0
-              stop()
-              return
-            }
-
-            var loss = root.keyboardDeceleration * elapsed
-            if (Math.abs(velocity) <= loss) {
-              root.keyboardVelocityY = 0
-              stop()
-            } else {
-              root.keyboardVelocityY = velocity > 0 ? velocity - loss : velocity + loss
-            }
-          }
-        }
-
-        NumberAnimation {
-          id: horizontalScroll
-          target: surface
-          property: "contentX"
-          duration: 170
-          easing.type: Easing.OutCubic
-        }
         NumberAnimation {
           id: verticalScroll
           target: surface
@@ -1531,86 +1407,26 @@ Item {
           duration: 320
           easing.type: Easing.OutCubic
         }
-        // A precision-scroll gesture is not a pointer drag, so handing its
-        // sampled velocity back to Flickable.flick() is unreliable after
-        // cancelFlick(): on some Qt/Wayland paths the synthetic flick is
-        // discarded with the wheel sequence that just ended. Animate the
-        // stopping distance directly instead. The cubic ease gives the coast
-        // a long, soft tail; distance derives from deceleration while the
-        // presentation duration is stretched enough to make that tail read.
-        NumberAnimation {
-          id: trackpadCoast
-          target: surface
-          property: "contentY"
-          easing.type: Easing.OutQuint
-        }
 
         // Qt/Wayland may report a two-finger trackpad stream as either a
         // touchpad or a mouse. Pixel deltas distinguish that stream from a
         // click wheel, whose notches keep using the animated keyboard step.
         WheelHandler {
-          id: trackpadWheel
           target: null
           blocking: true
           acceptedButtons: Qt.NoButton
           acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-          property double lastSampleTime: 0
-          property real releaseVelocityY: 0
-
-          function coast() {
-            coastTimer.stop()
-            root.coastVertically(-releaseVelocityY)
-            lastSampleTime = 0
-            releaseVelocityY = 0
-          }
-
           onWheel: function(wheel) {
             if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
               var steps = wheel.angleDelta.y / 120
-              var sideways = wheel.angleDelta.x / 120
-              if (steps !== 0 || sideways !== 0)
-                root.scrollLine(-sideways * 3, -steps * 3)
-              wheel.accepted = true
-              return
+              if (steps !== 0) root.scrollLine(-steps * 3)
+            } else {
+              verticalScroll.stop()
+              anchorScroll.stop()
+              transcriptPhysics.track(wheel)
             }
-
-            horizontalScroll.stop()
-            verticalScroll.stop()
-            anchorScroll.stop()
-            root.keyboardVelocityY = 0
-            keyboardCoast.stop()
-            trackpadCoast.stop()
-            surface.cancelFlick()
-
-            var now = Date.now()
-            var firstSample = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-            if (firstSample) {
-              lastSampleTime = now
-              releaseVelocityY = 0
-            }
-            if (wheel.phase === Qt.ScrollEnd) {
-              coast()
-              wheel.accepted = true
-              return
-            }
-
-            var elapsed = firstSample ? 16 : Math.max(1, Math.min(80, now - lastSampleTime))
-            var dy = wheel.pixelDelta.y
-            releaseVelocityY = releaseVelocityY * 0.55 + dy * 1000 / elapsed * 0.45
-            lastSampleTime = now
-
-            var maxY = Math.max(0, surface.contentHeight - surface.height)
-            surface.contentY = Math.max(0, Math.min(maxY, surface.contentY - dy))
-            coastTimer.restart()
             wheel.accepted = true
           }
-
-        }
-
-        Timer {
-          id: coastTimer
-          interval: 55
-          onTriggered: trackpadWheel.coast()
         }
 
         Column {
@@ -1661,7 +1477,7 @@ Item {
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
                 Keys.onPressed: function(event) {
-                  if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event)) event.accepted = true
+                  if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
               }
               TextEdit {
@@ -1679,9 +1495,17 @@ Item {
                 selectByMouse: true
                 selectionColor: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.32)
                 selectedTextColor: root.foreground
-                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                // The URL and its visible label are both agent-authored, so the
+                // label need not describe where it goes, and xdg-open dispatches
+                // any other scheme to a registered handler (#42). Refusing
+                // silently would be worse than opening it: the user could not
+                // tell whether the click registered.
+                onLinkActivated: function(link) {
+                  if (TextFormat.openableLink(link)) Qt.openUrlExternally(link)
+                  else root.statusText = "Nixi did not open that link: only http and https links can be opened."
+                }
                 Keys.onPressed: function(event) {
-                  if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event)) event.accepted = true
+                  if (root.handleCardKey(event) || root.handleScrollKey(event)) event.accepted = true
                 }
               }
             }
@@ -1794,7 +1618,7 @@ Item {
                 else Qt.callLater(root.scrollToEnd)
               }
               onTextChanged: {
-                if (!root.fileBrowserOpen && root.searchMode === "" && text.length > 0
+                if (root.searchMode === "" && text.length > 0
                     && "@^%".indexOf(text.charAt(0)) >= 0) {
                   root.searchMode = text.charAt(0)
                   text = text.slice(1)
@@ -1808,6 +1632,26 @@ Item {
               }
               Keys.onPressed: function(event) {
                 root.noteKeyboardActivity()
+                if (root.pendingPermission.id !== "") {
+                  var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
+                  if (bare && text.length === 0
+                      && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
+                    // A held key answers once: autorepeat is how the next
+                    // request got approved before it rendered (#50). And an
+                    // option id, not a boolean -- #58 changed the signature
+                    // here without changing this caller, so every Y and N from
+                    // the composer found no option and was silently swallowed.
+                    if (!event.isAutoRepeat)
+                      root.answerPermission(root.optionIdForKind(
+                        event.key === Qt.Key_Y ? "allow_once" : "reject_once"))
+                    event.accepted = true
+                    return
+                  }
+                  if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    event.accepted = true
+                    return
+                  }
+                }
                 if (event.key === Qt.Key_Backspace && root.searchMode !== ""
                     && text.length === 0) {
                   root.searchMode = ""
@@ -1865,7 +1709,7 @@ Item {
                     return
                   }
                 }
-                if (root.handleFontKey(event) || root.handlePinKey(event) || root.handleMotionTunerKey(event) || root.handleHarnessSelectorKey(event) || root.handleScrollKey(event, true)) {
+                if (root.handleCardKey(event) || root.handleScrollKey(event, true)) {
                   event.accepted = true
                 } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     && (root.searchMode !== ""
@@ -1956,113 +1800,36 @@ Item {
               flickDeceleration: 650
               reuseItems: true
               onContentYChanged: {
-                root.stopCoastAtBoundary(inlineResults, menuTrackpadCoast)
+                menuPhysics.stopAtBoundary()
                 root.deferMenuShortcutRange()
               }
               onHeightChanged: root.deferMenuShortcutRange()
               onCountChanged: Qt.callLater(root.updateMenuShortcutRange)
               onDraggingChanged: {
                 if (!dragging) return
-                root.menuKeyboardVelocityY = 0
-                menuKeyboardCoast.stop()
-                menuTrackpadCoast.stop()
+                menuPhysics.stop()
               }
               ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-              NumberAnimation {
-                id: menuTrackpadCoast
-                target: inlineResults
-                property: "contentY"
-                easing.type: Easing.OutQuint
-              }
-
               WheelHandler {
-                id: menuTrackpadWheel
                 target: null
                 blocking: true
                 acceptedButtons: Qt.NoButton
                 acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-                property double lastSampleTime: 0
-                property real releaseVelocityY: 0
-                function coast() {
-                  menuCoastTimer.stop()
-                  root.coastMenuTrackpad(-releaseVelocityY)
-                  lastSampleTime = 0
-                  releaseVelocityY = 0
-                }
                 onWheel: function(wheel) {
                   if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
                     var steps = wheel.angleDelta.y / 120
                     if (steps !== 0)
                       root.menuScrollKeyImpulse(steps < 0 ? 1 : -1, false)
-                    wheel.accepted = true
-                    return
-                  }
-                  root.menuKeyboardVelocityY = 0
-                  menuKeyboardCoast.stop()
-                  menuTrackpadCoast.stop()
-                  inlineResults.cancelFlick()
-                  var now = Date.now()
-                  var first = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-                  if (first) { lastSampleTime = now; releaseVelocityY = 0 }
-                  if (wheel.phase === Qt.ScrollEnd) {
-                    coast(); wheel.accepted = true; return
-                  }
-                  var elapsed = first ? 16 : Math.max(1, Math.min(80,
-                    now - lastSampleTime))
-                  var dy = wheel.pixelDelta.y
-                  releaseVelocityY = releaseVelocityY * 0.55
-                    + dy * 1000 / elapsed * 0.45
-                  lastSampleTime = now
-                  var bounds = root.menuScrollBounds()
-                  inlineResults.contentY = Math.max(bounds.min,
-                    Math.min(bounds.max, inlineResults.contentY - dy))
-                  menuCoastTimer.restart()
+                  } else menuPhysics.track(wheel)
                   wheel.accepted = true
                 }
-              }
-
-              Timer {
-                id: menuCoastTimer
-                interval: 55
-                onTriggered: menuTrackpadWheel.coast()
               }
 
               Timer {
                 id: menuShortcutAssignment
                 interval: 500
                 onTriggered: root.updateMenuShortcutRange()
-              }
-
-              Timer {
-                id: menuKeyboardCoast
-                interval: 16
-                repeat: true
-                onTriggered: {
-                  var now = Date.now()
-                  var elapsed = Math.max(1, Math.min(40,
-                    now - root.menuKeyboardSampleTime)) / 1000
-                  root.menuKeyboardSampleTime = now
-                  var velocity = root.menuKeyboardVelocityY
-                  var minY = inlineResults.originY
-                  var maxY = Math.max(minY, minY + inlineResults.contentHeight
-                    - inlineResults.height)
-                  var nextY = Math.max(minY, Math.min(maxY,
-                    inlineResults.contentY + velocity * elapsed))
-                  inlineResults.contentY = nextY
-                  if ((nextY <= minY && velocity < 0)
-                      || (nextY >= maxY && velocity > 0)) {
-                    root.menuKeyboardVelocityY = 0
-                    stop()
-                    return
-                  }
-                  var loss = root.keyboardDeceleration * elapsed
-                  if (Math.abs(velocity) <= loss) {
-                    root.menuKeyboardVelocityY = 0
-                    stop()
-                  } else root.menuKeyboardVelocityY = velocity > 0
-                    ? velocity - loss : velocity + loss
-                }
               }
 
               delegate: Rectangle {
@@ -2291,7 +2058,7 @@ Item {
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b,
               root.trust === "guide" ? 0.42 : 0.78)
         font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.caption * root.fontScale
 
         MouseArea {
           anchors.fill: parent
@@ -2319,7 +2086,7 @@ Item {
           ? root.accent
           : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.36)
         font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.body * root.fontScale
         z: 10
 
         MouseArea {
@@ -2333,366 +2100,12 @@ Item {
       }
     }
 
-    BorderSurface {
-      id: fileCard
-      parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      readonly property int maxHeight: Math.min(Style.space(560), parent.height - Style.gapsOut * 2)
-      width: root.pinned ? parent.width : Math.min(Style.space(540), parent.width - Style.gapsOut * 2)
-      height: root.pinned ? parent.height : Math.min(maxHeight,
-        fileContent.implicitHeight + Style.spacing.panelPadding * 2)
-      anchors.horizontalCenter: parent.horizontalCenter
-      y: root.pinned ? 0 : Math.max(Style.gapsOut,
-        Math.round((parent.height - height) * 0.38))
-      visible: root.layoutReady && root.fileBrowserOpen
-      color: root.background
-      radius: root.pinned ? 0 : Style.cornerRadius
-      borderSpec: root.pinned ? Border.none()
-        : Border.surfaceSpec("menu", "border", root.border, Math.max(1, Style.space(2)))
-
-      Column {
-        id: fileContent
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: Style.spacing.panelPadding
-        spacing: Style.space(6)
-
-        Text {
-          width: parent.width
-          text: root.fileBrowserMode === "repos" ? "Git repositories" : "Files"
-          color: root.foreground
-          font.family: Style.font.family
-          font.pixelSize: root.menuPathSize
-          font.bold: true
-          font.letterSpacing: 1.2
-        }
-
-        TextArea {
-          id: filePrompt
-          Keys.priority: Keys.BeforeItem
-          width: parent.width
-          height: Math.max(Style.space(48), contentHeight)
-          text: root.fileBrowserQuery
-          padding: 0
-          color: root.accent
-          font.family: root.conversationFont
-          font.pixelSize: root.humanSizeFor(text)
-          font.italic: true
-          wrapMode: TextEdit.Wrap
-          background: null
-          onTextChanged: {
-            if (text === root.fileBrowserQuery) return
-            root.fileBrowserQuery = text
-            root.fileBrowserIndex = 0
-            root.fileKeyboardVelocityY = 0
-            fileKeyboardCoast.stop()
-            fileTrackpadCoast.stop()
-          }
-          Keys.onPressed: function(event) {
-            if (root.handleVisibleSlotKey(event)) {
-              event.accepted = true
-              return
-            }
-            var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
-            var shift = (event.modifiers & Qt.ShiftModifier) !== 0
-            var selectionDirection = 0
-            var scrollDirection = 0
-            var scrollPage = false
-            if (!ctrl && (event.key === Qt.Key_Down
-                || (event.key === Qt.Key_Tab && !shift))) selectionDirection = 1
-            else if (!ctrl && (event.key === Qt.Key_Up
-                || event.key === Qt.Key_Backtab
-                || (event.key === Qt.Key_Tab && shift))) selectionDirection = -1
-            else if (ctrl && event.key === Qt.Key_J) scrollDirection = 1
-            else if (ctrl && event.key === Qt.Key_K) scrollDirection = -1
-            else if ((ctrl && event.key === Qt.Key_D)
-                || event.key === Qt.Key_PageDown) {
-              scrollDirection = 1; scrollPage = true
-            } else if ((ctrl && event.key === Qt.Key_U)
-                || event.key === Qt.Key_PageUp) {
-              scrollDirection = -1; scrollPage = true
-            }
-            if (selectionDirection !== 0) {
-              root.moveFileSelection(selectionDirection)
-              event.accepted = true
-            } else if (scrollDirection !== 0) {
-              root.fileScrollKeyImpulse(scrollDirection, scrollPage)
-              event.accepted = true
-            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-              root.openFileBrowserSelection(event.modifiers)
-              event.accepted = true
-            }
-          }
-        }
-
-        Rectangle {
-          width: parent.width
-          height: 1
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.14)
-        }
-
-        ListView {
-          id: fileList
-          width: parent.width
-          height: Math.min(contentHeight, Style.space(360))
-          model: root.fileBrowserRows
-          currentIndex: root.fileBrowserIndex
-          clip: true
-          boundsBehavior: Flickable.StopAtBounds
-          flickableDirection: Flickable.VerticalFlick
-          maximumFlickVelocity: 6000
-          flickDeceleration: 650
-          onContentYChanged: {
-            root.stopCoastAtBoundary(fileList, fileTrackpadCoast)
-            root.deferFileShortcutRange()
-          }
-          onHeightChanged: root.deferFileShortcutRange()
-          onCountChanged: Qt.callLater(root.updateFileShortcutRange)
-          onDraggingChanged: {
-            if (!dragging) return
-            root.fileKeyboardVelocityY = 0
-            fileKeyboardCoast.stop()
-            fileTrackpadCoast.stop()
-          }
-          ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-          NumberAnimation {
-            id: fileTrackpadCoast
-            target: fileList
-            property: "contentY"
-            easing.type: Easing.OutQuint
-          }
-
-          Timer {
-            id: fileKeyboardCoast
-            interval: 16
-            repeat: true
-            onTriggered: {
-              var now = Date.now()
-              var elapsed = Math.max(1, Math.min(40, now - root.fileKeyboardSampleTime)) / 1000
-              root.fileKeyboardSampleTime = now
-              var velocity = root.fileKeyboardVelocityY
-              var bounds = root.fileScrollBounds()
-              var nextY = Math.max(bounds.min, Math.min(bounds.max,
-                fileList.contentY + velocity * elapsed))
-              fileList.contentY = nextY
-              if ((nextY <= bounds.min && velocity < 0)
-                  || (nextY >= bounds.max && velocity > 0)) {
-                root.fileKeyboardVelocityY = 0
-                stop()
-                return
-              }
-              var loss = root.keyboardDeceleration * elapsed
-              if (Math.abs(velocity) <= loss) {
-                root.fileKeyboardVelocityY = 0
-                stop()
-              } else root.fileKeyboardVelocityY = velocity > 0 ? velocity - loss : velocity + loss
-            }
-          }
-
-          WheelHandler {
-            id: fileTrackpadWheel
-            target: null
-            blocking: true
-            acceptedButtons: Qt.NoButton
-            acceptedDevices: PointerDevice.TouchPad | PointerDevice.Mouse
-            property double lastSampleTime: 0
-            property real releaseVelocityY: 0
-            function coast() {
-              fileCoastTimer.stop()
-              root.coastFileTrackpad(-releaseVelocityY)
-              lastSampleTime = 0
-              releaseVelocityY = 0
-            }
-            onWheel: function(wheel) {
-              if (wheel.pixelDelta.x === 0 && wheel.pixelDelta.y === 0) {
-                var steps = wheel.angleDelta.y / 120
-                if (steps !== 0) root.fileScrollKeyImpulse(steps < 0 ? 1 : -1, false)
-                wheel.accepted = true
-                return
-              }
-              root.fileKeyboardVelocityY = 0
-              fileKeyboardCoast.stop()
-              fileTrackpadCoast.stop()
-              fileList.cancelFlick()
-              var now = Date.now()
-              var first = wheel.phase === Qt.ScrollBegin || lastSampleTime === 0
-              if (first) { lastSampleTime = now; releaseVelocityY = 0 }
-              if (wheel.phase === Qt.ScrollEnd) {
-                coast(); wheel.accepted = true; return
-              }
-              var elapsed = first ? 16 : Math.max(1, Math.min(80, now - lastSampleTime))
-              var dy = wheel.pixelDelta.y
-              releaseVelocityY = releaseVelocityY * 0.55 + dy * 1000 / elapsed * 0.45
-              lastSampleTime = now
-              var bounds = root.fileScrollBounds()
-              fileList.contentY = Math.max(bounds.min, Math.min(bounds.max,
-                fileList.contentY - dy))
-              fileCoastTimer.restart()
-              wheel.accepted = true
-            }
-          }
-
-          Timer { id: fileCoastTimer; interval: 55; onTriggered: fileTrackpadWheel.coast() }
-          Timer {
-            id: fileShortcutAssignment
-            interval: 500
-            onTriggered: root.updateFileShortcutRange()
-          }
-          Timer {
-            id: filePreviewTimer
-            interval: 500
-            onTriggered: {
-              var previewingFiles = root.fileBrowserOpen
-                ? root.fileBrowserMode === "files" : root.searchMode === "@"
-              if (!previewingFiles || root.hoverPreviewPath === "") return
-              root.filePreviewRequestId++
-              filePreviewProc.running = false
-              filePreviewProc.command = [
-                "gjs",
-                root.bridgeScript("preview.js"),
-                String(root.filePreviewRequestId), root.hoverPreviewPath
-              ]
-              filePreviewProc.running = true
-            }
-          }
-          delegate: Rectangle {
-            required property var modelData
-            required property int index
-            width: fileList.width
-            readonly property bool hasThumbnail: root.fileBrowserMode === "files"
-              && root.isImagePath(modelData.path)
-            readonly property real thumbnailSize: Style.space(38)
-            height: Math.max(fileRowText.implicitHeight,
-              hasThumbnail ? thumbnailSize : 0) + Style.space(14)
-            color: index === root.fileBrowserIndex
-              ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.18)
-              : "transparent"
-
-            readonly property int visibleSlot: index - root.fileShortcutFirst
-
-            Rectangle {
-              id: fileThumbnailFrame
-              visible: parent.hasThumbnail
-              width: parent.thumbnailSize
-              height: parent.thumbnailSize
-              anchors.left: parent.left
-              anchors.leftMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.05)
-              border.width: 1
-              border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
-              clip: true
-
-              Image {
-                anchors.fill: parent
-                anchors.margins: 1
-                source: fileThumbnailFrame.visible
-                  ? root.localFileUrl(modelData.path) : ""
-                asynchronous: true
-                cache: true
-                sourceSize.width: Math.round(parent.width * 2)
-                sourceSize.height: Math.round(parent.height * 2)
-                fillMode: Image.PreserveAspectCrop
-              }
-            }
-
-            Text {
-              id: fileSlotHint
-              anchors.top: parent.top
-              anchors.right: parent.right
-              anchors.topMargin: Style.space(3)
-              anchors.rightMargin: Style.space(6)
-              visible: parent.visibleSlot >= 0 && parent.visibleSlot < 10
-                && index <= root.fileShortcutLast
-              text: parent.visibleSlot < 9 ? "Ctrl+" + (parent.visibleSlot + 1) : "Ctrl+0"
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.38)
-              font.family: Style.font.family
-              font.pixelSize: root.menuPathSize
-            }
-
-            Column {
-              id: fileRowText
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(6)
-                + (parent.hasThumbnail ? parent.thumbnailSize + Style.space(8) : 0)
-              anchors.rightMargin: Style.space(6)
-              spacing: Style.space(1)
-              Text {
-                width: Math.max(0, fileList.width - Style.space(12) - (fileSlotHint.visible
-                  ? fileSlotHint.implicitWidth + Style.space(8) : 0)
-                )
-                text: modelData.name || ""
-                color: index === root.fileBrowserIndex ? root.accent : root.foreground
-                font.family: Style.font.family
-                font.pixelSize: root.menuTitleSize
-                elide: Text.ElideMiddle
-              }
-              Row {
-                width: parent.width
-                spacing: Style.space(8)
-                Text {
-                  width: Math.max(0, parent.width - actionHint.width - parent.spacing)
-                  text: modelData.relativePath || modelData.path || ""
-                  color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45)
-                  font.family: Style.font.family
-                  font.pixelSize: root.menuPathSize
-                  elide: Text.ElideMiddle
-                }
-                Text {
-                  id: actionHint
-                  visible: index === root.fileBrowserIndex
-                  width: visible ? implicitWidth : 0
-                  text: root.fileBrowserMode === "repos"
-                    ? "↵ terminal  ·  Ctrl+↵ reveal  ·  Shift+↵ copy path"
-                    : "↵ view  ·  Ctrl+↵ reveal  ·  Alt+↵ edit  ·  Shift+↵ copy"
-                  color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.72)
-                  font.family: Style.font.family
-                  font.pixelSize: root.menuPathSize
-                }
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              hoverEnabled: true
-              onEntered: {
-                root.fileBrowserIndex = index
-                root.scheduleFilePreview(modelData.path)
-              }
-              onExited: root.cancelFilePreview(modelData.path)
-              onClicked: {
-                root.fileBrowserIndex = index
-                root.openFileBrowserSelection(Qt.NoModifier)
-              }
-            }
-          }
-        }
-
-        Text {
-          width: parent.width
-          visible: root.fileBrowserRows.length === 0
-          text: root.fileBrowserQuery.length < 2
-            ? "Type at least two characters"
-            : "No matching " + (root.fileBrowserMode === "repos" ? "repositories" : "files")
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45)
-          font.family: Style.font.family
-          font.pixelSize: root.menuPathSize
-        }
-      }
-    }
-
     Item {
       id: filePreviewCard
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      visible: root.filePreviewVisible
-        && ((root.fileBrowserOpen && root.fileBrowserMode === "files")
-          || (!root.fileBrowserOpen && root.searchMode === "@"))
-      readonly property Item anchorCard: root.fileBrowserOpen ? fileCard : card
-      readonly property Item anchorItem: root.fileBrowserOpen
-        ? fileList.currentItem : inlineResults.currentItem
+      visible: root.filePreviewVisible && root.searchMode === "@"
+      readonly property Item anchorCard: card
+      readonly property Item anchorItem: inlineResults.currentItem
       width: Math.min(Style.space(500),
         Math.max(Style.space(280), parent.width - anchorCard.x
           - anchorCard.width - Style.space(12)))
@@ -2812,6 +2225,22 @@ Item {
       }
     }
 
+    Timer {
+      id: filePreviewTimer
+      interval: 500
+      onTriggered: {
+        if (root.searchMode !== "@" || root.hoverPreviewPath === "") return
+        root.filePreviewRequestId++
+        filePreviewProc.running = false
+        filePreviewProc.command = [
+          "gjs",
+          root.bridgeScript("preview.js"),
+          String(root.filePreviewRequestId), root.hoverPreviewPath
+        ]
+        filePreviewProc.running = true
+      }
+    }
+
     Process {
       id: filePreviewProc
       running: false
@@ -2834,7 +2263,7 @@ Item {
       id: permissionLayer
       parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
       anchors.fill: parent
-      visible: root.pendingPermissionId !== ""
+      visible: root.pendingPermission.id !== ""
       color: Qt.rgba(root.scrim.r, root.scrim.g, root.scrim.b, 0.72)
       z: 20
 
@@ -2868,13 +2297,57 @@ Item {
 
           Text {
             width: parent.width
-            text: root.pendingPermissionTitle
+            text: root.pendingPermission.title
+            textFormat: Text.PlainText
             color: root.foreground
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.body * root.fontScale
             wrapMode: Text.Wrap
             maximumLineCount: 5
             elide: Text.ElideRight
+          }
+
+          // What is being approved, whole: the command, the diff, the input.
+          // Agent-supplied, so plain text; a long one scrolls inside the card.
+          // When the bridge had to cut it, its last line is the cut notice,
+          // shown below in the urgent colour instead.
+          Flickable {
+            width: parent.width
+            height: Math.min(detailText.implicitHeight, permissionLayer.height * 0.45)
+            visible: root.pendingPermission.detail !== ""
+            clip: true
+            contentWidth: width
+            contentHeight: detailText.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+
+            TextEdit {
+              id: detailText
+              width: parent.width
+              text: root.pendingPermission.omitted > 0
+                ? root.pendingPermission.detail.slice(0, root.pendingPermission.detail.lastIndexOf("\n"))
+                : root.pendingPermission.detail
+              readOnly: true
+              selectByMouse: true
+              textFormat: TextEdit.PlainText
+              wrapMode: TextEdit.WrapAnywhere
+              color: root.foreground
+              font.family: "JetBrainsMono Nerd Font"
+              font.pixelSize: Style.font.caption * root.fontScale
+            }
+
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+          }
+
+          Text {
+            width: parent.width
+            visible: root.pendingPermission.omitted > 0
+            text: root.pendingPermission.detail.slice(root.pendingPermission.detail.lastIndexOf("\n") + 1)
+            textFormat: Text.PlainText
+            color: Color.urgent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption * root.fontScale
+            wrapMode: Text.Wrap
           }
 
           Text {
@@ -2883,33 +2356,57 @@ Item {
             text: root.permissionQueue.length + " more permission request" + (root.permissionQueue.length === 1 ? "" : "s") + " queued"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.caption * root.fontScale
           }
 
+          // One button per option the AGENT offered, in its own words. Only
+          // the agent knows what "always" scopes to -- this tool, this command
+          // pattern, this session, a persisted rule -- so inventing a label
+          // would assert a scope Nixi was never told (#53). An agent offering
+          // just allow_once/reject_once renders exactly the two buttons this
+          // card has always had.
           Row {
             width: parent.width
             spacing: Style.space(12)
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "N  Deny"
-              bordered: true
-              foreground: root.foreground
-              fontFamily: Style.font.family
-              fontSize: Style.font.body
-              onClicked: root.answerPermission(false)
-            }
+            Repeater {
+              model: root.pendingPermission.options || []
 
-            Button {
-              width: (parent.width - parent.spacing) / 2
-              text: "Y  Allow"
-              bordered: true
-              selected: true
-              foreground: root.accent
-              fontFamily: Style.font.family
-              fontSize: Style.font.body
-              onClicked: root.answerPermission(true)
+              Button {
+                required property var modelData
+                readonly property int count: Math.max(1, (root.pendingPermission.options || []).length)
+                readonly property bool isAllow: String(modelData.kind || "").indexOf("allow") === 0
+                readonly property bool isOnce: String(modelData.kind || "").indexOf("_once") > 0
+                width: (parent.width - parent.spacing * (count - 1)) / count
+                // Agent-authored, so plain text and bounded -- the same rule
+                // the detail pane above follows.
+                text: (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
+                  + String(modelData.label || modelData.id || "").slice(0, 48)
+                bordered: true
+                selected: isAllow && isOnce
+                foreground: isAllow && isOnce ? root.accent : root.foreground
+                fontFamily: Style.font.family
+                fontSize: Style.font.body * root.fontScale
+                // Disabled for the settle window: after #53 a click here can
+                // grant STANDING approval, so the mouse is the path that most
+                // needs it -- a double-click is autorepeat's equivalent (#50).
+                // qs.Ui.Button paints no disabled state of its own, so
+                // `enabled` alone would block the click and show nothing.
+                enabled: root.permissionSettled
+                opacity: root.permissionSettled ? 1 : 0.45
+                onClicked: root.answerPermission(modelData.id)
+              }
             }
+          }
+
+          Text {
+            width: parent.width
+            visible: prompt.text.length > 0
+            text: "Clear the message box to answer with Y or N"
+            color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption * root.fontScale
+            wrapMode: Text.Wrap
           }
         }
       }
@@ -2923,9 +2420,12 @@ Item {
     visible: root.opened && root.pinned
     title: root.windowTitle
     color: root.background
-    implicitWidth: 760
-    implicitHeight: 800
-    minimumSize: Qt.size(480, 420)
+    // The only unscaled pixel literals of consequence in the repo: they bypassed
+    // both Style.space() and fontScale, so on a 4K panel this was a postage
+    // stamp and at a large theme base-size the contents outgrew the frame (#38).
+    implicitWidth: Style.space(760) * root.fontScale
+    implicitHeight: Style.space(800) * root.fontScale
+    minimumSize: Qt.size(Style.space(480), Style.space(420))
 
     onVisibleChanged: {
       if (visible) {
@@ -2941,15 +2441,5 @@ Item {
     // like the overlay it was pinned out of, and took the key away from
     // anything inside that might want it. The overlay keeps its Escape.
     WindowShortcuts { conversation: root }
-    Shortcut {
-      sequence: "Y"
-      enabled: root.pendingPermissionId !== ""
-      onActivated: root.answerPermission(true)
-    }
-    Shortcut {
-      sequence: "N"
-      enabled: root.pendingPermissionId !== ""
-      onActivated: root.answerPermission(false)
-    }
   }
 }

@@ -1,0 +1,15 @@
+title: Nixi
+description: Your nixarchy guide — ask anything about this machine
+
+# No theme. The site is docs/index.html and docs/media/, and what builds on
+# GitHub Pages is exactly what is in this directory.
+
+# Everything else in docs/ is engineering documentation, written to be read on
+# github.com next to the code. It must not become pages.
+exclude:
+  - architecture.md
+  - FORK.md
+  - model-verification.md
+  - release.md
+  - testing.md
+  - reviews

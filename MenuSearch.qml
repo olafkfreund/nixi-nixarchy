@@ -23,6 +23,15 @@ import "file:///run/current-system/sw/share/omarchy/shell/plugins/menu/MenuModel
 Item {
   id: root
 
+  // One long-lived bridge helper per search source, fed a JSON line per query.
+  // An inline component cannot see root's id, so the resolved path is passed in.
+  component BridgeProc: Process {
+    property string path
+    command: ["node", path]
+    running: true
+    stdinEnabled: true
+  }
+
   // Bridge scripts are resolved next to this file, the way Ask.qml already
   // loads HarnessSelector.qml, not from a fixed ~/.config/omarchy/plugins/<id>/
   // path: a Nix store install, a symlinked checkout and a second plugin id all
@@ -80,9 +89,6 @@ Item {
   property var windowRows: []
   property int fileRequestId: 0
   property int windowRequestId: 0
-  property bool fileMode: false
-  property bool repoMode: false
-  property string fileQueryOverride: ""
   property bool lastRunKeepsOpen: false
 
   signal actionRan(string label)
@@ -132,7 +138,7 @@ Item {
       route: "",
       score: -2
     })
-    if (!focusedMode && !root.fileMode && root.fileRows.length > 0) scored.push({
+    if (!focusedMode && root.fileRows.length > 0) scored.push({
       id: "file-results",
       label: root.fileMatchCount + (root.fileMatchCapped ? "+" : "")
         + " matched files" + (!root.fileMatchCapped && !root.fileMatchComplete ? "…" : ""),
@@ -144,7 +150,7 @@ Item {
       isFileAggregate: true,
       appIcon: "", appId: "", action: "", route: "", score: -1
     })
-    if (!focusedMode && !root.repoMode && root.repoRows.length > 0) scored.push({
+    if (!focusedMode && root.repoRows.length > 0) scored.push({
       id: "repo-results",
       label: root.repoMatchCount + (root.repoMatchCapped ? "+" : "")
         + " matched git repos" + (!root.repoMatchCapped && !root.repoMatchComplete ? "…" : ""),
@@ -246,14 +252,13 @@ Item {
           : String(a.workspace).localeCompare(String(b.workspace))
         return workspaceOrder || a.score - b.score || a.label.localeCompare(b.label)
       })
-      var grouped = scored
       var priorWorkspace = ""
-      for (var g = 0; g < grouped.length; g++) {
-        grouped[g].workspaceHeader = grouped[g].workspace !== priorWorkspace
-          ? "Workspace " + grouped[g].workspace : ""
-        priorWorkspace = grouped[g].workspace
+      for (var g = 0; g < scored.length; g++) {
+        scored[g].workspaceHeader = scored[g].workspace !== priorWorkspace
+          ? "Workspace " + scored[g].workspace : ""
+        priorWorkspace = scored[g].workspace
       }
-      root.rows = grouped
+      root.rows = scored
       return
     }
     for (var i = 0; i < root.itemOrder.length; i++) {
@@ -398,14 +403,7 @@ Item {
     root.fileRequestId++
     root.windowRequestId++
     root.mathRow = null
-    root.fileRows = []
-    root.fileMatchCount = 0
-    root.fileMatchCapped = false
-    root.fileMatchComplete = true
-    root.repoRows = []
-    root.repoMatchCount = 0
-    root.repoMatchCapped = false
-    root.repoMatchComplete = true
+    root.clearPathResults()
     root.windowRows = []
     root.rows = []
     if (String(root.query || "").trim() === "") {
@@ -426,18 +424,7 @@ Item {
     root.refreshRows()
   }
 
-  onFileQueryOverrideChanged: if (root.fileMode || root.repoMode) root.requestFiles()
-  onFileModeChanged: if (root.fileMode) root.requestFiles()
-  onRepoModeChanged: if (root.repoMode) root.requestFiles()
-
-  function requestFiles() {
-    var focused = root.fileMode || root.repoMode
-      || /^[@^]/.test(String(root.query || "").trim())
-    var wanted = (root.fileMode || root.repoMode) ? root.fileQueryOverride : root.query
-    wanted = String(wanted || "").replace(/^[@^]/, "").trim()
-    // Rows belong to one query generation. Clear them before advancing the id
-    // so the UI cannot briefly relabel the previous query's 100 results as
-    // matches for the text that was just typed.
+  function clearPathResults() {
     root.fileRows = []
     root.fileMatchCount = 0
     root.fileMatchCapped = false
@@ -446,6 +433,15 @@ Item {
     root.repoMatchCount = 0
     root.repoMatchCapped = false
     root.repoMatchComplete = true
+  }
+
+  function requestFiles() {
+    var focused = /^[@^]/.test(String(root.query || "").trim())
+    var wanted = String(root.query || "").replace(/^[@^]/, "").trim()
+    // Rows belong to one query generation. Clear them before advancing the id
+    // so the UI cannot briefly relabel the previous query's 100 results as
+    // matches for the text that was just typed.
+    root.clearPathResults()
     root.fileRequestId++
     if (fileProc.running) fileProc.write(JSON.stringify({
       id: root.fileRequestId,
@@ -470,7 +466,7 @@ Item {
         root.repoMatchCapped = message.repoCapped === true
         root.repoMatchComplete = message.repoComplete !== false
       }
-      if (!root.fileMode && !root.repoMode) root.refreshRows()
+      root.refreshRows()
     } catch (error) { }
   }
 
@@ -504,38 +500,11 @@ Item {
     } catch (error) { }
   }
 
-  Process {
-    id: mathProc
-    command: [
-      "node",
-      root.bridgeScript("math.js")
-    ]
-    running: true
-    stdinEnabled: true
-    stdout: SplitParser { onRead: function(line) { root.acceptMath(line) } }
-  }
+  BridgeProc { id: mathProc; path: root.bridgeScript("math.js"); stdout: SplitParser { onRead: function(line) { root.acceptMath(line) } } }
 
-  Process {
-    id: fileProc
-    command: [
-      "node",
-      root.bridgeScript("files.js")
-    ]
-    running: true
-    stdinEnabled: true
-    stdout: SplitParser { onRead: function(line) { root.acceptFiles(line) } }
-  }
+  BridgeProc { id: fileProc; path: root.bridgeScript("files.js"); stdout: SplitParser { onRead: function(line) { root.acceptFiles(line) } } }
 
-  Process {
-    id: windowProc
-    command: [
-      "node",
-      root.bridgeScript("windows.js")
-    ]
-    running: true
-    stdinEnabled: true
-    stdout: SplitParser { onRead: function(line) { root.acceptWindows(line) } }
-  }
+  BridgeProc { id: windowProc; path: root.bridgeScript("windows.js"); stdout: SplitParser { onRead: function(line) { root.acceptWindows(line) } } }
 
   Timer {
     id: searchDebounce

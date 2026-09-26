@@ -23,6 +23,25 @@ Item {
   // window — reads one value and a single writer persists it.
   readonly property real minFontScale: 0.7
   readonly property real maxFontScale: 2
+
+  // Nothing in this repo, or in Omarchy's Style singleton, reads the display:
+  // Style scales off the theme's [font] base-size, which is a static number.
+  // So the card was a fixed 540x560 logical-pixel box on every monitor, at 21%
+  // of a 1440p screen's width and 28% of a 1080p one -- it shrank when moved to
+  // the larger display (#38).
+  //
+  // 1080p is the baseline, so a 1080p panel is exactly 1 and nothing changes
+  // there. The largest screen wins on a mixed setup: the geometry clamps bound
+  // every surface to its own panel's height anyway, so an over-large scale
+  // cannot overflow the smaller monitor, while an under-large one leaves the
+  // big screen unreadable. Per-monitor scale is the follow-up, not this.
+  readonly property real displayScale: {
+    var tallest = 1080
+    var screens = Quickshell.screens || []
+    for (var i = 0; i < screens.length; i++)
+      if (screens[i] && screens[i].height > tallest) tallest = screens[i].height
+    return Math.max(1, Math.min(maxFontScale, Math.round((tallest / 1080) * 100) / 100))
+  }
   readonly property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/nixi.json"
   property real fontScale: 1
   // How long typing has to pause before the menu search recomputes. Matching
@@ -43,13 +62,16 @@ Item {
   property string selectedReasoningEffort: ""
   readonly property real keyboardPageImpulse: keyboardLineImpulse * (740 / 360)
   property bool settingsLoaded: false
+  // nixi.json as last read. The bridge writes keys of its own to the same file
+  // (trust, askBeforeReading), so the UI writes its keys on top of these
+  // rather than replacing the file with only the keys it knows.
+  property var settingsOnDisk: ({})
   // Retained so writing the font scale cannot drop the mode the bridge owns.
   property string persistedPermissionMode: "permission"
   property bool copyToastVisible: false
   // One manager owns the compositor submap. Conversations only affect the
   // derived desired state; they never dispatch Hyprland commands themselves.
-  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap
-    && activeOverlay !== null && activeOverlay.opened && !activeOverlay.pinned
+  readonly property bool shortcutSubmapDesired: useHyprlandShortcutSubmap && opened
   property bool shortcutSubmapOwned: false
   property bool shortcutSubmapTarget: false
   property bool shortcutSubmapInitialized: false
@@ -115,10 +137,8 @@ Item {
   }
 
   function showCopyToast() {
-    copyToastFade.stop()
-    copyToastCard.opacity = 1
     copyToastVisible = true
-    copyToastHold.restart()
+    copyToastAnimation.restart()
   }
 
   function setFontScale(value) {
@@ -130,36 +150,31 @@ Item {
 
   function adjustFontScale(step) { setFontScale(fontScale + step) }
 
-  function setKeyboardMotion(impulse, deceleration) {
-    var nextImpulse = Math.round(Math.max(80, Math.min(2000, impulse)))
-    var nextDeceleration = Math.round(Math.max(100, Math.min(5000, deceleration)))
-    if (nextImpulse === keyboardLineImpulse && nextDeceleration === keyboardDeceleration) return
-    keyboardLineImpulse = nextImpulse
-    keyboardDeceleration = nextDeceleration
-    if (settingsLoaded) settingsSaveTimer.restart()
-  }
+  function clampImpulse(value) { return Math.round(Math.max(80, Math.min(2000, value))) }
+  function clampDeceleration(value) { return Math.round(Math.max(100, Math.min(5000, value))) }
 
   function loadSettings(raw) {
     var data = {}
     try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
     if (!data || typeof data !== "object") data = {}
+    settingsOnDisk = data
     persistedPermissionMode = data.permissionMode === "yolo" ? "yolo" : "permission"
-    var scale = Number(data.fontScale)
-    fontScale = (isFinite(scale) && scale > 0)
+    // Presence, then value. Number(undefined) is NaN, so testing the coerced
+    // value alone made an absent key and a deliberate 1 indistinguishable --
+    // and a 4K user who had chosen 1 would have had it silently overridden.
+    var stored = data.fontScale
+    var scale = Number(stored)
+    fontScale = (stored !== undefined && stored !== null && isFinite(scale) && scale > 0)
       ? Math.max(minFontScale, Math.min(maxFontScale, scale))
-      : 1
+      : root.displayScale
     var debounce = Number(data.searchDebounceMs)
     searchDebounceMs = isFinite(debounce)
       ? Math.round(Math.max(minSearchDebounceMs, Math.min(maxSearchDebounceMs, debounce)))
       : 270
     var impulse = Number(data.keyboardLineImpulse)
-    keyboardLineImpulse = isFinite(impulse)
-      ? Math.round(Math.max(80, Math.min(2000, impulse)))
-      : 335
+    keyboardLineImpulse = isFinite(impulse) ? clampImpulse(impulse) : 335
     var deceleration = Number(data.keyboardDeceleration)
-    keyboardDeceleration = isFinite(deceleration)
-      ? Math.round(Math.max(100, Math.min(5000, deceleration)))
-      : 608
+    keyboardDeceleration = isFinite(deceleration) ? clampDeceleration(deceleration) : 608
     fileOpenCommand = normalizeCommand(data.fileOpenCommand)
     fileEditCommand = normalizeCommand(data.fileEditCommand)
     useHyprlandShortcutSubmap = data.useHyprlandShortcutSubmap === true
@@ -177,17 +192,12 @@ Item {
     if (typeof value === "string")
       return value.trim() === "" ? [] : [value.trim()]
     if (!Array.isArray(value)) return []
-    var command = []
-    for (var i = 0; i < value.length; i++) {
-      var argument = String(value[i] || "")
-      if (argument !== "") command.push(argument)
-    }
-    return command
+    return value.map(function(argument) { return String(argument || "") }).filter(Boolean)
   }
 
   function flushSettings() {
     if (!settingsLoaded) return
-    settingsFile.setText(JSON.stringify({
+    settingsFile.setText(JSON.stringify(Object.assign({}, settingsOnDisk, {
       permissionMode: persistedPermissionMode,
       fontScale: fontScale,
       searchDebounceMs: searchDebounceMs,
@@ -200,7 +210,7 @@ Item {
       agent: selectedAgent,
       model: selectedModel,
       reasoningEffort: selectedReasoningEffort
-    }, null, 2) + "\n")
+    }), null, 2) + "\n")
   }
 
   FileView {
@@ -223,16 +233,6 @@ Item {
     onTriggered: root.flushSettings()
   }
 
-  MotionTuner {
-    id: motionTuner
-    impulse: root.keyboardLineImpulse
-    deceleration: root.keyboardDeceleration
-    onMotionChanged: function(nextImpulse, nextDeceleration) {
-      root.setKeyboardMotion(nextImpulse, nextDeceleration)
-    }
-    onResetRequested: root.setKeyboardMotion(335, 608)
-  }
-
   Loader {
     id: harnessSelectorLoader
     source: Qt.resolvedUrl("HarnessSelector.qml")
@@ -251,6 +251,7 @@ Item {
   function openHarnessSelector() {
     var selector = harnessSelectorLoader.item
     if (!selector) return
+    selector.fontScale = Qt.binding(function() { return root.fontScale })
     selector.agent = selectedAgent
     selector.model = selectedModel
     selector.reasoningEffort = selectedReasoningEffort
@@ -290,21 +291,14 @@ Item {
       }
     }
 
-    Timer {
-      id: copyToastHold
-      interval: 1500
-      onTriggered: copyToastFade.restart()
-    }
-
-    NumberAnimation {
-      id: copyToastFade
-      target: copyToastCard
-      property: "opacity"
-      from: 1
-      to: 0
-      duration: 500
-      easing.type: Easing.OutQuad
-      onFinished: root.copyToastVisible = false
+    // Shown at full opacity, held, then faded. The hide is a step of the
+    // sequence, so restarting it for a second copy cannot hide the new toast.
+    SequentialAnimation {
+      id: copyToastAnimation
+      PropertyAction { target: copyToastCard; property: "opacity"; value: 1 }
+      PauseAnimation { duration: 1500 }
+      NumberAnimation { target: copyToastCard; property: "opacity"; to: 0; duration: 500; easing.type: Easing.OutQuad }
+      ScriptAction { script: root.copyToastVisible = false }
     }
   }
 
@@ -363,7 +357,6 @@ Item {
       if (conversations[i] !== conversation) remaining.push(conversations[i])
     }
     conversations = remaining
-    if (remaining.length === 0) motionTuner.visible = false
     Qt.callLater(function() { conversation.destroy() })
   }
 
@@ -388,10 +381,8 @@ Item {
     conversation.harnessSelectorOpen = Qt.binding(function() {
       return harnessSelectorLoader.item && harnessSelectorLoader.item.visible
     })
-    conversation.motionTunerOpen = Qt.binding(function() { return motionTuner.visible })
     conversation.fontScaleStepRequested.connect(function(step) { root.adjustFontScale(step) })
     conversation.fontScaleResetRequested.connect(function() { root.setFontScale(1) })
-    conversation.motionTunerRequested.connect(function() { motionTuner.open() })
     conversation.harnessSelectorRequested.connect(function() { root.openHarnessSelector() })
     conversation.sessionRestartRequested.connect(function() {
       conversation.agentName = root.selectedAgent
@@ -418,24 +409,45 @@ Item {
       var payload = JSON.parse(payloadJson || "{}")
       if (payload && payload.action === "tour") root.startTour(conversation)
       else if (payload && payload.action === "learn") root.teachNext(conversation)
+      else if (payload && payload.action === "ask") root.askFromSummon(conversation, payload)
     } catch (error) {}
     reconcileShortcutSubmap()
     return conversation
   }
 
+  // A question handed over by another program (`nixi --ask`, the nixarchy
+  // menu) asks like typing, but never runs a slash command -- /guide and
+  // /mechanic change trust, /tour and /learn start flows -- and never steers
+  // or interrupts a running turn. Those cases only fill the prompt (nixi#37).
+  function askFromSummon(conversation, payload) {
+    var text = payload && typeof payload.prompt === "string" ? payload.prompt.trim() : ""
+    if (text === "") return
+    if (conversation.waiting || text.charAt(0) === "/") conversation.setPrompt(text)
+    else conversation.askQuestion(text)
+  }
+
   function open(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned) return
+    if (opened) {
+      // An open card ignores a summons, except a handed-over question.
+      // `opened` is this branch's extraction of master's inline
+      // activeOverlay && .opened && !.pinned -- same condition, one name.
+      try {
+        var payload = JSON.parse(payloadJson || "{}")
+        if (payload && payload.action === "ask") root.askFromSummon(activeOverlay, payload)
+      } catch (error) {}
+      return
+    }
     createConversation(payloadJson)
   }
 
   function close() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     reconcileShortcutSubmap()
   }
 
   function pinActive() {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.pinConversation()
   }
 
@@ -447,7 +459,7 @@ Item {
   }
 
   function toggle(payloadJson) {
-    if (activeOverlay && activeOverlay.opened && !activeOverlay.pinned)
+    if (opened)
       activeOverlay.close()
     else
       createConversation(payloadJson)

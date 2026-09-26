@@ -15,16 +15,6 @@
         default = nixi;
       });
 
-      # `nix run github:olafkfreund/nixi-nixarchy` opens the card, if the Nixi
-      # plugin is installed and enabled in the running Omarchy shell.
-      apps = forAllSystems (pkgs: rec {
-        nixi = {
-          type = "app";
-          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.nixi}/bin/nixi";
-        };
-        default = nixi;
-      });
-
       # The supported way in. `homeManagerModules` is the older spelling and
       # is kept as an alias so either name works.
       homeModules.default = import ./nix/hm-module.nix self;
@@ -42,7 +32,7 @@
 
       checks = forAllSystems (pkgs: {
         # Building the package runs its installCheckPhase (py_compile on every
-        # program, bash -n on the launcher, assets non-empty).
+        # program, bash -n on the launcher, and every shipped file non-empty).
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
 
         # The behavioural self-check: updater precedence, offline search, tour

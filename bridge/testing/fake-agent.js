@@ -10,12 +10,17 @@ import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION } from "@agentclien
 
 const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify(entry) + "\n");
 
+// setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
+// one at session start. See setSessionMode below.
+let modeCalls = 0;
+
 new AgentSideConnection((conn) => ({
   async initialize() {
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
   },
   async newSession(params) {
-    log({ method: "newSession", cwd: params.cwd, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
+    log({ method: "newSession", cwd: params.cwd, meta: params._meta ?? null, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null,
+      disableProjectConfig: process.env.OPENCODE_DISABLE_PROJECT_CONFIG ?? null });
     // FAKE_AGENT_MODES=config: modes only as a config option, the way OpenCode offers them.
     if (process.env.FAKE_AGENT_MODES === "config") return {
       sessionId: "fake-session",
@@ -32,11 +37,20 @@ new AgentSideConnection((conn) => ({
           { id: "read-only", name: "Read only" },
         ],
       },
-      configOptions: [],
+      // A model option, as Claude's adapter offers one, so NIXI_MODEL can be applied.
+      configOptions: [{ id: "model", name: "Model", category: "model", type: "select", currentValue: "default",
+        options: [{ value: "default", name: "Default" }] }],
     };
   },
   async setSessionMode(params) {
     log({ method: "setSessionMode", modeId: params.modeId });
+    // FAKE_AGENT_HANG=mode: accept the request and never answer, the way a
+    // wedged agent does. The bridge must time out rather than wait forever,
+    // or the card's trust controls are dead for the conversation (#40).
+    // Only from the SECOND call on: the first is the one at session start,
+    // which runs before `ready` is emitted, so hanging it would fail the
+    // session instead of exercising a later trust change.
+    if (process.env.FAKE_AGENT_HANG === "mode" && ++modeCalls > 1) await new Promise(() => {});
     return {};
   },
   async setSessionConfigOption(params) {
@@ -50,11 +64,26 @@ new AgentSideConnection((conn) => ({
     log({ method: "prompt", text });
     // A prompt asking for a change triggers a permission request, so tests can
     // observe how the bridge answers it.
-    if (text.includes("PLEASE_WRITE")) {
+    // PLEASE_EDIT carries a diff and PLEASE_RUN a 2 KB command, for the detail.
+    const toolCall = text.includes("PLEASE_WRITE") ? { toolCallId: "t1", title: "Write ~/probe", kind: "edit" }
+      : text.includes("PLEASE_EDIT") ? { toolCallId: "t2", title: "Edit /tmp/probe", kind: "edit",
+        content: [{ type: "diff", path: "/tmp/probe", oldText: "a\n", newText: "b\n" }] }
+      : text.includes("PLEASE_RUN") ? { toolCallId: "t3", title: "Run a long command", kind: "execute",
+        rawInput: { command: "echo " + "x".repeat(2048 - "echo  && echo TAIL".length) + " && echo TAIL" } }
+      : null;
+    if (toolCall) {
       const outcome = await conn.requestPermission({
         sessionId: params.sessionId,
-        toolCall: { toolCallId: "t1", title: "Write ~/probe", kind: "edit" },
-        options: [
+        toolCall,
+        // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
+        // claude-agent-acp and codex-acp both do. Behind a flag so the existing
+        // tests' two-option expectations are untouched (#53).
+        options: process.env.FAKE_AGENT_OPTIONS === "always" ? [
+          { optionId: "allow", name: "Allow", kind: "allow_once" },
+          { optionId: "allow-all", name: "Allow always", kind: "allow_always" },
+          { optionId: "reject", name: "Reject", kind: "reject_once" },
+          { optionId: "reject-all", name: "Never allow", kind: "reject_always" },
+        ] : [
           { optionId: "allow", name: "Allow", kind: "allow_once" },
           { optionId: "reject", name: "Reject", kind: "reject_once" },
         ],

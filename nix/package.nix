@@ -1,14 +1,13 @@
 { lib
-, stdenv
 , stdenvNoCC
 , buildNpmPackage
-, autoPatchelfHook
 , nodejs-slim
 , gjs
 , fd
 , glib
 , python3
 , bash
+, jq
 , makeWrapper
   # Agent adapters are NOT bundled (see bridge/harness-policy.js resolveAdapter).
   # Pass nixpkgs' claude-agent-acp / codex-acp here to pin them; left null, the
@@ -26,8 +25,9 @@ let
   version = (builtins.fromJSON (builtins.readFile ../manifest.json)).version;
 
   # The bridge's node_modules, built from the lockfile alone so that editing the
-  # bridge's JavaScript does not invalidate npmDepsHash. After the adapters were
-  # dropped every dependency is MIT or Apache-2.0.
+  # bridge's JavaScript does not invalidate npmDepsHash. After the adapters and
+  # the native file index were dropped, every dependency is MIT or Apache-2.0
+  # and none of them ships a binary, so nothing here needs patchelf.
   bridgeModules = buildNpmPackage {
     pname = "nixi-bridge-modules";
     inherit version;
@@ -35,13 +35,8 @@ let
       root = ../bridge;
       fileset = lib.fileset.unions [ ../bridge/package.json ../bridge/package-lock.json ];
     };
-    npmDepsHash = "sha256-mP8ZEQrwoNK2+OzSyDUJlWsXBKdN9eKF9BHdcR3Sm/U=";
+    npmDepsHash = "sha256-+hVJkMXXoTih3i/+IP73NUCPuunlhgweQtXaFH4tktw=";
     dontNpmBuild = true;
-    # @ff-labs/fff-node and @yuuang/ffi-rs ship prebuilt shared objects. They
-    # happen to load on a machine with nix-ld; autoPatchelf makes them load from
-    # the store without depending on that.
-    nativeBuildInputs = [ autoPatchelfHook ];
-    buildInputs = [ stdenv.cc.cc.lib ];
     installPhase = ''
       runHook preInstall
       mkdir -p $out
@@ -51,18 +46,35 @@ let
   };
 
   # The node the plugin runs everything with. When adapters are given, their
-  # store paths become the bridge's defaults; --set-default keeps NIXI_* from the
-  # environment in charge.
+  # store paths are PINNED with --set, not offered as defaults: the environment
+  # cannot redirect what Nixi launches as the agent (#76).
+  #
+  # --set-default writes `export VAR=${VAR-store-path}`, which any exported
+  # variable beats -- a line in ~/.bashrc, ~/.zshrc or ~/.config/environment.d
+  # is enough. That does not merely change a setting: trust levels, the rules in
+  # bridge/trust-policy.js and Guide's cancel are all enforced by the bridge
+  # against whatever it spawned, and none of them constrain a substituted binary,
+  # because that binary decides what to report back.
+  #
+  # To develop an adapter locally, override the package rather than the
+  # environment: services.nixi.package = pkgs.nixi.override { claudeAcp = …; }.
+  # There is deliberately no option to re-enable the environment route; a
+  # setting whose only purpose is to reopen this gets switched on and left on.
+  #
+  # NIXI_ACP_COMMAND is untouched. nothing here sets it, and adapterOverride in
+  # bridge/harness-policy.js reads the per-agent name first, so pinning these
+  # makes the wildcard unreachable on a Nix deployment while it keeps working
+  # for PATH installs and for bridge/testing/run-bridge.js.
   adapterFlags = lib.concatStringsSep " " (
     lib.optional (claudeAcp != null)
-      "--set-default NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
+      "--set NIXI_CLAUDE_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${claudeAcp}/bin/claude-agent-acp" ])}"
     ++ lib.optional (codexAcp != null)
-      "--set-default NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
+      "--set NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
     ++ lib.optional (opencodeAcp != null)
-      "--set-default NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
+      "--set NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
   );
 in
-stdenvNoCC.mkDerivation (finalAttrs: {
+stdenvNoCC.mkDerivation {
   pname = "nixi";
   inherit version;
 
@@ -71,7 +83,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     filter = path: type:
       let base = baseNameOf path; in
       !(lib.hasSuffix ".png" base || lib.hasSuffix ".gif" base
-        || base == ".git" || base == "result");
+        || base == ".git" || base == "result" || base == "docs");
   };
 
   nativeBuildInputs = [ makeWrapper ];
@@ -85,7 +97,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    mkdir -p $out/bin $out/share/nixi $out/share/nixi/skills
+    # The safe-IO module those programs import (descriptor-bound directory walk,
+    # atomic replace). It must sit in the same directory as them -- a script's own
+    # directory is its sys.path[0] -- which is also where install.py puts it on
+    # the imperative path (#60). Not executable, and no shebang to substitute.
+    install -Dm644 bin/nixi_safeio.py $out/bin/nixi_safeio.py
 
     # The Python programs get a real interpreter.
     for p in nixi-watch nixi-update-manual nixi-context; do
@@ -123,11 +139,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # ---- the overlay plugin (omarchy-ask based, issue #8) ---------------------
     plugin=$out/share/omarchy/plugins/${pluginId}
     install -Dm644 manifest.json $plugin/manifest.json
-    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml MotionTuner.qml Tour.qml; do
+    for q in Ask.qml Conversation.qml HarnessSelector.qml MenuSearch.qml Tour.qml; do
       install -Dm644 "$q" "$plugin/$q"
     done
     # Tour logic shared with the node tests, and the tour/learning data.
     install -Dm644 TourModel.js $plugin/TourModel.js
+    install -Dm644 TextFormat.js $plugin/TextFormat.js
     install -Dm644 share/tour.json $plugin/share/tour.json
     install -Dm644 share/learn.json $plugin/share/learn.json
     # The FAQ is searchable from the card, so it ships beside the QML.
@@ -156,7 +173,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # NIXI_CONTEXT_COMMAND: the Omarchy shell's PATH does not include this
     # package, so the bridge is told where its grounding CLI is.
     makeWrapper ${nodejs-slim}/bin/node $plugin/bridge/nixi-node ${adapterFlags} \
-      --set-default NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
+      --set NIXI_CONTEXT_COMMAND "[\"$out/bin/nixi-context\"]"
 
     # The bar button is a SECOND plugin: Omarchy gives a third-party plugin
     # either a bar widget or an overlay, never both (shell.qml
@@ -189,15 +206,25 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # Every Python program must at least import-compile with the pinned
     # interpreter, and the launcher must parse.
     ${python3}/bin/python3 -m py_compile \
-      $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped
-    # py_compile drops __pycache__ beside the source; it must not ship.
+      $out/bin/nixi-watch $out/bin/nixi-update-manual $out/bin/.nixi-context-wrapped \
+      $out/bin/nixi_safeio.py
+    # The shared module must be there AND actually importable from that directory,
+    # which is the whole reason it is installed beside the programs rather than
+    # anywhere tidier. -B so no __pycache__ lands in the store (checked below).
+    test -s $out/bin/nixi_safeio.py || { echo "the safe-IO module is missing"; exit 1; }
+    ${python3}/bin/python3 -B -c \
+      'import sys; sys.path.insert(0, "'"$out"'/bin"); import nixi_safeio; nixi_safeio._dirfd' \
+      || { echo "nixi_safeio is not importable from the package bin directory"; exit 1; }
+    # py_compile drops __pycache__ beside the source; it must not ship, and
+    # nor must any other bytecode.
     rm -rf $out/bin/__pycache__
+    ! find $out -name '__pycache__' -o -name '*.pyc' | grep -q . \
+      || { echo "bytecode leaked into the store output"; exit 1; }
     ${bash}/bin/bash -n $out/bin/nixi
-    test ! -e $out/bin/nixi-server || { echo "the old widget server is still installed"; exit 1; }
 
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
-    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
+    for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js TextFormat.js \
              share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
@@ -206,6 +233,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       test -s "$out/share/omarchy/plugins/${pluginId}-button/$f" \
         || { echo "the bar button plugin is missing $f"; exit 1; }
     done
+    # manifest.json is the single source `version` above is derived from; the
+    # button's copy is hand-maintained and nothing read it, so it was free to go
+    # stale at the next release (#56).
+    button_version=$(${jq}/bin/jq -r .version "$out/share/omarchy/plugins/${pluginId}-button/manifest.json")
+    [ "$button_version" = "${version}" ] \
+      || { echo "button/manifest.json says $button_version, the package is ${version}"; exit 1; }
     ${nodejs-slim}/bin/node --check $plugin/bridge/bridge.js
     # Omarchy's validator rejects any symlink inside a plugin folder.
     links=$(find $plugin -type l)
@@ -222,15 +255,27 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     ! test -e $plugin/bridge/testing || { echo "bridge/testing leaked into the plugin"; exit 1; }
     grep -q 'NIXI_CONTEXT_COMMAND' $plugin/bridge/nixi-node \
       || { echo "the bridge is not told where nixi-context is"; exit 1; }
+    # ...and told UNCONDITIONALLY (#76). The check above passes for both
+    # spellings, because --set and --set-default both emit the variable name;
+    # only --set-default emits the shell default-expansion form, so `=[$][{]`
+    # is what tells them apart. Without this, reverting to --set-default would
+    # reopen the hole with every test still green.
+    #
+    # The character classes are not decoration. Written `=''${`, the `$` is an
+    # ERE anchor and `{` opens an interval, so the pattern matches NOTHING and
+    # the check silently passes whatever the wrapper says. That is exactly the
+    # failure this guards against, and only a negative test caught it.
+    ! grep -qE 'NIXI_(CLAUDE_ACP|CODEX_ACP|OPENCODE|CONTEXT)_COMMAND=[$][{]' $plugin/bridge/nixi-node \
+      || { echo "an adapter or context command is still overridable from the environment"; exit 1; }
     # Every program launched by name was pinned.
     ! grep -nE '"(node|gjs)"' $plugin/*.qml \
       || { echo "a bare node/gjs call is left in the plugin QML"; exit 1; }
     ! grep -nE 'execFile(Async)?\("(fd|gdbus)"' $plugin/bridge/*.js \
       || { echo "a bare fd/gdbus call is left in the bridge"; exit 1; }
-    # The native file finder must actually load from the store, not just exist.
-    ( cd $plugin/bridge && ${nodejs-slim}/bin/node --input-type=module -e \
-        "const m = await import('@ff-labs/fff-node'); if (!m.binaryExists()) { console.error('fff native library not found'); process.exit(1) }" ) \
-      || { echo "@ff-labs/fff-node does not load from the store"; exit 1; }
+    # `@` file search is plocate and fd only: no prebuilt shared object may
+    # come back in without the patchelf machinery coming back with it.
+    ! find $plugin/bridge/node_modules -name '*.so' -o -name '*.node' | grep -q . \
+      || { echo "a native binary reappeared in the bridge's node_modules"; exit 1; }
   '';
 
   meta = {
@@ -247,4 +292,4 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     platforms = lib.platforms.linux;
     mainProgram = "nixi";
   };
-})
+}

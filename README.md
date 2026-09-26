@@ -1,5 +1,6 @@
-<h1 align="center">❄ Nixi</h1>
+<h1 align="center">✨ Nixi</h1>
 <p align="center"><em>Your nixarchy guide — a guided tour, a learning path, and an AI tutor that actually knows your machine.</em></p>
+<p align="center"><a href="https://olafkfreund.github.io/nixi-nixarchy/"><img src="docs/media/nixi-demo.gif" alt="Nixi answering a question, then making and undoing a change in Mechanic" width="640"></a></p>
 
 Nixi is an Omarchy overlay card: press a key, ask "how do I…" about
 [nixarchy](https://github.com/olafkfreund/nixarchy), and it answers — the keys,
@@ -15,6 +16,29 @@ an agent and the same card becomes a tutor.
 > Nixi began as a fork of [Archy](https://github.com/respira-crece-lidera) by
 > Luke Warren Wills, retargeted from Omarchy/Arch to nixarchy/NixOS. The
 > history is in [docs/FORK.md](docs/FORK.md).
+
+---
+
+## A first session
+
+Sam has just installed nixarchy, and knows Arch but not NixOS. This is one real
+session (Nixi 0.10.0, Claude Code, NixOS 26.11), captured as it happened. The
+[site](https://olafkfreund.github.io/nixi-nixarchy/) has the full recording.
+
+| | |
+|---|---|
+| <img src="docs/media/01-search.png" alt="Typing install shows menu entries, files and repositories" width="420"> | **1. Open it.** Sam clicks the ✨ in the bar and types `install`. Before any AI is involved, the card matches Omarchy menu entries, apps, files and repositories. Enter sends the text as a question. |
+| <img src="docs/media/02-answer.png" alt="Nixi's answer to how do I install an app, leading with Install ▸ Packages" width="420"> | **2. Ask.** "How do I install an app?" The answer is nixarchy's, not `pacman -S`: the **Packages** panel (Install ▸ Packages), where picking an app only queues it until you apply, then the same in a terminal (`nixarchy pkg add`, `nixarchy apply`). Nixi checked the panel is on, and says its key isn't bound on this machine rather than naming one. |
+| <img src="docs/media/03-your-machine.png" alt="Nixi reporting the NixOS generation and disk use" width="420"> | **3. Ask about the machine.** "What generation am I on, how full is my disk?" Nixi runs read-only checks and answers with this laptop's numbers, which matched `readlink /nix/var/nix/profiles/system` and `df`. |
+| <img src="docs/media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of changing anything" width="420"> | **4. Guide changes nothing.** Asked to add btop, Nixi explains instead: btop is already installed. In Guide the bridge cancels every permission request it receives, so nothing changes; reading your config needs no prompt. |
+| <img src="docs/media/05-mechanic-asks.png" alt="Mechanic asking permission before a change" width="420"> | **5. Mechanic asks first.** After `/mechanic`, "put btop on SUPER+ALT+T" is done step by step, and each step needs your yes: **Y** or **Allow**. The prompt shows the whole command or change being approved. Most lookups no longer ask: reading files doesn't, except for secrets such as `~/.ssh`. |
+| <img src="docs/media/06-mechanic-done.png" alt="Nixi reporting the change and how it verified it" width="420"> | **6. Checked.** One line is added to `~/.config/hypr/bindings.lua`. Nixi reloads Hyprland, confirms the live binding, and says where the backup is. |
+| <img src="docs/media/07-undo.png" alt="Nixi restoring the file from its backup" width="420"> | **7. Undo.** "Now undo it." Nixi restores its backup and checks the binding is gone. `/guide` makes it read-only again. |
+
+With no agent at all: `/tour` ([step 2](docs/media/08-tour.png)), `/learn`
+([a lesson](docs/media/09-learn.png)), the [calculator](docs/media/10-calculator.png),
+and [written FAQ answers](docs/media/11-faq.png): they show up in search as you
+type, and choosing one puts its answer in the card, with no network.
 
 ---
 
@@ -100,7 +124,7 @@ journalled, so a failure restores exactly what was there before.
 
 | | |
 |---|---|
-| **Open it** | The ❄ in the bar, `nixi`, or SUPER+SPACE → Help. Bind a key if you like: `o.bind("SUPER + H", "Nixi", "nixi")` in `~/.config/hypr/bindings.lua` |
+| **Open it** | The ✨ in the bar, `nixi`, or SUPER+SPACE → Help. Bind a key if you like: `o.bind("SUPER + H", "Nixi", "nixi")` in `~/.config/hypr/bindings.lua` |
 | **Ask** | Type and press Enter. The card opens empty — nothing appears until you ask |
 | **Search first** | While you type, FAQ answers, the Tour, the Learning path, Omarchy menu entries and apps appear as rows. `@` searches files, `^` repositories, `%` windows |
 | **Tour** | `/tour`, or `nixi --tour`. Eleven steps that watch Hyprland events, so a step completes when you actually did it. Close the card mid-tour; `/tour` resumes where you were |
@@ -114,7 +138,7 @@ journalled, so a failure restores exactly what was there before.
 ### What it knows about NixOS
 
 Before every question the bridge runs `nixi-context`, which searches a locally
-fetched, hash-verified copy of **both** manuals and prepends the best excerpt.
+fetched, hash-verified copy of **both** manuals and appends the best excerpt.
 The nixarchy manual wins every collision and Omarchy's backfills the rest, the
 way nixarchy's own manual describes it. So the answer is `nixarchy apply`, not
 `pacman -S`.
@@ -130,17 +154,34 @@ never shows that line; the bridge appends the fact to
 Two levels, so that neither claims a boundary it cannot enforce.
 
 - **Guide** *(default)* — explains and instructs. The bridge **cancels every
-  permission request** before it reaches you, and puts the agent in its most
-  restrictive mode as a second layer. Nothing on your machine changes.
+  permission request it receives**, and puts the agent in its most restrictive
+  mode as a second layer. Nothing on your machine changes. Reading and
+  searching are the exception, and deliberately so: Nixi may look at your
+  configuration without asking, because a guide that cannot read your machine
+  cannot explain it. Sensitive paths — keys, credentials, `.env` files — still
+  ask, in both levels.
 - **Mechanic** — every change the agent wants is shown in the card and needs
   your yes. Click **MECHANIC** in the corner to switch to **YOLO**
   (auto-approve); YOLO cannot be reached from Guide.
 
 | agent | Guide | Mechanic |
 |---|---|---|
-| Claude | `plan` mode, requests cancelled | `default` mode, asks |
-| Codex | `read-only`, requests cancelled | `read-only`, asks before each edit |
-| OpenCode | `plan`, requests cancelled | `build`, asks |
+| Claude | `plan` mode, requests cancelled (reads excepted) | `default` mode, asks |
+| Codex | `read-only`, requests cancelled (reads excepted) | `read-only`, asks before each edit |
+| OpenCode | `plan`, requests cancelled (reads excepted) | `build`, asks |
+
+In **both** trust levels, reading and searching files does not ask, so the
+prompts you see in Mechanic are for something that changes. With Claude that
+means its Read, Grep and Glob tools. This is why Guide can answer questions
+about your own configuration: it reads, it just never writes. Secrets still
+ask, in both levels and for all three tools: `~/.ssh`, `~/.gnupg`, cloud and
+GitHub credentials, `/run/agenix`, `.env` and `*.age` files. Shell commands, even `grep` and `ls`,
+still ask. Nixi tells the agent to use its file tools for lookups, and it
+mostly does, but an occasional `grep` still arrives as a shell command. Adding
+one key binding typically takes two or three prompts: the live key list,
+perhaps one search, and the edit. To be asked before every read, set
+`"askBeforeReading": true` in `~/.config/omarchy/nixi.json`. It applies from
+the next session, and to OpenCode as well.
 
 OpenCode's own defaults let tools run without asking, so Nixi always starts it
 with its own rules — everything asks except reading and searching, and it may

@@ -25,15 +25,21 @@ which Omarchy requires to be a second plugin.
 """
 import json
 import os
-import secrets
+import shutil
 import stat
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
+# The safe-IO floor (descriptor-bound directory walk, atomic replace) is shared
+# with bin/nixi-watch and bin/nixi-update-manual, so it lives beside them in
+# bin/: a suffix-less program installed to ~/.local/bin or a store bin/ finds it
+# on sys.path[0] with no help. This one runs from the checkout, so it says where.
+sys.path.insert(0, os.path.join(ROOT, "bin"))
+from nixi_safeio import _dirfd, _write  # noqa: E402  (needs the path line above)
+
 HOME = os.path.expanduser("~")
 DIR = os.path.join(HOME, ".config", "nixi")
-DATA = os.path.join(HOME, ".local", "share", "nixi")
 BIN = os.path.join(HOME, ".local", "bin")
 UNITS = os.path.join(HOME, ".config", "systemd", "user")
 SKILLS = os.path.join(HOME, ".claude", "skills", "nixi")
@@ -43,74 +49,10 @@ EXT_DIR = os.path.join(HOME, ".config", "omarchy", "extensions")
 NO_SYSTEMD = "--no-systemd" in sys.argv
 PLUGINS = os.path.join(HOME, ".config", "omarchy", "plugins")
 FEATURES = ("watcher", "skill", "hooks")
-_LOG = []
 
 
 def log(msg):
-    _LOG.append(str(msg))
     print(msg, file=sys.stderr if msg.startswith(("install failed", "rollback")) else sys.stdout)
-
-
-_UID = os.getuid()
-_HOME = os.path.abspath(os.path.expanduser("~"))
-
-
-def _group_exclusive(gid):
-    """A group-writable directory is acceptable only if the group is provably
-    ours alone: our primary group, no other account has it as primary, and
-    no member other than us."""
-    import grp
-    import pwd
-    if gid != os.getgid():
-        return False
-    try:
-        g = grp.getgrgid(gid)
-        me = pwd.getpwuid(_UID).pw_name
-    except KeyError:
-        return False
-    if any(m != me for m in g.gr_mem):
-        return False
-    return not any(p.pw_gid == gid and p.pw_uid != _UID for p in pwd.getpwall())
-
-
-def _dir_ok(st):
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != _UID or (st.st_mode & 0o002):
-        return False
-    if st.st_mode & 0o020:
-        return _group_exclusive(st.st_gid)
-    return True
-
-
-def _dirfd(path, create=False, mode=0o700):
-    """Open a directory under $HOME by walking every component from the
-    $HOME anchor with O_NOFOLLOW|O_DIRECTORY, validating each directory
-    (ours, never world-writable, group-writable only if exclusive). A
-    symlink anywhere on the path is refused. Returns the leaf descriptor;
-    callers keep it for every relative operation that follows."""
-    path = os.path.abspath(path)
-    if path != _HOME and not path.startswith(_HOME + os.sep):
-        raise PermissionError("outside $HOME: " + path)
-    fd = os.open(_HOME, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
-    try:
-        if not _dir_ok(os.fstat(fd)):
-            raise PermissionError("untrusted $HOME")
-        for comp in [c for c in path[len(_HOME):].split(os.sep) if c]:
-            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-            try:
-                nfd = os.open(comp, flags, dir_fd=fd)
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(comp, mode, dir_fd=fd)
-                nfd = os.open(comp, flags, dir_fd=fd)
-            os.close(fd)
-            fd = nfd
-            if not _dir_ok(os.fstat(fd)):
-                raise PermissionError("untrusted directory: " + path)
-        return fd
-    except BaseException:
-        os.close(fd)
-        raise
 
 
 def read_src(path, cap=8_000_000):
@@ -206,34 +148,6 @@ class Journal:
                 log(f"rollback: could not restore {dirpath}/{name}: {e}")
 
 
-def _write(dfd, name, data, mode):
-    tmp = ".%s.%s.tmp" % (name, secrets.token_hex(8))
-    try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                     mode, dir_fd=dfd)
-        try:
-            view = memoryview(data)
-            while view:
-                view = view[os.write(fd, view):]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        try:
-            cur = os.stat(name, dir_fd=dfd, follow_symlinks=False)
-            if not stat.S_ISREG(cur.st_mode):
-                raise PermissionError("refusing to replace non-regular file: " + name)
-        except FileNotFoundError:
-            pass
-        os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
-        os.fsync(dfd)
-    except BaseException:
-        try:
-            os.unlink(tmp, dir_fd=dfd)
-        except OSError:
-            pass
-        raise
-
-
 def systemctl(*args):
     """Run a user-manager command; returns the exit code (checked by callers)."""
     if NO_SYSTEMD:
@@ -276,6 +190,14 @@ class Services:
     def enable_now(self, unit):
         self.snapshot(unit)
         must(systemctl("daemon-reload"), "daemon-reload")
+        # `enable` adds the symlinks this [Install] asks for; it does NOT remove
+        # ones a PREVIOUS [Install] left behind. nixi-watch moved from
+        # default.target to graphical-session.target (#56), so without the
+        # disable an upgraded machine keeps default.target.wants/ and the unit
+        # still starts before the shell exists -- the exact bug being fixed,
+        # surviving the fix. Failure is ignored: not being enabled yet is the
+        # normal first-install case.
+        systemctl("disable", unit)
         must(systemctl("enable", "--now", unit), "enable " + unit)
 
     def disable_now(self, unit):
@@ -295,49 +217,24 @@ def src(*parts):
 
 
 def install_core(j, svc):
-    remove_old_widget(j, svc)
     for f in ("CLAUDE.md", "KNOWLEDGE.md", "faq.json", "AGENTS.md"):
         j.place(DIR, f, read_src(src("share", f)), dir_mode=0o700)
     for b in ("nixi", "nixi-context", "nixi-update-manual"):
         j.place(BIN, b, read_src(src("bin", b)), mode=0o755)
+    # The safe-IO module the suffix-less programs import. It has to land in the
+    # SAME directory as them: that directory is their sys.path[0]. Not executable.
+    # nix/package.nix places it in $out/bin for the declarative path (#60).
+    j.place(BIN, "nixi_safeio.py", read_src(src("bin", "nixi_safeio.py")), mode=0o644)
     # The bar button is its own plugin: Omarchy gives a third-party plugin a
     # bar widget or an overlay, never both.
     button = os.path.join(PLUGINS, json.loads(read_src(src("button", "manifest.json")))["id"])
     for f in ("manifest.json", "BarWidget.qml"):
         j.place(button, f, read_src(src("button", f)))
-    version = json.loads(read_src(src("manifest.json")))["version"]
-    j.place(DATA, "source_root", (ROOT + "\n").encode(), mode=0o600, dir_mode=0o700)
-    j.place(DATA, ".installed-version", (version + "\n").encode(), mode=0o600, dir_mode=0o700)
     merge_menu(j)
     install_bridge_deps()
     if not os.path.realpath(ROOT).startswith(os.path.realpath(PLUGINS) + os.sep):
         log("card: this checkout is not in %s, so the shell will not load it; "
             "install it with `omarchy plugin add` (or use the Home Manager module)" % PLUGINS)
-
-
-# What a 0.9.x install placed and the overlay no longer uses. The server unit
-# must be stopped before its program disappears, or it restart-loops.
-OLD_FILES = ((BIN, "nixi-server"), (UNITS, "nixi.service"), (DIR, "ui.html"),
-             (os.path.join(DIR, "vendor"), "marked.min.js"),
-             (os.path.join(DIR, "vendor"), "purify.min.js"),
-             (os.path.join(DATA, "models"), "ggml-base.en.bin"),
-             (os.path.join(DATA, "models"), "ggml-silero-v5.1.2.bin"))
-
-
-def remove_old_widget(j, svc):
-    if os.path.exists(os.path.join(UNITS, "nixi.service")) and is_enabled("nixi.service"):
-        svc.disable_now("nixi.service")
-    removed = [n for d, n in OLD_FILES if os.path.lexists(os.path.join(d, n))]
-    for d, n in OLD_FILES:
-        j.remove(d, n)
-    for d in (os.path.join(DIR, "vendor"), os.path.join(DATA, "models")):
-        try:
-            os.rmdir(d)
-        except OSError:
-            pass
-    if removed:
-        must(systemctl("daemon-reload"), "daemon-reload")
-        log("removed the old widget: " + ", ".join(removed))
 
 
 def install_bridge_deps():
@@ -347,7 +244,7 @@ def install_bridge_deps():
     bridge = src("bridge")
     if os.environ.get("NIXI_SKIP_NPM") in ("1", "true", "yes"):
         return
-    if not _shutil_which("npm"):
+    if not shutil.which("npm"):
         log("bridge: npm is not on PATH, so the card cannot start an agent; "
             "add pkgs.nodejs, then run install.py --refresh")
         return
@@ -366,9 +263,8 @@ ADAPTERS = (("claude", "claude-agent-acp"), ("codex", "codex-acp"), ("opencode",
 
 
 def requirements():
-    found = {agent: bool(_shutil_which(cmd)) for agent, cmd in ADAPTERS}
-    return {"agents": found, "fileSearch": bool(_shutil_which("fd")),
-            "node": bool(_shutil_which("node"))}
+    found = {agent: bool(shutil.which(cmd)) for agent, cmd in ADAPTERS}
+    return {"agents": found, "fileSearch": bool(shutil.which("fd"))}
 
 
 def merge_menu(j):
@@ -391,6 +287,10 @@ def merge_menu(j):
         # U+F0625) is swapped for sparkles in place. Scoped to the help entry's
         # own braces so an identical glyph on a neighbouring row is not touched.
         # Without this the new icon would only ever reach fresh installs.
+        # Do NOT delete this as 0.9.x-era upgrade code: it is a POST-release
+        # migration. `git show v0.10.0:install.py` writes U+F0625; sparkles
+        # landed two days after that tag, in 6d7a61b (2026-09-17). Every
+        # machine installed from the only release Nixi has made needs this.
         b = s.find("{", s.index('"help"'))
         depth, e = 0, b
         while b != -1 and e < len(s):
@@ -447,16 +347,14 @@ def disable_watcher(j, svc):
 
 
 def enable_skill(j, svc):
-    for f in sorted(os.listdir(src("skills", "nixi"))):
-        if f.endswith(".md"):
-            j.place(SKILLS, f, read_src(src("skills", "nixi", f)))
-    j.place(DIR, "SKILL.md", read_src(src("skills", "nixi", "SKILL.md")), dir_mode=0o700)
+    skill = read_src(src("skills", "nixi", "SKILL.md"))
+    j.place(SKILLS, "SKILL.md", skill)
+    j.place(DIR, "SKILL.md", skill, dir_mode=0o700)
 
 
 def disable_skill(j, svc):
-    for f in ("SKILL.md",):
-        j.remove(SKILLS, f)
-        j.remove(DIR, f)
+    j.remove(SKILLS, "SKILL.md")
+    j.remove(DIR, "SKILL.md")
     try:
         os.rmdir(SKILLS)
     except OSError:
@@ -481,11 +379,6 @@ def disable_hooks(j, svc):
     must(systemctl("daemon-reload"), "daemon-reload")
 
 
-def _shutil_which(b):
-    import shutil
-    return shutil.which(b)
-
-
 def status():
     return {
         "watcher": os.path.exists(os.path.join(UNITS, "nixi-watch.service"))
@@ -500,11 +393,11 @@ DISABLE = {"watcher": disable_watcher, "skill": disable_skill, "hooks": disable_
 
 
 def main(argv):
-    args = [a for a in argv if a not in ("--no-systemd", "--log")]
+    args = [a for a in argv if a != "--no-systemd"]
     if args == ["--status"]:
         print(json.dumps(status()))
         return 0
-    want_on, want_off, core = [], [], True
+    want_on, want_off = [], []
     for a in args:
         if a == "--all":
             want_on = list(FEATURES)
@@ -514,12 +407,11 @@ def main(argv):
             want_on.append(a[7:])
         elif a.startswith("--without-") and a[10:] in FEATURES:
             want_off.append(a[10:])
-            core = False
         else:
             print("unknown flag: " + a, file=sys.stderr)
             return 64
-    if want_on and not core:
-        core = True
+    # --without-X alone only removes X; anything else also (re)installs the core.
+    core = bool(want_on) or not want_off
     j, svc = Journal(), Services()
     try:
         if core:
@@ -532,7 +424,6 @@ def main(argv):
         log("install failed: %s — rolling back" % e)
         svc.rollback()
         j.rollback()
-        write_log()
         return 1
     # The first manual fetch is a convenience, not part of the install: it is
     # already best-effort, and CI (and air-gapped installs) want it skipped
@@ -580,24 +471,7 @@ def main(argv):
                 % (", ".join(off), " ".join("--with-" + f for f in off)))
         else:
             log("all optional features are enabled")
-    write_log()
     return 0
-
-
-def write_log():
-    """The setup log lives in the private state dir, written through the
-    same descriptor-bound primitive as everything else (never a shell
-    redirection through a symlink)."""
-    if "--log" not in sys.argv:
-        return
-    try:
-        dfd = _dirfd(DATA, create=True)
-        try:
-            _write(dfd, "setup.log", ("\n".join(_LOG) + "\n").encode(), 0o600)
-        finally:
-            os.close(dfd)
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

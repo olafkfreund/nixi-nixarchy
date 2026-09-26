@@ -40,7 +40,7 @@
     {
       "id": "install",
       "title": "Installing software",
-      "question": "How do I install and remove apps on nixarchy, and why does the Install menu not install straight away?",
+      "question": "How do I install and remove apps on nixarchy with the package manager panel, why does nothing change until I apply, and what do I use for software NixOS will not run?",
       "observe": null
     },
     {
@@ -94,7 +94,7 @@
     {
       "id": "devenv",
       "title": "Per-project toolchains",
-      "question": "How do I give one project its own toolchain with nixarchy dev init?",
+      "question": "How do I give one project its own toolchain, and where do containers and throwaway VMs fit?",
       "observe": null
     }
   ]
