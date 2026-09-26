@@ -139,7 +139,7 @@ async function applyRequestedModel(configOptions) {
   }
 }
 
-const childEnvironment = { ...process.env, HUGINN_INTERNAL: "1" };
+const childEnvironment = { ...process.env };
 // ACP is the transport adapter; the installed system harness owns execution.
 // Explicit deployment overrides retain precedence. Never silently use the
 // adapter's transitive harness dependency when the system install is absent.

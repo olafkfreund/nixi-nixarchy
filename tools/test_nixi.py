@@ -996,6 +996,26 @@ def test_bridge_command_is_pinned():
 
     print("  ok  the bridge command is pinned by the build")
 
+def test_no_huginn_marker():
+    """#79: a marker nobody reads is worse than no marker.
+
+    HUGINN_INTERNAL was set on every bridge launch and propagated into the
+    agent's environment, and from there into every process the agent spawned,
+    with no reader anywhere -- not in this repo, not in omarchy-4.0.4 (1489
+    files), not in the resolved shell tree quickshell runs (1407 files).
+
+    It is asserted gone rather than left to review because it READ as
+    load-bearing: while fixing #77 the marker was very nearly used to gate a
+    security decision, which would have gated it on nothing. CI cannot execute
+    QML at all, so a string check is the only guard the card has.
+    """
+    for name in ("Conversation.qml", os.path.join("bridge", "bridge.js")):
+        body = open(os.path.join(ROOT, name)).read()
+        assert "HUGINN" not in body, \
+            "%s reinstates HUGINN_INTERNAL -- a marker with no reader (#79)" % name
+
+    print("  ok  no unread HUGINN marker on the agent's process tree")
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
