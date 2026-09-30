@@ -2,8 +2,11 @@
   description = "Nixi — an offline-first guide, tour and AI tutor for nixarchy";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # One file of it, MenuModel.js, is copied into the store at build time for
+  # MenuSearch.qml. nixarchy makes this follow its own.
+  inputs.omarchy = { url = "github:basecamp/omarchy/v4.0.4"; flake = false; };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, omarchy }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f:
@@ -11,7 +14,7 @@
     in
     {
       packages = forAllSystems (pkgs: rec {
-        nixi = pkgs.callPackage ./nix/package.nix { };
+        nixi = pkgs.callPackage ./nix/package.nix { omarchySrc = omarchy; };
         default = nixi;
       });
 

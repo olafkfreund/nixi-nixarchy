@@ -18,6 +18,10 @@
 , codexAcp ? null
   # OpenCode speaks ACP itself (`opencode acp`); nixpkgs' opencode is MIT.
 , opencodeAcp ? null
+, runCommandLocal
+  # Omarchy's source, for MenuModel.js. The flake passes its pinned input;
+  # left null, MenuSearch keeps its /run/current-system import.
+, omarchySrc ? null
 }:
 
 let
@@ -73,6 +77,13 @@ let
     ++ lib.optional (opencodeAcp != null)
       "--set NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
   );
+
+  # One file, not ${omarchySrc}: the tree is 128 MiB and would become a runtime dependency.
+  menuModel = if omarchySrc == null then null else
+  runCommandLocal "omarchy-menu-model" { } ''
+    test -f ${omarchySrc}/shell/plugins/menu/MenuModel.js
+    install -Dm444 ${omarchySrc}/shell/plugins/menu/MenuModel.js "$out/MenuModel.js"
+  '';
 in
 stdenvNoCC.mkDerivation {
   pname = "nixi";
@@ -193,6 +204,10 @@ stdenvNoCC.mkDerivation {
       --replace-fail '"gjs"' '"${gjs}/bin/gjs"'
     substituteInPlace $plugin/MenuSearch.qml \
       --replace-fail '"node"' "\"$plugin/bridge/nixi-node\""
+    ${lib.optionalString (menuModel != null) ''
+      substituteInPlace $plugin/MenuSearch.qml \
+        --replace-fail 'file:///run/current-system/sw/share/omarchy/shell/plugins/menu/MenuModel.js' 'file://${menuModel}/MenuModel.js'
+    ''}
     substituteInPlace $plugin/bridge/files.js \
       --replace-fail 'execFileAsync("fd"' 'execFileAsync("${fd}/bin/fd"'
     substituteInPlace $plugin/bridge/reveal.js \
@@ -229,6 +244,14 @@ stdenvNoCC.mkDerivation {
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done
+    ${lib.optionalString (menuModel != null) ''
+      if grep -n '/run/current-system' $plugin/MenuSearch.qml; then
+        echo "MenuSearch.qml imports MenuModel.js from the system profile, not the build-time store path"; exit 1
+      fi
+      grep -qF 'file://${menuModel}/MenuModel.js' $plugin/MenuSearch.qml \
+        || { echo "MenuSearch.qml does not import the build-time MenuModel.js"; exit 1; }
+      test -s ${menuModel}/MenuModel.js || { echo "the build-time MenuModel.js is missing"; exit 1; }
+    ''}
     for f in manifest.json BarWidget.qml; do
       test -s "$out/share/omarchy/plugins/${pluginId}-button/$f" \
         || { echo "the bar button plugin is missing $f"; exit 1; }
