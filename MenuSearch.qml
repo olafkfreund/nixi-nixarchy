@@ -15,9 +15,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
-// The menu LOGIC comes from the system profile, which is stable across nixarchy
-// updates; a QML import cannot read OMARCHY_PATH, a store path that changes on
-// every update. The file is byte-identical to the one under OMARCHY_PATH.
+// The menu LOGIC comes from the system profile when this file is loaded from
+// a plain checkout; the Nix package rewrites the import to a store copy of
+// the same file from its pinned Omarchy (nix/package.nix). A QML import
+// cannot read OMARCHY_PATH.
 import "file:///run/current-system/sw/share/omarchy/shell/plugins/menu/MenuModel.js" as MenuModel
 
 Item {
