@@ -64,6 +64,11 @@ function save(dir, bytes, hash, mime) {
   const path = join(dir, `${hash}.${EXTENSION[mime]}`);
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // prepareMediaDir refuses a symlinked directory at startup, but the bridge
+    // only reports that failure and carries on -- and mkdirSync above succeeds
+    // through a symlink that already points at a directory, so the write would
+    // land in its target. Re-check here, where the file is actually created.
+    if (!lstatSync(dir).isDirectory()) return null;
     try {
       return lstatSync(path).isFile() ? path : null;
     } catch {}

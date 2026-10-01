@@ -258,7 +258,7 @@ function noticeMcpSource(params) {
     return;
   }
   mcpFieldSeen = true;
-  const registered = currentPolicy().mcpServers.some((server) => server.name === tool.mcpServer.name);
+  const registered = attachedMcpServers.indexOf(tool.mcpServer.name) >= 0;
   if (tool.mcpServer.source === "sdk" && registered) return;
   if (mcpNoticed) return;
   mcpNoticed = true;
@@ -362,7 +362,7 @@ async function start() {
     } : {}),
   });
   sessionId = session.sessionId;
-  attachedMcpServers = currentPolicy().mcpServers.length;
+  attachedMcpServers = currentPolicy().mcpServers.map((server) => server.name);
   sessionModes = session.modes || null;
   configOptions = session.configOptions || [];
   await applyRequestedModel(configOptions);
@@ -502,9 +502,10 @@ function cancelAllPendingPermissions() {
 
 let sessionModes = null;
 let configOptions = [];
-// How many MCP servers this session was created with. ACP fixes them at
-// newSession, so a later trust change cannot add one.
-let attachedMcpServers = 0;
+// The MCP servers this session was created with. ACP fixes them at newSession,
+// so a later trust change cannot add or remove one -- which is exactly why the
+// diagnostic below must compare against THIS, not against the current policy.
+let attachedMcpServers = [];
 
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
@@ -607,7 +608,7 @@ input.on("line", (line) => {
       // to Mechanic cannot attach ai-mirror to a session that started at Guide,
       // and silently lacking desktop control would read as a broken feature.
       // Rebuilding the session here would instead discard the conversation.
-      if (trust === "mechanic" && attachedMcpServers === 0
+      if (trust === "mechanic" && attachedMcpServers.length === 0
           && currentPolicy().mcpServers.length > 0)
         emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
     })().catch((error) => {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
@@ -133,4 +133,16 @@ test("a backslash never reaches an alt or a link label", sandbox((root, dir) => 
   const link = blockMarkdown(
     { type: "resource_link", name: "doc\\", uri: "https://example.com/a" }, dir).markdown;
   assert.ok(!link.includes("\\"), link);
+}));
+
+test("a symlinked media directory is refused in the write path too", sandbox((root, dir) => {
+  // prepareMediaDir refuses a symlinked directory, but the bridge only reports
+  // that and carries on -- so save() must refuse it again, or mkdirSync would
+  // succeed through the link and the bytes would land in its target.
+  const real = join(root, "elsewhere");
+  mkdirSync(real, { recursive: true });
+  symlinkSync(real, dir);
+  const png = { type: "image", mimeType: "image/png", data: PNG.toString("base64") };
+  assert.equal(blockMarkdown(png, dir).markdown, "", "nothing is written through a symlink");
+  assert.deepEqual(readdirSync(real), [], "and nothing reached its target");
 }));

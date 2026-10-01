@@ -171,7 +171,19 @@ Item {
       if (home === "") return ""
       data = home + "/.local/share/nixi"
     }
-    return data.replace(/\/+/g, "/").replace(/\/\.(?=\/|$)/g, "").replace(/\/+$/, "") + "/images"
+    // Lexical normalisation matching node's path.join, which the bridge uses:
+    // "//" collapsed, "." dropped and ".." RESOLVED. Leaving ".." unresolved
+    // made "/tmp/a/../b" disagree with the bridge's "/tmp/b", and every image
+    // would then quietly become a link.
+    var parts = data.split("/")
+    var stack = []
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i]
+      if (part === "" || part === ".") continue
+      if (part === "..") { stack.pop(); continue }
+      stack.push(part)
+    }
+    return "/" + stack.join("/") + "/images"
   }
 
   // Read only so the card can SAY it ignored this, never to build a command
