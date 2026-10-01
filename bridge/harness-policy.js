@@ -1,7 +1,7 @@
 import { readFileSync, accessSync, statSync, constants } from "node:fs";
 import { join } from "node:path";
 
-export const AGENTS = ["claude", "codex", "opencode"];
+const AGENTS = ["claude", "codex", "opencode"];
 
 export function agentLabel(agent) {
   return { claude: "Claude Code", codex: "Codex", opencode: "OpenCode" }[agent] || agent;
@@ -44,7 +44,7 @@ export function resolveHarness(env = process.env) {
 }
 
 export function resolveExecutable(agent, env = process.env) {
-  const override = env[{ codex: "CODEX_PATH", opencode: "OPENCODE_PATH" }[agent] || "CLAUDE_CODE_EXECUTABLE"];
+  const override = env[{ codex: "CODEX_PATH", claude: "CLAUDE_CODE_EXECUTABLE" }[agent]];
   const executable = override || agent;
   const found = firstExecutable(executable.includes("/") ? [executable] : onPath(executable, env));
   if (found) return found;
@@ -82,11 +82,27 @@ function firstExecutable(candidates) {
 // harness that works. Kept beside resolveAdapter so the two stay in step; the
 // variable names are also read in bridge.js's configuredAgentCommand.
 function adapterAvailable(agent, env = process.env) {
-  const override = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agent]
-    || "NIXI_CLAUDE_ACP_COMMAND";
-  if (String(env[override] || env.NIXI_ACP_COMMAND || "").trim()) return true;
+  if (adapterOverride(agent, env)) return true;
   try { resolveAdapter(agent, env); return true; }
   catch { return false; }
+}
+
+// The adapter command a deployment pinned for this agent, as raw JSON text, or
+// "". NIXI_ACP_COMMAND pins one for any agent.
+export function adapterOverride(agent, env = process.env) {
+  const name = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agent]
+    || "NIXI_CLAUDE_ACP_COMMAND";
+  return String(env[name] || env.NIXI_ACP_COMMAND || "").trim();
+}
+
+// A command given as a JSON array of non-empty strings, or null.
+export function parseCommand(raw) {
+  try {
+    const command = JSON.parse(raw);
+    if (Array.isArray(command) && command.length > 0
+        && command.every((part) => typeof part === "string" && part !== "")) return command;
+  } catch {}
+  return null;
 }
 
 export function resolveAdapter(agent, env = process.env) {
@@ -122,11 +138,10 @@ export function resolveAdapter(agent, env = process.env) {
 export function resolveAiMirror(env = process.env) {
   const raw = String(env.NIXI_AI_MIRROR_COMMAND || "").trim();
   if (!raw) return null;
-  let command;
-  try { command = JSON.parse(raw); }
-  catch { throw new Error("NIXI_AI_MIRROR_COMMAND must be a JSON array of arguments"); }
-  if (!Array.isArray(command) || command.length === 0
-      || command.some((argument) => typeof argument !== "string" || argument === ""))
+  const command = parseCommand(raw);
+  // This names a program Nixi spawns on the user's behalf, so a malformed value
+  // fails here rather than reaching spawn as something unintended.
+  if (!command)
     throw new Error("NIXI_AI_MIRROR_COMMAND must be a non-empty JSON array of non-empty strings");
   return command;
 }

@@ -123,7 +123,7 @@ These are Nixi's additions to the upstream card. Each has a test that fails
 if the invariant breaks.
 
 **Grounding** (`bridge/grounding.js`). Before every prompt the bridge runs
-`nixi-context` with the question (3 s timeout) and prepends its excerpt of the
+`nixi-context` with the question (3 s timeout) and appends its excerpt of the
 local manuals. A missing or failing `nixi-context` sends the question
 unchanged and emits a diagnostic; it never blocks the turn. The agent runs in
 `~/.config/nixi` when it exists, so its `CLAUDE.md`/`AGENTS.md` is the tutor
@@ -132,9 +132,23 @@ brief.
 **Trust** (`bridge/trust-policy.js`). `guide` or `mechanic`, stored beside the
 permission mode in `nixi.json`; anything else is Guide.
 
-- Guide: every ACP permission request is cancelled in the bridge and never
+- Guide: every ACP permission request the bridge receives is cancelled and never
   reaches the card. The agent is also put in its most restrictive mode, through
   ACP session modes or, for OpenCode, the `mode` config option.
+
+  Read, Grep and Glob are the documented exception, in both trust levels. They
+  are granted in the permissions object handed to Claude Code at `newSession`
+  (`claudePermissions`, `bridge/trust-policy.js`), and Claude Code applies that
+  allowlist itself — so those three tools **never reach ACP as a permission
+  request at all**, and there is nothing for Guide to cancel. This is why Guide
+  reads without asking: not a gap in the cancel, but three tools that never
+  generate a request. Everything that writes, executes or reaches the network
+  still does, and in Guide every one of those is cancelled.
+
+  `SECRET_PATHS` is the limit on that allowance. Its rules are generated for all
+  three read tools, because Claude matches rules per tool name — a list of
+  `Read(...)` patterns alone left Grep and Glob able to reach the same paths
+  unprompted (#41).
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.

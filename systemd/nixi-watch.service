@@ -1,5 +1,11 @@
 [Unit]
 Description=Nixi tip watcher (suggests workflow improvements, max one per day)
+# The watcher talks to omarchy-notification-send, which needs a session. Started
+# at default.target it ran before the shell existed, failed, and Restart=
+# on-failure burned the start limit -- dead for the whole session (#56). Must
+# match nix/hm-module.nix; tools/test_nixi.py asserts they do.
+PartOf=graphical-session.target
+After=graphical-session.target
 
 [Service]
 # NixOS keeps almost nothing in /usr/bin (env, and little else), so an
@@ -8,7 +14,7 @@ Environment=PATH=%h/.nix-profile/bin:/etc/profiles/per-user/%u/bin:/run/current-
 Type=exec
 ExecStart=%h/.local/bin/nixi-watch
 Restart=on-failure
-RestartSec=5
+RestartSec=2
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

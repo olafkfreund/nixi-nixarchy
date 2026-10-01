@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 
@@ -60,7 +61,7 @@ async function commandLine(pid) {
 }
 
 function commandIndex(args, name) {
-  return args.findIndex((arg) => String(arg).split("/").pop() === name);
+  return args.findIndex((arg) => basename(String(arg)) === name);
 }
 
 function optionValue(args, start, names) {
@@ -153,7 +154,6 @@ async function search(message) {
       stableId,
       title,
       detail,
-      originalTitle,
       class: String(window.class || ""),
       workspace: String(window.workspace?.name || window.workspace?.id || ""),
       score,

@@ -35,8 +35,9 @@ topic says which of the two it is.
   window, icon, and launcher entry. Install more: SUPER+SPACE → Install →
   Web App. This needs no rebuild.
 - Real packages are DECLARATIVE here — see the NixOS section. There is no
-  AUR and no working `pacman`/`yay`: the Install menu queues into
-  `~/.config/nixarchy/apps.nix` and `nixarchy apply` makes it real.
+  AUR and no working `pacman`/`yay`: the package manager panel (Install ▸
+  Packages) queues into `~/.config/nixarchy/apps.nix` and applies with one
+  key; `nixarchy apply` is the same step in a terminal.
 - Floating windows move with SUPER+drag.
 
 ## Screenshots & capture
@@ -79,6 +80,39 @@ topic says which of the two it is.
 - `~/.config/nixarchy/{apps,services,advanced}.nix` is the user's declarative
   surface; `~/.config/hypr/` and `~/.config/omarchy/` remain plain mutable
   config exactly as on Arch.
+
+## nixarchy's own tools — prefer these (verified on razer 2026-09-21)
+nixarchy ships a shell panel for each job a newcomer brings from Arch. Lead
+with the panel; the terminal command is the second answer, for people who
+want it. Details live in the local manual page named in the last column.
+
+| the job | plugin id | open it | seeded key | terminal | manual |
+|---|---|---|---|---|---|
+| install an app, service or package; set an option | `nixarchy.pkg` | Install ▸ Packages | Super+Alt+N | `nixarchy search`, `nixarchy pkg add <attr>`, `nixarchy app enable <id>`, then `nixarchy apply` | plugins.md |
+| a toolchain for one project | `nixarchy.devenv` | Apps ▸ Dev environments | Super+Alt+E | `nixarchy dev init <preset>`, `nixarchy dev list` | per-project-environments.md |
+| try something in a throwaway VM | `nixarchy.microvm` | Trigger ▸ Sandbox | Super+Alt+V | `nixarchy vm` (`nixarchy vm help`) | sandboxes.md |
+| run a container | `nixarchy.podman` | Apps ▸ Podman | Super+Alt+O | `podman` (`docker` stays rootless Docker) | plugins.md |
+| software that only ships for another distro (.deb, AUR) | `nixarchy.distrobox` | Trigger ▸ Boxes | Super+Alt+D | `distrobox` | boxes.md |
+
+Rules, in order:
+1. **Check before recommending.** `nixarchy-plugin --enabled <id>` exits 0
+   when the panel is on. If it is not, `test -d ~/.config/omarchy/plugins/<id>`
+   tells *off* from *not installed*. Check the key in
+   `omarchy menu keybindings --print`. If `nixarchy-plugin` does not exist,
+   this is not nixarchy: answer with the terminal command and name no panel.
+2. **Say it in this order:** the panel's menu path, then its key **only if it
+   is bound**, one line on what the panel does, then the terminal command.
+3. **Off:** turn it on in Setup ▸ Plugins, or `omarchy plugin enable <id>`.
+   **Not installed:** the panel follows a service. devenv comes with the
+   `devenv` service, Podman with the `podman` service (`boxes` turns podman
+   on too), and Distrobox with the `boxes` service. Turn the service on with
+   `nixarchy-service-enable <id>` (or Install ▸ Service), then `nixarchy
+   apply`. Until then, the terminal command is the answer.
+
+The keys are seeded into `bindings.lua` only on new installs, so a missing
+key is normal, not a fault (the machine this was verified on had only
+Super+Alt+V of the five). The menu path and `nixarchy-plugin <id>` work
+either way.
 
 ## For scripts (advanced, verified the hard way)
 - In Omarchy 4 both `hyprctl` AND the raw Hyprland IPC socket are wrapped in

@@ -1,96 +1,15 @@
-// Rich-media logic for the Nixi overlay, kept Qt-free so it can be unit tested
+// Chart rendering for the Nixi overlay, kept Qt-free so it can be unit tested
 // under node (bridge/media-model.test.js) -- the same shape as TourModel.js.
-// CommonJS on purpose: QML imports this file and has no module loader, so no
-// import/export and no require. Every function returns a new value.
+// CommonJS on purpose: no import/export and no require, so the bridge can
+// require it and QML could import it.
 //
-// sanitize() runs in the QML text binding on every streamed chunk, so it must
-// stay cheap and must never throw -- a throw stops the reply rendering mid-turn.
+// The image allowlist that used to live here now lives in TextFormat.js, where
+// master grew one independently for the same reason (#42). One control, not two.
 
 var MAX_ROWS = 24
 var MAX_LABEL = 48
 var MAX_TITLE = 80
 var MAX_VALUE = 1e15
-
-// DEFAULT DENY. Every "![" outside a fenced block loses its "!" -- becoming an
-// ordinary link -- unless what follows it matches ALLOWED exactly and names a
-// file inside the media directory.
-//
-// The earlier version matched images with a regex and passed anything it did
-// not recognise through untouched. That is default-ALLOW on no-match, and
-// CommonMark has more image forms than a regex of that shape can hold: nested
-// brackets in the alt (`![see [this] shot](url)`), an escaped bracket
-// (`![a\]b](url)`), and the shortcut reference (`![leak]` with a later
-// `[leak]: url`) all slipped past and were fetched for real by the card --
-// proved against a listener, which logged all three.
-//
-// So the question is inverted. Nothing is an image until it is proved to be a
-// local one, and an unrecognised form loses its "!" like everything else.
-var FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
-// ![alt](url) on one line: no brackets, backslash or whitespace anywhere in the
-// alt or the url. A backslash could escape the closing bracket; whitespace
-// could hide a second destination. Anything richer is not worth admitting.
-var ALLOWED = /^!\[([^\[\]\\]*)\]\((file:\/\/\/[^\s()<>\\\]\[]*)\)/
-
-// An image renders only from a file:// path inside the media directory. The
-// trailing separator stops "/media-evil/" passing as "/media/"; ".." and an
-// encoded dot are refused before any prefix comparison.
-function allowed(url, dir) {
-  if (!dir || url.slice(0, 8) !== "file:///") return false
-  if (url.indexOf("..") !== -1 || /%2e/i.test(url) || url.indexOf("\\") !== -1) return false
-  var path = url.slice(7)
-  return path.length > dir.length && path.slice(0, dir.length) === dir
-}
-
-// Linear: one pass, no backtracking. The binding re-runs this over the whole
-// accumulated body on every streamed chunk, so it cannot afford an ambiguous
-// pattern -- the previous one went quadratic on an unterminated "![a](".
-function denyImages(line, dir) {
-  var out = ""
-  var i = 0
-  while (true) {
-    var at = line.indexOf("![", i)
-    if (at < 0) return out + line.slice(i)
-    out += line.slice(i, at)
-    var match = ALLOWED.exec(line.slice(at))
-    if (match && allowed(match[2], dir)) {
-      out += match[0]
-      i = at + match[0].length
-    } else {
-      // Drop the "!": an image nobody proved local is a link.
-      out += "["
-      i = at + 2
-    }
-  }
-}
-
-function sanitize(markdown, mediaDir) {
-  try {
-    var text = String(markdown == null ? "" : markdown)
-    if (text.indexOf("![") === -1) return text
-    var dir = String(mediaDir || "").replace(/\/+$/, "") + "/"
-    if (dir === "/") dir = ""
-    var lines = text.split("\n")
-    var fence = null   // { ch, len } while inside a fenced block
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-      var f = FENCE.exec(line)
-      if (fence) {
-        if (f && f[1][0] === fence.ch && f[1].length >= fence.len && f[2].trim() === "") fence = null
-        continue
-      }
-      if (f) { fence = { ch: f[1][0], len: f[1].length }; continue }
-      if (line.indexOf("![") === -1) continue
-      lines[i] = denyImages(line, dir)
-    }
-    return lines.join("\n")
-  } catch (e) {
-    // Fail closed. An error inside the allowlist must not hand the renderer an
-    // image it never checked -- that is the whole control. Dropping the "!"
-    // turns every image, in every form, into an ordinary link.
-    try { return String(markdown == null ? "" : markdown).replace(/!\[/g, "[") }
-    catch (again) { return "" }
-  }
-}
 
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
@@ -149,7 +68,6 @@ function chartSvg(block) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    sanitize: sanitize,
-    chartSvg: chartSvg
+      chartSvg: chartSvg
   }
 }

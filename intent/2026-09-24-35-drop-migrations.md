@@ -1,0 +1,105 @@
+---
+status: approved
+issue: 35
+author: olafkfreund
+---
+
+# Intent: drop the 0.9.x / pre-rebrand migration cluster
+
+## Problem
+
+Four places in the tree exist only to upgrade an installation of an older nixi
+onto the current one:
+
+| Where | What it migrates |
+|---|---|
+| `install.py`: `OLD_FILES`, `remove_old_widget()` | deletes the browser widget's server, unit, page, vendored JS and voice models from a 0.9.x install |
+| `nix/migrate-plugin-dir.sh` + `nix/hm-module.nix`'s `nixiOldPluginDir` activation | removes the real `~/.config/omarchy/plugins/<id>` directory the 0.9.x Home Manager module created file-by-file, which would otherwise fail `checkLinkTargets` |
+| `nix/package.nix`: the `share/nixi/ui.html` / `share/nixi/vendor` assertion | fails the build if the old widget's files reappear in the store output |
+| `tools/test_nixi.py`: `test_old_plugin_dir_migration` | the test for the Home Manager migration |
+| `.github/workflows/ci.yml`: the 0.9.x seeding in "Imperative installer (offline)" | plants `nixi-server`, `nixi.service`, `ui.html` in a throwaway `$HOME` and asserts the installer removes them |
+
+The whole-repo review of 2026-09-22 (#35) listed this as removable on the
+grounds that **0.9.x never shipped under a tag**, so it is upgrade code for a
+version that had no release.
+
+The review's original list held two further items. Investigation showed each was
+misclassified, and **both are excluded from this deletion and stay in the tree**:
+`merge_menu()`'s menu-icon migration, which upgrades `v0.10.0` itself, and
+`test_old_widget_stays_gone`, which is a dead-feature drift guard. The evidence
+is below; the spec records the exclusions.
+
+## Outcome
+
+The cluster is gone. `install.py` stops carrying a list of files from a layout
+this repo no longer produces; the Home Manager module stops running a shell
+script on every activation; three tests and one CI seeding step go.
+
+## The premise, stated honestly
+
+`v0.10.0` is the only tag in this repository and the only GitHub release, so
+"0.9.x never shipped under a tag" is literally true. **The inference from it is
+weaker than it sounds, and this intent records the risk the decision accepts
+rather than restating the premise as though it settled the question.**
+
+- `install.py` first appears in `5be4010` (2026-09-02). `v0.10.0` is
+  `2026-09-15`. That is a **13-day window** in which the repository was
+  installable from `main` with no tag. A pre-0.10 install was possible.
+- The window is real on the declarative path too, not just the imperative one.
+  `nix/hm-module.nix` has existed since the fork commit `19dec39` (2026-09-03),
+  and at that commit it did link the plugin file by file —
+  `"omarchy/plugins/${pluginId}/manifest.json".source`, `.../BarWidget.qml`,
+  `.../nixi-launch` — which is exactly the shape `migrate-plugin-dir.sh` exists
+  to clean up. It also placed `"nixi/ui.html".source` and `"nixi/vendor".source`.
+  So both migrations describe a layout this repo genuinely produced, from `main`,
+  for thirteen days.
+- **The menu-icon migration is a POST-release migration, and the review's
+  premise is false for it. Excluded; it stays.** Tag-verified:
+  `git show v0.10.0:install.py` writes `\U000f0625` (help-circle), and sparkles
+  landed in `6d7a61b` on 2026-09-17 — **two days after the only release Nixi has
+  ever made** (`v0.10.0`, 2026-09-15). `install.py` wrote help-circle
+  continuously from `5be4010` (2026-09-02) to that commit, so the span contains
+  the tag. `merge_menu()` leaves an existing `"help"` entry alone by design, so
+  this branch is the sole thing that would ever replace the glyph. Deleting it
+  would ship a permanent question-mark icon to exactly the users who followed the
+  documented install path. It happened to sit next to the pre-release migrations;
+  it is not one of them.
+- **`test_old_widget_stays_gone` is a dead-feature drift guard, not migration
+  code. Excluded; it stays.** Only one of its eight patterns (`ui.html`)
+  belonged to the migration; the other seven (`/voice`, `/listen/`, `pw-record`,
+  `whisper`, `NIXI_WHISPER`, `8642`, `X-Nixi-Token`) guard the removed
+  browser-widget and voice feature against returning, and it is the **only**
+  guard in the tree that does so — `spec/2026-09-24-56-drift-traps.md:55` cites
+  it as one of the two existing invariants of its class. The `ui.html`
+  alternative is dropped, because this change removes the last code allowed to
+  name it.
+
+No evidence was found that argues the other way: nothing in the history shows an
+install path that could not have worked before the tag, or a file format that
+did not exist then.
+
+The user approved this deletion directly, with the 13-day window on the table.
+That call is made; this section exists so the accepted risk is on the record.
+
+## Affected
+
+`install.py`, `nix/hm-module.nix`, `nix/migrate-plugin-dir.sh` (deleted),
+`nix/package.nix`, `tools/test_nixi.py`, `.github/workflows/ci.yml`.
+
+Users upgrading from a pre-`v0.10.0` checkout. Users of `v0.10.0` itself are
+**not** affected: the icon migration that serves them is excluded and stays.
+
+## Constraints
+
+- Deletion only. No behaviour outside the migration cluster changes.
+- `python3 tools/test_nixi.py`, `nix flake check` and CI's exact `ruff` invocation
+  must pass.
+- Nothing removed may still be referenced anywhere.
+- The "Imperative installer (offline)" CI job must still be able to fail. If the
+  deletion leaves it asserting nothing, say so rather than keeping a vacuous job.
+
+## Open questions
+
+None outstanding. The two raised during investigation — whether the menu-icon
+migration and `test_old_widget_stays_gone` belonged in this deletion — were both
+answered no, on the tag evidence above, and both are excluded.

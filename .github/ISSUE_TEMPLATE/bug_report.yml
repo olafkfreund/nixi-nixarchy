@@ -30,8 +30,8 @@ body:
     attributes:
       label: Machine facts
       description: |
-        Run this and paste the output. It is the same information Nixi feeds
-        its own prompt, and contains no secrets.
+        Run this and paste the output. It contains no secrets. (Only the
+        chosen agent is read at runtime -- the versions are for us.)
       value: |
         nixos-version
         omarchy --version 2>/dev/null || echo "omarchy: (version file only)"
@@ -43,5 +43,5 @@ body:
     id: logs
     attributes:
       label: Server log (optional)
-      description: "`journalctl --user -u nixi -n 50 --no-pager`"
+      description: "`journalctl --user -u nixi-watch -n 50 --no-pager`"
       render: shell

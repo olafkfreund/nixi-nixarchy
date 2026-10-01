@@ -102,7 +102,7 @@ test("through the bridge: media keeps its place in the stream", async () => {
   const run = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_IMAGE" }] });
   const shown = run.events.filter((e) => e.type === "text").map((e) => e.text).join("");
   assert.match(shown, new RegExp(
-    `^before\\n!\\[[^\\]]+\\]\\(file://${run.home}/\\.local/share/nixi/media/[0-9a-f]{16}\\.png\\)\\n\\n\\[Manual\\]\\(https://example\\.com/a%20b\\)\\nafter$`));
+    `^before\\n!\\[[^\\]]+\\]\\(file://${run.home}/\\.local/share/nixi/images/[0-9a-f]{16}\\.png\\)\\n\\n\\[Manual\\]\\(https://example\\.com/a%20b\\)\\nafter$`));
   assert.ok(run.events.some((e) => e.type === "diagnostic" && /Media skipped/.test(e.text)), "bad data is reported");
 });
 

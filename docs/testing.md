@@ -52,7 +52,7 @@ its original global binding still exists and works after dismissal.
 3. Confirm assistant text is sans-serif, user prompts remain serif/italic, and
    there is breathing room before the next input.
 4. Click a Markdown link and confirm the desktop URL handler opens it.
-5. Use arrows, Page Up/Down, and Ctrl+H/J/K/L/U/D to scroll. Confirm each
+5. Use arrows, Page Up/Down, and Ctrl+J/K/U/D to scroll. Confirm each
    press supplies momentum, held/repeated keys build speed, opposite keys
    brake or reverse it, and the transcript coasts to a stop after release.
 6. Scroll a long transcript with a trackpad and with a touch drag. Confirm the
@@ -144,6 +144,22 @@ opposed to YOLO.
    step appears. Close the card, reopen it: it is empty. `/tour` resumes at the
    same step.
 8. With Super+, select each installed agent in turn and repeat 3 and 4.
+9. Handed-over questions (`nixi --ask`, nixi#37):
+   - **No card open:** `nixi --ask "how do I add a font?"` opens a card that
+     asks and answers.
+   - **Card open and idle:** the question is asked there. No second card
+     opens.
+   - **Card busy, mid-answer:** `nixi --ask "and a theme?"` only fills the
+     prompt. The running answer continues, and Enter sends it.
+   - **Slash text:** `nixi --ask "/mechanic"` only fills the prompt. The
+     trust level is unchanged until you press Enter yourself.
+   - **Card pinned:** a fresh overlay asks the question. The pinned window is
+     untouched.
+   - **Existing actions:** `nixi --tour` still starts the tour.
+
+   When you test a changed plugin by re-pointing its symlink, run
+   `omarchy-restart-shell` first. The shell's plugin reload keeps the old
+   compiled QML, because the file URL does not change.
 
 ## Pinning and concurrency checklist
 

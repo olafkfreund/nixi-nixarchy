@@ -1,7 +1,7 @@
 // ACP content blocks -> markdown, for the card. The agent can send an image or a
 // resource link instead of text; the bridge writes the bytes into a private
 // media directory itself (never the agent, so this works in Guide) and hands the
-// card a file:// markdown image, which the card's allowlist (MediaModel.js)
+// card a file:// markdown image, which the card's allowlist (TextFormat.js)
 // admits only from that directory.
 //
 // Everything here is synchronous: the caller sits inside the agent_message_chunk

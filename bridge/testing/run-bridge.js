@@ -1,6 +1,7 @@
 // Runs the real bridge.js against testing/fake-agent.js and returns what the
 // agent received. Shared by the bridge's behavioural tests.
 import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,7 @@ function executable(path, body) {
 
 // options.context: text the stub nixi-context prints (null = no stub on PATH)
 // options.configDir: create ~/.config/nixi before starting
+// options.codexProjectDir: also create ~/.config/nixi/.codex
 // options.messages: stdin messages sent in order, each after the previous turn
 export async function runBridge(options = {}) {
   const home = mkdtempSync(join(tmpdir(), "nixi-bridge-"));
@@ -29,6 +31,9 @@ export async function runBridge(options = {}) {
       `#!/bin/sh\nprintf '%s\\n' "$*" > "${join(home, "context-args")}"\ncat <<'NIXI_EOF'\n${options.context}\nNIXI_EOF\n`);
   }
   if (options.configDir) mkdirSync(join(home, ".config", "nixi"), { recursive: true });
+  // options.codexProjectDir: plant <cwd>/.codex, the directory codex reads a
+  // project config layer from and Nixi never creates (#74).
+  if (options.codexProjectDir) mkdirSync(join(home, ".config", "nixi", ".codex"), { recursive: true });
   if (options.settings) {
     mkdirSync(join(home, ".config", "omarchy"), { recursive: true });
     writeFileSync(join(home, ".config", "omarchy", "nixi.json"), JSON.stringify(options.settings));
@@ -49,24 +54,17 @@ export async function runBridge(options = {}) {
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
   const events = [];
   let permissionFailure = null;
-  let buffer = "";
   const waiters = [];
-  child.stdout.on("data", (chunk) => {
-    buffer += chunk;
-    let index;
-    while ((index = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, index);
-      buffer = buffer.slice(index + 1);
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      events.push(event);
-      // options.onPermission answers a permission prompt the way the card would.
-      if (event.type === "permission" && options.onPermission) {
-        try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
-        catch (error) { permissionFailure = error; }
-      }
-      for (const waiter of waiters.splice(0)) waiter();
+  createInterface({ input: child.stdout }).on("line", (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    events.push(event);
+    // options.onPermission answers a permission prompt the way the card would.
+    if (event.type === "permission" && options.onPermission) {
+      try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
+      catch (error) { permissionFailure = error; }
     }
+    for (const waiter of waiters.splice(0)) waiter();
   });
   const until = (predicate, label) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}; events: ${JSON.stringify(events)}`)), 15000);
@@ -86,9 +84,12 @@ export async function runBridge(options = {}) {
         const target = ++turns;
         await until(() => events.filter((e) => e.type === "done").length >= target, `turn ${target}`);
       } else if (message.type === "trust" || message.type === "permission_mode") {
-        const count = events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length;
-        await until(() => events.filter((e) => e.type === message.type || e.type === `${message.type}_error`).length > count,
-          `${message.type} acknowledgement`);
+        // One ack shape since #44: { type: "ack", of, ok }. `of` matches the
+        // inbound message type, so waiting for a reply is the same expression
+        // whatever was asked -- which is the point of collapsing the triples.
+        const acks = () => events.filter((e) => e.type === "ack" && e.of === message.type).length;
+        const count = acks();
+        await until(() => acks() > count, `${message.type} acknowledgement`);
       }
     }
     const agent = existsSync(log)

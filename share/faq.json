@@ -27,7 +27,7 @@
  {
   "cat": "Apps",
   "q": "Install an app",
-  "a": "This is the one thing NixOS really does differently. SUPER+SPACE → Install picks the app, but it does NOT install it — it writes your choice into ~/.config/nixarchy/apps.nix and stops. Nothing changes until you run: nixarchy apply. That one command rebuilds the system and makes every queued choice real at once. From a terminal you can skip the menu: nixarchy search to browse everything, or nixarchy pkg add <name>, then nixarchy apply."
+  "a": "This is the one thing NixOS really does differently. Open the package manager: SUPER+SPACE → Install → Packages (or SUPER+ALT+N, if that key is bound on your machine). Search, tick what you want, and apply with one key. Ticking does NOT install anything: it writes your choice into ~/.config/nixarchy/apps.nix, and nothing changes until you apply. Applying rebuilds the system and makes every queued choice real at once. From a terminal it is the same: nixarchy search to browse everything, or nixarchy pkg add <name>, then nixarchy apply. If you don't see Packages, the panel may be off: Setup → Plugins."
  },
  {
   "cat": "Apps",
@@ -47,7 +47,17 @@
  {
   "cat": "Apps",
   "q": "A toolchain just for one project",
-  "a": "Don't install compilers system-wide — give each project its own. In the project folder run: nixarchy dev init <preset> (run it with no argument to list presets: node, python, go, rust…). It writes a devenv.nix, and from then on the toolchain appears when you cd into that folder and disappears when you leave. Two projects can use two different versions of the same language without clashing."
+  "a": "Don't install compilers system-wide — give each project its own. Open SUPER+SPACE → Apps → Dev environments (SUPER+ALT+E where it is bound) to create a project from a template, enter it, or see every project that has one. In a terminal, the same thing is nixarchy dev init <preset> in the project folder (run it with no argument to list presets: node, python, go, rust…). It writes a devenv.nix, and from then on the toolchain appears when you cd into that folder and disappears when you leave. Two projects can use two different versions of the same language without clashing. No Dev environments entry? It comes with the devenv service: nixarchy-service-enable devenv, then nixarchy apply. If it is installed but off, turn it on in Setup → Plugins."
+ },
+ {
+  "cat": "Apps",
+  "q": "Run a container",
+  "a": "Open the Podman panel: SUPER+SPACE → Apps → Podman (SUPER+ALT+O where it is bound). It lists containers, images, volumes and networks, and starts, stops, follows logs and opens a shell without you remembering flags. In a terminal it is plain podman, rootless. The docker command keeps meaning Docker, which is still nixarchy's default engine. No Podman entry? It comes with the podman service: nixarchy-service-enable podman, then nixarchy apply. If it is installed but off, turn it on in Setup → Plugins."
+ },
+ {
+  "cat": "Apps",
+  "q": "Software that only ships for Ubuntu or Arch",
+  "a": "Some programs only come as a .deb, or only in the AUR, and will not run on NixOS as they are. Put them in a box: a whole other Linux distribution running inside nixarchy, sharing your home folder and your screen. Open SUPER+SPACE → Trigger → Boxes (SUPER+ALT+D where it is bound), create a box from a template, enter it, and install the program with that distribution's own tools. In a terminal it is distrobox. No Boxes entry? Turn boxes on: nixarchy-service-enable boxes, then nixarchy apply. If it is installed but off, turn it on in Setup → Plugins."
  },
  {
   "cat": "Windows & workspaces",
@@ -98,6 +108,11 @@
   "cat": "System",
   "q": "Undo a bad update",
   "a": "You can always go back — this is NixOS's best feature. Every rebuild keeps the previous system as a 'generation', and the boot menu lists them: reboot and pick the one before the problem. To step back without rebooting: sudo nixos-rebuild switch --rollback. Nothing is lost, because the old system was never deleted in the first place."
+ },
+ {
+  "cat": "System",
+  "q": "Try something in a throwaway VM",
+  "a": "Want to try a risky tool or a config change without touching this machine? Start a MicroVM: SUPER+SPACE → Trigger → Sandbox (SUPER+ALT+V where it is bound). Pick a template, and a small NixOS machine boots in seconds, sharing your /nix/store read-only. It is a console, not a desktop. Throw it away when you are done and nothing is left behind. It keeps an untrusted package off your machine; it is not a wall against an attacker. In a terminal it is nixarchy vm (nixarchy vm help lists what it can do). No Sandbox entry? The MicroVMs panel may be off: turn it on in Setup → Plugins."
  },
  {
   "cat": "System",

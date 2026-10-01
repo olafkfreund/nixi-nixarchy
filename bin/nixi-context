@@ -4,7 +4,7 @@
 # omarchy:hidden=true
 """Grounding for the Nixi overlay.
 
-The overlay's bridge runs this before each prompt and prepends what it prints,
+The overlay's bridge runs this before each prompt and appends what it prints,
 so most questions are answered from the local nixarchy + Omarchy manual copy
 without the agent spending tool calls searching for it. Prints nothing, and
 exits 0, when nothing matches well enough -- a bad excerpt is worse than none.
@@ -14,7 +14,7 @@ tokenizer and section splitting are what tools/test_nixi.py already verifies.
 Stdlib only, no network.
 """
 import os
-import re as _re
+import re
 import stat
 import subprocess
 import sys
@@ -52,7 +52,7 @@ def bounded_read(path, cap):
         os.close(fd)
 
 
-_WORD = _re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
+_WORD = re.compile(r"[a-zA-Z][a-zA-Z0-9+\-]{1,}")
 _STOP = set("the a an and or of to in on for with how do i does what is are my "
             "you your it this that can where when omarchy use using used why "
             "work works working different way ways get set new want would "
@@ -90,14 +90,14 @@ def _sections():
             except (OSError, ValueError):
                 continue
             fname_words = " ".join(name[:-3].split("-"))
-            for part in _re.split(r"\n(?=#{1,3} )", text):
+            for part in re.split(r"\n(?=#{1,3} )", text):
                 lines = part.strip().splitlines()
                 if not lines:
                     continue
                 head = (lines[0].lstrip("# ").strip() or name) + " " + fname_words
                 body = "\n".join(lines[1:]).strip()
                 if body:
-                    docs.append((f"{head}", body, tag))
+                    docs.append((head, body, tag))
     return docs
 
 
@@ -110,6 +110,60 @@ def _keybinds():
                               capture_output=True, text=True, timeout=10).stdout
     except Exception:
         return ""
+
+
+# nixarchy ships a panel for five jobs, and KNOWLEDGE.md's "nixarchy's own
+# tools" table says which. Word overlap cannot find that table -- its rows
+# share few words with the questions, so a dual-boot page won "install btop"
+# (#31). These words route a question to its row instead. They are ranking
+# tuning, so they live here; the facts stay in KNOWLEDGE.md. Never "app":
+# "close an app" is not an install question.
+TOOL_JOBS = (   # precedence: first match wins
+    ("nixarchy.distrobox", "deb rpm aur ubuntu debian fedora arch distro distribution "
+                           "box boxes distrobox appimage"),
+    ("nixarchy.devenv", "environment toolchain venv virtualenv devenv python node nodejs "
+                        "go rust java ruby sdk project"),
+    ("nixarchy.pkg", "install uninstall remove package apt pacman yay flatpak"),
+    ("nixarchy.microvm", "vm vms virtual sandbox throwaway disposable microvm"),
+    ("nixarchy.podman", "container docker podman compose"),
+)
+_TOOL_TRIGGERS = [(tool, set(_tokens(words))) for tool, words in TOOL_JOBS]
+TOOLS_LIMIT = 900     # the matched rows plus rules 1 and 2, whole
+TOOLS_THRESHOLD = 5.5   # a manual excerpt must be strong to ride along
+
+
+def _tool_ids(q):
+    words = set()
+    for w in _tokens(q):
+        words.add(w)
+        words.update(p for p in w.split("-") if p)
+    return [tool for tool, triggers in _TOOL_TRIGGERS if words & triggers][:2]
+
+
+def _tools_part(ids):
+    """The table rows for ids and the first two rules, from KNOWLEDGE.md."""
+    if not ids:
+        return ""
+    try:
+        text = bounded_read(os.path.join(DIR, "KNOWLEDGE.md"), 524288).decode("utf-8", "replace")
+    except (OSError, ValueError):
+        return ""
+    section = text.split("## nixarchy's own tools", 1)
+    if len(section) < 2:
+        return ""
+    section = section[1].split("\n## ", 1)[0]
+    rows = []
+    for tool in ids:
+        for line in section.splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) >= 6 and cells[1] == f"`{tool}`":
+                rows.append(" · ".join(cells))
+    if not rows:
+        return ""
+    rules = re.findall(r"^\d\. .*(?:\n   .*)*", section, re.M)[:2]
+    out = ("From the notes — nixarchy's own tools (prefer these; check before recommending):\n"
+           + "\n".join(rows) + "\n" + "\n".join(" ".join(r.split()) for r in rules))
+    return out if len(out) <= TOOLS_LIMIT else out[:TOOLS_LIMIT].rsplit(" ", 1)[0] + " …"
 
 
 def local_answer(q):
@@ -133,15 +187,18 @@ def local_answer(q):
             best, score = (head, body, tag), s
     # keybinding questions: grep the live bindings too
     kb_hit = ""
-    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
+    if any(w in qset for w in ("key", "shortcut", "keybinding", "bind",
                                "super", "press", "hotkey")):
         kb = _keybinds()
         hits = [l for l in kb.splitlines()
                 if any(w in l.lower() for w in qt)][:4]
         kb_hit = "\n".join(hits)
-    if score < 3.8 and not kb_hit:
+    tools = _tools_part(_tool_ids(q))
+    if tools and score < TOOLS_THRESHOLD:
+        best = None             # a weak manual match would dilute the tool row
+    if not tools and score < 3.8 and not kb_hit:
         return None
-    parts = []
+    parts = [tools] if tools else []
     if best:
         body = best[1]
         body = body if len(body) <= 700 else body[:700].rsplit(" ", 1)[0] + " …"

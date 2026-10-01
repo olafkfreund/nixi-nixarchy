@@ -19,9 +19,18 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# bin/ holds nixi_safeio.py, which the programs loaded below import by name: in
+# every real layout it sits in their own directory, which is their sys.path[0].
+# Loading them from here instead means saying where it is (#60).
+sys.path.insert(0, os.path.join(ROOT, "bin"))
 
 
 def load(name, path):
+    # Dropping the cached nixi_safeio makes the loaded program re-import it, so
+    # its $HOME anchor is recomputed against the environment this call is made
+    # in. Tests that install into a fake HOME rely on that, and used to get it
+    # for free when every program carried its own copy of the helpers (#60).
+    sys.modules.pop("nixi_safeio", None)
     spec = importlib.util.spec_from_loader(
         name, importlib.machinery.SourceFileLoader(name, os.path.join(ROOT, path)))
     m = importlib.util.module_from_spec(spec)
@@ -48,7 +57,7 @@ def test_updater_precedence():
     assert oma["repo"] == "omacom/omarchy-site"
 
     # markdown source: docs/manual/<slug>.md, nothing deeper, nothing else
-    s = _slug = up._slug_of
+    s = up._slug_of
     assert s("docs/manual/gaming.md", "docs/manual", "md") == "gaming"
     assert s("docs/manual/img/x.md", "docs/manual", "md") is None, "no subdirs"
     assert s("docs/manual/_config.yml", "docs/manual", "md") is None
@@ -89,9 +98,7 @@ def test_local_search():
 def test_no_runtime_rename():
     """The fork renamed branding only. If any of these ever disappears, the
     widget silently stops talking to the desktop."""
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                           text=True, check=True).stdout.split()
-    # docs/FORK.md is the one file whose JOB is to name the old identifiers.
+    files = _tracked()
     # docs/FORK.md records the old names on purpose; this file spells them
     # out as search needles. Neither is shipped branding.
     SKIP = ("docs/FORK.md", "flake.lock", "tools/test_nixi.py", "intent/", "spec/", "plan/")
@@ -240,11 +247,15 @@ def test_lock_bundles_no_adapter():
 
 def test_old_widget_stays_gone():
     """The browser widget, its server and voice input were removed (plan step
-    16). Only the checks that they are absent, and the installer's list of what
-    to delete from an old install, may name them."""
-    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py",
-               ".github/workflows/ci.yml", "install.py")
-    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|ui\.html|8642|X-Nixi-Token")
+    16). Only the fork record and the intent/spec/plan prose may name them.
+
+    This is a dead-feature drift guard, not migration code: seven of its seven
+    patterns are the removed voice and browser-widget surface, and this is one of
+    only two invariants of its class in the tree
+    (spec/2026-09-24-56-drift-traps.md). The `ui.html` alternative dropped out
+    with #35, which removed the last code allowed to name it."""
+    allowed = ("docs/FORK.md", "intent/", "spec/", "plan/", "tools/test_nixi.py")
+    pattern = re.compile(r"/voice|/listen/|pw-record|whisper|NIXI_WHISPER|8642|X-Nixi-Token")
     for f in _tracked():
         if f.startswith(allowed) or f.endswith((".png", ".gif", ".jpg")):
             continue
@@ -254,60 +265,11 @@ def test_old_widget_stays_gone():
     print("  ok  the old widget, server and voice input stay gone")
 
 
-def test_old_plugin_dir_migration():
-    """0.9.x left a real directory where 0.10 links the plugin, which fails
-    Home Manager's checkLinkTargets on every upgraded machine. The migration
-    may remove it only when it holds nothing but Home Manager's own links."""
-    script = os.path.join(ROOT, "nix", "migrate-plugin-dir.sh")
-    hm = "/nix/store/2l4gxghyqargbik6bx57rvkck6rrc8qh-home-manager-files/.config/omarchy/plugins/x/"
-    root = tempfile.mkdtemp()
-    try:
-        def plugin_dir(name, entries):
-            d = os.path.join(root, name)
-            os.mkdir(d)
-            for entry, target in entries:
-                if target is None:
-                    open(os.path.join(d, entry), "w").write("mine")
-                else:
-                    os.symlink(target, os.path.join(d, entry))
-            return d
-
-        def run(d, **env):
-            return subprocess.run(["bash", script, d], capture_output=True, text=True,
-                                  env={**os.environ, **env}, check=True)
-
-        ours = plugin_dir("ours", [("manifest.json", hm + "manifest.json"), ("BarWidget.qml", hm + "BarWidget.qml")])
-        out = run(ours, DRY_RUN="1")
-        assert os.path.isdir(ours) and "would remove" in out.stdout, "dry run deleted something"
-        run(ours)
-        assert not os.path.lexists(ours), "Home Manager's old directory was not removed"
-
-        checkout = plugin_dir("checkout", [("manifest.json", hm + "manifest.json"), ("install.py", None)])
-        out = run(checkout)
-        assert os.path.isfile(os.path.join(checkout, "install.py")), "a user's file was deleted"
-        assert "move it aside" in out.stderr, "a foreign directory was kept silently"
-
-        elsewhere = plugin_dir("elsewhere", [("manifest.json", "/home/someone/manifest.json")])
-        run(elsewhere)
-        assert os.path.islink(os.path.join(elsewhere, "manifest.json")), "a link not made by Home Manager was deleted"
-
-        target = plugin_dir("target", [])
-        linked = os.path.join(root, "linked")
-        os.symlink(target, linked)
-        run(linked)
-        run(os.path.join(root, "absent"))
-        assert os.path.islink(linked) and os.path.isdir(target), "an existing 0.10 link was touched"
-        print("  ok  the 0.9 plugin directory is removed only when it is Home Manager's")
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
-
-
 def test_menu_icon_migration():
     """The icon change has to reach machines that already have a Help entry.
     merge_menu leaves an existing entry alone, so it would otherwise only ever
     land on fresh installs -- but nixi's own pre-0.11 icon is migrated, and a
     matching glyph on somebody else's row is not."""
-    import importlib.util
     OLD, NEW = "\U000f0625", "\U000f0674"
     root = tempfile.mkdtemp()
     home = os.environ.get("HOME")
@@ -315,10 +277,7 @@ def test_menu_icon_migration():
         # install.py anchors every write at $HOME and refuses paths outside it,
         # so the fake home has to be in place before the module is loaded.
         os.environ["HOME"] = root
-        spec = importlib.util.spec_from_file_location(
-            "nixi_install", os.path.join(ROOT, "install.py"))
-        nixi_install = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(nixi_install)
+        nixi_install = load("nixi_install", "install.py")
         ext = os.path.join(root, ".config", "omarchy", "extensions")
         os.makedirs(ext, mode=0o700, exist_ok=True)
 
@@ -414,6 +373,69 @@ def test_enable_card():
             path, mark, before, _, out = case(name, raw=raw)
             assert open(path).read() == before and not os.path.exists(mark), name + " file was edited"
 
+        # ---- #55 -------------------------------------------------------
+        # A malformed Omarchy defaults file is not the user's doing and must
+        # never fail their rebuild: return 0, write nothing, say what to do.
+        bad = os.path.join(root, "bad-defaults.json")
+        open(bad, "w").write("{not json")
+        d = os.path.join(root, "bad-src"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        run = subprocess.run([sys.executable, script, path, mark, card, button, bad],
+                             capture_output=True, text=True)
+        assert run.returncode == 0, "a malformed defaults file failed the activation"
+        assert not os.path.exists(path) and "Setup > Plugins" in run.stdout, run.stdout
+
+        # An unreadable argv, a missing argument, anything at all: still 0.
+        run = subprocess.run([sys.executable, script], capture_output=True, text=True)
+        assert run.returncode == 0 and "could not enable the card" in run.stdout, run.stdout
+
+        # barWidget.enable off, then on: the button must appear the second time.
+        # It was one-shot -- the marker was checked before the ids were looked at.
+        d = os.path.join(root, "button-later"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        json.dump(json.loads(json.dumps(user)), open(path, "w"), indent=2)
+        base = [sys.executable, script, path, mark, card]
+        subprocess.run(base + [""], check=True, capture_output=True)
+        after = json.load(open(path))
+        assert {"id": card} in after["plugins"] and {"id": button} not in after["bar"]["layout"]["center"]
+        subprocess.run(base + [button], check=True, capture_output=True)
+        after = json.load(open(path))
+        assert {"id": button} in after["bar"]["layout"]["center"], "barWidget.enable is still one-shot"
+
+        # The backup holds the bytes from BEFORE nixi first wrote, and is
+        # written once -- not overwritten with a copy nixi itself produced.
+        backup = path + ".bak-nixi"
+        assert os.path.exists(backup), "no backup was written"
+        assert json.loads(open(backup).read()) == user, "backup is not the original"
+
+        # A legacy marker means the card was handled. It must NOT be read as
+        # "nothing done": that would re-enable a card the user turned off.
+        d = os.path.join(root, "legacy-off"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        off = json.loads(json.dumps(user))
+        json.dump(off, open(path, "w"), indent=2)
+        os.makedirs(os.path.dirname(mark))
+        open(mark, "w").write("enabled once; delete to let nixi enable the card again\n")
+        before = open(path).read()
+        subprocess.run([sys.executable, script, path, mark, card, button], check=True, capture_output=True)
+        assert open(path).read() == before, "a legacy marker re-enabled a card the user turned off"
+
+        # ...but with the card still ON, a legacy marker plus a newly requested
+        # button does add the button. That is the #55 fix for existing machines.
+        d = os.path.join(root, "legacy-on"); os.makedirs(d)
+        path, mark = os.path.join(d, "shell.json"), os.path.join(d, "state", "m")
+        on = json.loads(json.dumps(user)); on["plugins"].append({"id": card})
+        json.dump(on, open(path, "w"), indent=2)
+        os.makedirs(os.path.dirname(mark))
+        open(mark, "w").write("enabled once; delete to let nixi enable the card again\n")
+        subprocess.run([sys.executable, script, path, mark, card, button], check=True, capture_output=True)
+        assert {"id": button} in json.load(open(path))["bar"]["layout"]["center"], \
+            "a legacy marker blocked the button for a card that is on"
+
+        # NOT covered by a test: the mtime re-check before atomic_write. It
+        # needs a write landing between two syscalls inside the script, which a
+        # subprocess test cannot interleave. Verified by reading the code only.
+
         d = os.path.join(root, "linked"); os.makedirs(d)
         real = os.path.join(root, "real.json"); json.dump(user, open(real, "w"))
         os.symlink(real, os.path.join(d, "shell.json"))
@@ -467,7 +489,20 @@ def test_nixi_launcher():
             assert "notify" in calls and "Setup > Plugins" in r.stderr, name + ": failed silently"
         r, calls = run(on, answers=False)
         assert r.returncode == 1 and "toggle" not in calls and "not answering" in r.stderr, (r.stderr, calls)
+        # --ask summons (never toggles) with the question as JSON the card can
+        # parse back exactly, quotes, backslash, newline and tab included (nixi#37).
+        question = 'say "hi" \\ back\nnow\tthen'
+        r, calls = run(on, args=("--ask", question))
+        marker = "shell summon %s " % card
+        summons = [l.partition(marker)[2] for l in calls.splitlines() if marker in l]
+        assert r.returncode == 0 and len(summons) == 1 and "toggle" not in calls, (r, calls)
+        assert json.loads(summons[0]) == {"action": "ask", "prompt": question}, summons[0]
+        r, calls = run(off, args=("--ask", "x"))
+        assert r.returncode == 1 and "summon" not in calls, (r, calls)
+        r, calls = run(on, args=("--ask",))
+        assert r.returncode == 64 and "summon" not in calls, (r, calls)
         print("  ok  nixi explains a card that is off instead of doing nothing")
+        print("  ok  nixi --ask hands the card a question as exact JSON")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -485,12 +520,504 @@ def test_nixi_rows_are_searchable():
         "answering an FAQ closes the card"
     assert "onFaqAnswered" in card and "onNixiActionRequested" in card, \
         "the card ignores its own search rows"
+    # A model declared by id is not a property of root: `root.<id>` is
+    # undefined at runtime, and the handler throws (#19).
+    for model in re.findall(r"ListModel\s*\{\s*id:\s*(\w+)", card):
+        assert "root.%s" % model not in card, \
+            "Conversation.qml reaches ListModel %r as root.%s, which is undefined" % (model, model)
     print("  ok  FAQ, tour and learn are searchable from the card")
 
 
+def test_prefers_nixarchy_plugins():
+    """Nixi leads with nixarchy's own panels for the five jobs they exist for,
+    and checks each is on before recommending it (#23)."""
+    ids = ("nixarchy.pkg", "nixarchy.devenv", "nixarchy.microvm",
+           "nixarchy.podman", "nixarchy.distrobox")
+    knowledge = open(os.path.join(ROOT, "share/KNOWLEDGE.md")).read()
+    missing = [i for i in ids if i not in knowledge]
+    assert not missing, f"KNOWLEDGE.md does not name {missing}"
+    assert "nixarchy-plugin --enabled" in knowledge, "KNOWLEDGE.md has no live check"
+
+    skill = open(os.path.join(ROOT, "skills/nixi/SKILL.md")).read()
+    assert "Prefer nixarchy's own tools" in skill, "the skill has no prefer-the-panel step"
+    assert "nixarchy-plugin" in skill, "the skill never checks a plugin"
+    assert "nixarchy-plugin --enabled" in open(os.path.join(ROOT, "share/CLAUDE.md")).read()
+
+    faq = {e["q"]: e["a"] for e in json.load(open(os.path.join(ROOT, "share/faq.json")))}
+    for q in ("Run a container", "Software that only ships for Ubuntu or Arch",
+              "Try something in a throwaway VM"):
+        assert q in faq, f"FAQ has no entry {q!r}"
+    # A static answer cannot check the machine, so each one that sends people
+    # to a panel must also say what to do when that panel is off.
+    for q, a in faq.items():
+        if any(p in a for p in ("Install → Packages", "Dev environments", "Apps → Podman",
+                                "Trigger → Boxes", "Trigger → Sandbox")):
+            assert "Setup → Plugins" in a, f"FAQ {q!r} names a panel but not how to turn it on"
+    install = faq["Install an app"]
+    assert "Packages" in install and install.index("Packages") < install.index("nixarchy apply"), \
+        "the install answer does not lead with the package manager panel"
+
+    learn = {t["id"]: t["question"] for t in
+             json.load(open(os.path.join(ROOT, "share/learn.json")))["topics"]}
+    assert "package manager" in learn["install"] and "NixOS will not run" in learn["install"]
+    assert "containers" in learn["devenv"] and "VMs" in learn["devenv"]
+    print("  ok  Nixi prefers nixarchy's own panels, after checking them")
+
+
+def _block(src, start):
+    """The text of the brace block that opens at or after `start`."""
+    i = src.index("{", start)
+    depth = 0
+    for j in range(i, len(src)):
+        depth += {"{": 1, "}": -1}.get(src[j], 0)
+        if depth == 0:
+            return src[i:j + 1]
+    raise AssertionError("unbalanced braces")
+
+
+def test_lookups_use_file_tools():
+    # #27: in Mechanic every shell command needs a yes, so lookups done with
+    # grep/ls/cat in a shell flood the card with prompts. The skill and both
+    # briefs send the agent to its file tools instead.
+    skill = open(os.path.join(ROOT, "skills/nixi/SKILL.md")).read()
+    for path in ("skills/nixi/SKILL.md", "share/CLAUDE.md", "share/AGENTS.md"):
+        assert "file tools" in open(os.path.join(ROOT, path)).read(), path
+    for piped in ("| grep", "ls /usr", "test -d"):
+        assert piped not in skill, f"the skill still teaches a shell lookup: {piped}"
+
+
+def test_settings_keep_bridge_keys():
+    """The UI and the bridge both write nixi.json. The UI must write its keys on
+    top of what it read, or a font-size change deletes trust and
+    askBeforeReading, which only the bridge writes (#27 review)."""
+    ask = open(os.path.join(ROOT, "Ask.qml")).read()
+    flush = _block(ask, ask.index("function flushSettings"))
+    assert "Object.assign({}, settingsOnDisk" in flush, "flushSettings replaces nixi.json with UI keys only"
+    load = _block(ask, ask.index("function loadSettings"))
+    assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
+    print("  ok  a UI settings write keeps the bridge's own keys")
+
+
+def test_permission_keys_guard():
+    """Y and N answer a permission prompt from the composer too, but only while
+    it is empty, and Return does not send while the prompt is up (#20)."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
+    assert "pendingPermission.id" in handler, "the composer ignores a permission prompt"
+    guard = _block(handler, handler.index("pendingPermission.id"))
+    for token in ("text.length === 0", "Qt.Key_Y", "Qt.Key_N", "Qt.Key_Return"):
+        assert token in guard, f"the composer's permission branch has no {token}"
+    # One pair, in WindowShortcuts, shared by the overlay and the pinned window.
+    shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card)
+                 if re.search(r'sequence:\s*"[YN]"', s)]
+    assert len(shortcuts) == 2, f"expected 2 Y/N shortcuts, found {len(shortcuts)}"
+    for s in shortcuts:
+        assert "conversation.permissionKeysLive" in s, "a Y/N shortcut ignores the typed-text guard"
+    live = re.search(r"property bool permissionKeysLive:(.*)", card).group(1)
+    assert "text.length === 0" in live, "a Y/N shortcut fires over typed text"
+    # The composer answers with an OPTION ID. #58 changed answerPermission's
+    # signature and left this caller passing a boolean, which found no option
+    # and returned -- after event.accepted had already eaten the key (#50).
+    assert "answerPermission(event.key === Qt.Key_Y)" not in guard, \
+        "the composer answers with a boolean; answerPermission takes an option id"
+    assert "optionIdForKind" in guard, "the composer does not answer with an option id"
+    print("  ok  Y and N answer a prompt, and never over typed text")
+
+
+def test_permission_settle_window():
+    """A permission request cannot be answered before it has been on screen long
+    enough to read: a held key answers once, and the next request in the queue
+    is unanswerable for 400 ms however it is aimed at (#50).
+
+    These are source assertions. The 400 ms itself is compositor-facing and can
+    only be judged on a real desktop -- what is checked here is that every gate
+    the design depends on is still in the file, so removing one fails CI. Each
+    was confirmed to fail when its gate was deleted.
+    """
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    # The agent's options have to reach the card at all: the Repeater renders one
+    # button per option and the keys resolve through them, so an enqueue that
+    # drops them leaves a card with no buttons and dead Y/N (#58 did exactly
+    # that). Without this the settle window guards nothing.
+    enqueue = _block(card, card.index("function enqueuePermission"))
+    assert "options" in enqueue, "enqueuePermission drops the agent's options"
+    call = re.search(r"enqueuePermission\(event\.[^)]*\)", card).group(0)
+    assert "event.options" in call, "the permission event's options are not passed on"
+
+    # One flag, cleared when a request is shown, set by one timer.
+    assert "property bool permissionSettled" in card, "no settle flag"
+    live = re.search(r"property bool permissionKeysLive:(.*)", card).group(1)
+    assert "permissionSettled" in live, "Y and N are live before the card settles"
+    show = _block(card, card.index("function showNextPermission"))
+    assert "permissionSettled = false" in show, "showing the next request leaves it answerable"
+    assert "permissionSettle.restart()" in show, "the settle window is never started"
+    timer = card[card.index("id: permissionSettle"):]
+    timer = timer[:timer.index("}")]
+    assert "interval: 400" in timer, "the settle window is not 400 ms"
+
+    # The gate itself, in the one function all three answer paths route through.
+    answer = _block(card, card.index("function answerPermission"))
+    assert "!permissionSettled" in answer, "answerPermission does not check the settle window"
+
+    # A held key answers once, whatever the compositor's repeat_delay is.
+    shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card)
+                 if re.search(r'sequence:\s*"[YN]"', s)]
+    assert len(shortcuts) == 2, f"expected 2 Y/N shortcuts, found {len(shortcuts)}"
+    for s in shortcuts:
+        assert "autoRepeat: false" in s, "a held Y or N repeats into the next request"
+    handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
+    assert "isAutoRepeat" in handler, "the composer answers on autorepeat"
+
+    # The mouse too: after #53 a click can grant STANDING approval, so the
+    # button is the path that most needs the window, and a greyed button is the
+    # visible signal that this is a new question.
+    buttons = card.split("id: permissionLayer")[1].split("id: cardFade")[0]
+    buttons = buttons[buttons.index("Repeater {"):]
+    assert "enabled: root.permissionSettled" in buttons, \
+        "the permission buttons are clickable before the card settles"
+    # qs.Ui.Button paints no disabled state, so `enabled` alone is invisible.
+    assert "opacity: root.permissionSettled" in buttons, \
+        "a settling permission button looks exactly like a clickable one"
+    print("  ok  a request cannot be answered before it has been seen")
+
+
+def test_permission_detail_is_plain():
+    """The permission card shows what is being approved as plain text: an
+    agent-supplied title or detail cannot restyle or hide part of itself, and a
+    long detail scrolls inside the card instead of being cut short (#21)."""
+    qml = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = qml.split("id: permissionLayer")[1].split("id: cardFade")[0]
+    title = card.split("text: root.pendingPermission.title")[1].split("}")[0]
+    assert "textFormat: Text.PlainText" in title, "the permission title is not PlainText"
+    assert "Flickable {" in card, "the permission detail does not scroll"
+    detail = card.split("Flickable {")[1].split("ScrollBar.vertical")[0]
+    assert "TextEdit {" in detail and "root.pendingPermission.detail" in detail, \
+        "the permission detail is not in the Flickable"
+    assert "textFormat: TextEdit.PlainText" in detail, "the permission detail is not PlainText"
+    assert "readOnly: true" in detail, "the permission detail is editable"
+    # Conversation {} is created with no size, so root.height is 0 and a
+    # detail capped by it collapses to nothing (#21, seen on razer).
+    assert "root.height" not in card.split("Flickable {")[1].split("TextEdit {")[0], \
+        "the permission detail is sized from root, which has no height"
+    print("  ok  the permission card shows its detail as plain, scrolling text")
+
+
+def _legacy_local_answer(c, q):
+    """bin/nixi-context's local_answer() as it was before #31, kept to prove
+    that questions no tool matches still get exactly the same excerpt."""
+    qt = c._tokens(q)
+    if not qt:
+        return None
+    qset = set(qt)
+    best, score = None, 0.0
+    for head, body, tag in c._sections():
+        ht, bt = c._tokens(head), c._tokens(body)
+        if not bt:
+            continue
+        hmatch = len(qset & set(ht))
+        s = 3.0 * hmatch                            # title/filename hits: undamped
+        if hmatch and ht:
+            s += 1.5 * hmatch / len(set(ht))        # focused titles beat long ones
+        freq = sum(min(bt.count(w), 3) for w in qset)   # repeated terms matter
+        s += freq / (1 + 0.02 * len(bt))
+        if s > score:
+            best, score = (head, body, tag), s
+    # keybinding questions: grep the live bindings too
+    kb_hit = ""
+    if any(w in qset for w in ("key", "keys", "shortcut", "keybinding", "bind",
+                               "super", "press", "hotkey")):
+        kb = c._keybinds()
+        hits = [l for l in kb.splitlines()
+                if any(w in l.lower() for w in qt)][:4]
+        kb_hit = "\n".join(hits)
+    if score < 3.8 and not kb_hit:
+        return None
+    parts = []
+    if best:
+        body = best[1]
+        body = body if len(body) <= 700 else body[:700].rsplit(" ", 1)[0] + " …"
+        parts.append(f"From the {'manual' if best[2] == 'manual' else 'notes'} — {best[0]}:\n{body}")
+    if kb_hit:
+        parts.append("Your live keybindings say:\n" + kb_hit)
+    return "\n\n".join(parts)
+
+
+
+TOOL_QUESTIONS = {
+    "how do I install btop?": "nixarchy.pkg",
+    "how do I install an app?": "nixarchy.pkg",
+    "how do I remove an app": "nixarchy.pkg",
+    "I need a Python environment for one project": "nixarchy.devenv",
+    "can I try something in a throwaway VM?": "nixarchy.microvm",
+    "how do I run a container?": "nixarchy.podman",
+    "this app only ships a .deb": "nixarchy.distrobox",
+}
+
+
+def test_tools_route():
+    """For the five jobs nixarchy has a panel for, the grounding excerpt leads
+    with that panel's row from KNOWLEDGE.md, and a weak, unrelated manual
+    section no longer rides along; everything else is unchanged (#31)."""
+    data, conf = tempfile.mkdtemp(), tempfile.mkdtemp()
+    try:
+        shutil.copytree(os.path.join(ROOT, "tools", "fixtures", "manual-grounding"),
+                        os.path.join(data, "manual"))
+        shutil.copy(os.path.join(ROOT, "share/KNOWLEDGE.md"), conf)
+        os.environ["NIXI_DATA"], os.environ["NIXI_DIR"] = data, conf
+        c = load("ctx31", "bin/nixi-context")
+        c._keybinds = lambda: ""
+        for q, tool in TOOL_QUESTIONS.items():
+            hit = c.local_answer(q) or ""
+            ids = re.findall(r"nixarchy\.(?:pkg|devenv|microvm|podman|distrobox)", hit)
+            assert ids and ids[0] == tool, f"{q!r} leads with {ids[:1]}, not {tool}"
+        absent = {"how do I install btop?": "Dual boot",
+                  "can I try something in a throwaway VM?": "Using it",
+                  "how do I run a container?": "Or: add it to NixOS",
+                  "this app only ships a .deb": "I picked an app in Install"}
+        for q, section in absent.items():
+            assert section not in c.local_answer(q), f"{q!r} still carries {section!r}"
+        present = {"how do I install an app?": "I picked an app in Install",
+                   "I need a Python environment for one project": "Per-project environments"}
+        for q, section in present.items():
+            assert section in c.local_answer(q), f"{q!r} lost {section!r}"
+        for q in ("how do I close an app", "open a terminal app",
+                  "what is the scratchpad", "change the theme"):
+            assert c.local_answer(q) == _legacy_local_answer(c, q), f"{q!r} changed"
+        print("  ok  the five jobs lead with nixarchy's own tool; other questions unchanged")
+    finally:
+        shutil.rmtree(data, ignore_errors=True)
+        shutil.rmtree(conf, ignore_errors=True)
+
+
+def test_unit_parity():
+    """CONTRIBUTING.md:52 makes install.py and nix/hm-module.nix parity a rule
+    and asks for a job that checks it. This is that check, in the place CI
+    already runs (checks.selfcheck) rather than a new job.
+
+    ExecStart and PATH are deliberately NOT compared: one path installs to
+    ~/.local/bin and the other to a store path, and no parity rule should
+    collapse that. What must match is ordering and restart policy -- the fields
+    that decide whether the unit works, and the ones that had drifted (#56)."""
+    units = os.path.join(ROOT, "systemd")
+    module = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+
+    def field(text, key):
+        m = re.search(r"^%s=(.*)$" % re.escape(key), text, re.M)
+        return m.group(1).strip() if m else None
+
+    watch = open(os.path.join(units, "nixi-watch.service")).read()
+    # The file version started at default.target, so the watcher ran before the
+    # shell existed, failed, and burned its start limit -- dead for the session.
+    for key, want in (("PartOf", "graphical-session.target"),
+                      ("After", "graphical-session.target"),
+                      ("WantedBy", "graphical-session.target"),
+                      ("Restart", "on-failure"),
+                      ("RestartSec", "2"),
+                      ("Type", "exec")):
+        got = field(watch, key)
+        assert got == want, "nixi-watch.service %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    timer = open(os.path.join(units, "nixi-manual.timer")).read()
+    for key, want in (("Persistent", "true"), ("RandomizedDelaySec", "6h"),
+                      ("WantedBy", "timers.target")):
+        got = field(timer, key)
+        assert got == want, "nixi-manual.timer %s=%s, expected %s" % (key, got, want)
+        assert want in module, "nix/hm-module.nix lost %s=%s" % (key, want)
+
+    manual = open(os.path.join(units, "nixi-manual.service")).read()
+    assert field(manual, "Type") == "oneshot" and '"oneshot"' in module
+
+    # The button's version is hand-maintained beside the package's single
+    # source; nix/package.nix asserts they match at build time, and this catches
+    # it before a build is even attempted.
+    top = json.load(open(os.path.join(ROOT, "manifest.json")))
+    button = json.load(open(os.path.join(ROOT, "button", "manifest.json")))
+    assert top["version"] == button["version"], \
+        "button/manifest.json is %s, manifest.json is %s" % (button["version"], top["version"])
+
+    # A comment describing an assertion that does not exist is worse than none.
+    flake = open(os.path.join(ROOT, "flake.nix")).read()
+    assert "assets non-empty" not in flake, "flake.nix claims an assertion that is not there"
+
+    print("  ok  the two unit definitions agree, and the versions do too")
+
+
+def test_safeio_is_shared():
+    """The safe-IO floor is the best-audited code here -- descriptor-bound
+    $HOME-anchored walks, per-component uid/mode checks, O_EXCL temp plus
+    renameat -- and it used to exist three times, byte-identically, in
+    install.py, bin/nixi-watch and bin/nixi-update-manual (#60). Three copies is
+    not redundancy: the next fix lands in one and rots in the other two, and the
+    one-file diff looks complete.
+
+    So this asserts there is exactly ONE definition of each helper, that it is
+    in bin/nixi_safeio.py, and that everyone else imports it. Paste any helper
+    back into a second file and this fails."""
+    helpers = ("_group_exclusive", "_dir_ok", "_dirfd", "_write")
+    consumers = ("install.py", "bin/nixi-watch", "bin/nixi-update-manual")
+    home = "bin/nixi_safeio.py"
+
+    sources = {rel: open(os.path.join(ROOT, rel)).read()
+               for rel in consumers + (home,)}
+    for h in helpers:
+        where = [rel for rel, text in sources.items()
+                 if re.search(r"^def %s\(" % h, text, re.M)]
+        assert where == [home], "%s is defined in %s, want only %s" % (h, where, home)
+    where = [rel for rel, text in sources.items()
+             if re.search(r"^_UID = os\.getuid\(\)", text, re.M)]
+    assert where == [home], "_UID is defined in %s, want only %s" % (where, home)
+
+    for rel in consumers:
+        assert re.search(r"^from nixi_safeio import ", sources[rel], re.M), \
+            "%s no longer imports the shared safe-IO module" % rel
+        # A local grp/pwd import is the tell-tale of a pasted-back copy.
+        assert "import grp" not in sources[rel], "%s looks like it grew a copy again" % rel
+
+    # CONTRIBUTING.md:52 -- both install paths must place it, in the same
+    # directory as the suffix-less programs that import it by name.
+    assert 'j.place(BIN, "nixi_safeio.py"' in sources["install.py"], \
+        "install.py does not place nixi_safeio.py in ~/.local/bin"
+    package = open(os.path.join(ROOT, "nix", "package.nix")).read()
+    assert "install -Dm644 bin/nixi_safeio.py $out/bin/nixi_safeio.py" in package, \
+        "nix/package.nix does not place nixi_safeio.py in the store bin/"
+    assert "import nixi_safeio" in package, \
+        "nix/package.nix does not prove the module is importable from $out/bin"
+
+    print("  ok  the safe-IO helpers live in exactly one file, placed by both paths")
+
+
+def test_card_grows_with_content():
+    """#38: the card widens for content that needs it, and the ceiling follows
+    the screen -- without the width ever depending on a measured height.
+
+    That last part is the whole risk. Binding width to how tall the content
+    measures creates a loop: wider wraps less, so the card shortens, so it
+    narrows, so it lengthens again. CI does not run QML, so a loop would ship
+    green and show up as a card that visibly flickers."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    trigger = _block(card, card.index("function noteContentWidth"))
+    for forbidden in ("height", "width", "implicit", "parent.", "stack."):
+        assert forbidden not in trigger, \
+            "noteContentWidth reads %r -- the width trigger must not touch geometry" % forbidden
+
+    # The expression wraps across two lines; take both.
+    width = re.search(r"^\s*width: root\.pinned.*\n.*$", card, re.M).group(0)
+    assert "contentWantsRoom" in width, "the card width ignores the content"
+    for forbidden in ("stack.height", "implicitHeight", "maxHeight"):
+        assert forbidden not in width, \
+            "card width depends on %s -- that is a layout feedback loop" % forbidden
+
+    # The ceiling follows the panel rather than a fixed 560 (#38).
+    maxh = re.search(r"^\s*readonly property int maxHeight:.*$", card, re.M).group(0)
+    assert "parent.height" in maxh and "560" not in maxh, \
+        "maxHeight is still a fixed ceiling: " + maxh.strip()
+
+    # Every place a user message enters the model must feed the trigger, or a
+    # long prompt silently fails to widen the card.
+    for m in re.finditer(r'messages\.append\(\{ role: "You".*\n(.*)', card):
+        assert "noteContentWidth" in m.group(1), \
+            "a You message is appended without noting its width: " + m.group(1).strip()
+
+    assert "contentWantsRoom = false" in _block(card, card.index("function close")), \
+        "contentWantsRoom survives close(), so a new conversation starts wide"
+
+    print("  ok  the card grows with its content, with no layout feedback loop")
+
+
+def test_one_ack_shape():
+    """#44: the card keeps ONE piece of in-flight state, so a reset cannot
+    clear one request kind and miss another -- which is exactly how #40
+    happened. CI does not run QML, so this is the only thing guarding it."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    assert "property var pendingAck" in card, "the single ack state is gone"
+    for name in ("steeringPending", "trustPending", "permissionModePending"):
+        assert re.search(r"readonly property bool %s: pendingAck\." % name, card), \
+            "%s is no longer derived from pendingAck -- the state has split again" % name
+        assert not re.search(r"^\s+%s = " % name, card, re.M), \
+            "%s is assigned directly; it must go through beginAck/settleAck" % name
+
+    # restartSession is where #40 bit. It must clear EVERY kind, not a list.
+    restart = _block(card, card.index("function restartSession"))
+    assert "clearAcks()" in restart, "restartSession does not clear the ack state"
+    for name in ("trustPending", "permissionModePending", "steeringPending"):
+        assert name not in restart, \
+            "restartSession still names %s -- a per-kind reset is what #44 removes" % name
+
+    # One branch, not five.
+    for dead in ('event.type === "trust"', 'event.type === "trust_error"',
+                 'event.type === "steered"', 'event.type === "steering_error"',
+                 'event.type === "permission_mode_error"'):
+        assert dead not in card, "a per-kind branch survives: " + dead
+    assert 'event.type === "ack"' in card, "the card no longer handles the ack event"
+
+    bridge = open(os.path.join(ROOT, "bridge", "bridge.js")).read()
+    for dead in ('type: "trust"', 'type: "trust_error"', 'type: "steered"',
+                 'type: "steering_error"', 'type: "permission_mode_error"'):
+        assert dead not in bridge, "the bridge still emits " + dead
+
+    print("  ok  one ack shape, one place to clear it")
+
+
+def test_bridge_command_is_pinned():
+    """#77: the environment cannot choose what runs the bridge.
+
+    The bridge is where trust-policy.js is applied and where Guide cancels
+    permissions, so substituting its interpreter does not change what is
+    enforced -- it removes the enforcement while the card keeps showing the
+    trust badge. CI never executes QML, so this string check is the only guard
+    there is.
+    """
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+
+    command = re.search(r"^\s*readonly property var bridgeCommand:.*?\]$",
+                        card, re.M | re.S).group(0)
+
+    # --replace-fail in nix/package.nix needs this literal to substitute. If it
+    # moves, the build fails rather than silently shipping an unpinned card.
+    assert '"node"' in command, \
+        "bridgeCommand lost its bare node literal -- nix/package.nix cannot pin it"
+
+    for forbidden in ("NIXI_BRIDGE_COMMAND", "Quickshell.env", "JSON.parse"):
+        assert forbidden not in command, \
+            "bridgeCommand reads %r -- the environment must not choose the interpreter" % forbidden
+
+    # Ignoring it silently would make a deployment's behaviour change a mystery,
+    # so the card has to say so. The variable is named in the notice and in the
+    # read-only property that feeds it; what matters is that it is stated
+    # somewhere and reaches no command.
+    assert "NIXI_BRIDGE_COMMAND" in card, \
+        "nothing mentions NIXI_BRIDGE_COMMAND -- an ignored override must be stated, not forgotten"
+    assert "ignoredBridgeOverride" in card, \
+        "the card no longer reports an ignored NIXI_BRIDGE_COMMAND"
+
+    print("  ok  the bridge command is pinned by the build")
+
+def test_no_huginn_marker():
+    """#79: a marker nobody reads is worse than no marker.
+
+    HUGINN_INTERNAL was set on every bridge launch and propagated into the
+    agent's environment, and from there into every process the agent spawned,
+    with no reader anywhere -- not in this repo, not in omarchy-4.0.4 (1489
+    files), not in the resolved shell tree quickshell runs (1407 files).
+
+    It is asserted gone rather than left to review because it READ as
+    load-bearing: while fixing #77 the marker was very nearly used to gate a
+    security decision, which would have gated it on nothing. CI cannot execute
+    QML at all, so a string check is the only guard the card has.
+    """
+    for name in ("Conversation.qml", os.path.join("bridge", "bridge.js")):
+        body = open(os.path.join(ROOT, name)).read()
+        assert "HUGINN" not in body, \
+            "%s reinstates HUGINN_INTERNAL -- a marker with no reader (#79)" % name
+
+    print("  ok  no unread HUGINN marker on the agent's process tree")
+
 if __name__ == "__main__":
-    for fn in (test_updater_precedence, test_local_search, test_no_runtime_rename, test_units_have_a_nixos_path, test_faq_schema, test_tour_and_learning_data,
-               test_rebrand_is_complete, test_qml_is_portable, test_lock_bundles_no_adapter, test_old_widget_stays_gone, test_old_plugin_dir_migration, test_menu_icon_migration, test_enable_card, test_nixi_launcher,
-               test_nixi_rows_are_searchable):
-        fn()
+    for name, fn in list(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            fn()
     print("\nall checks passed")

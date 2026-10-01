@@ -12,19 +12,24 @@ for good. State: ~/.local/share/nixi/tips.json
 import json
 import os
 import socket
+import stat
 import subprocess
-import sys
 import time
 
 DATA = os.path.expanduser(os.environ.get("NIXI_DATA", "~/.local/share/nixi"))
 STATE = os.path.join(DATA, "tips.json")
 
-# Thresholds (env-overridable so tests can force them low).
-FLIPFLOP = int(os.environ.get("OMARCHY_TIPS_FLIPFLOP", "40"))
-TERM_CHURN = int(os.environ.get("OMARCHY_TIPS_TERM_CHURN", "10"))
-MONO_WINDOWS = int(os.environ.get("OMARCHY_TIPS_MONO_WINDOWS", "8"))
-DAY_GAP = float(os.environ.get("OMARCHY_TIPS_DAY_GAP", str(24 * 3600)))
-TIP_GAP = float(os.environ.get("OMARCHY_TIPS_TIP_GAP", str(14 * 24 * 3600)))
+# The descriptor-bound safe-IO floor, shared with install.py and
+# nixi-update-manual (#60). It is installed into the same directory as this
+# program by both install paths, and a script's own directory is sys.path[0].
+from nixi_safeio import _UID, _dirfd, _write  # noqa: E402  (after the docstring block)
+
+# Thresholds.
+FLIPFLOP = 40
+TERM_CHURN = 10
+MONO_WINDOWS = 8
+DAY_GAP = 24 * 3600
+TIP_GAP = 14 * 24 * 3600
 
 TERMINALS = {"foot", "alacritty", "kitty", "com.mitchellh.ghostty", "ghostty"}
 
@@ -47,71 +52,6 @@ TIPS = {
                    "How do I arrange two windows side by side and move focus "
                    "between them? Teach me briefly."),
 }
-
-
-import secrets
-import stat
-
-_UID = os.getuid()
-_HOME = os.path.abspath(os.path.expanduser("~"))
-
-
-def _group_exclusive(gid):
-    """A group-writable directory is acceptable only if the group is provably
-    ours alone: our primary group, no other account has it as primary, and
-    no member other than us."""
-    import grp
-    import pwd
-    if gid != os.getgid():
-        return False
-    try:
-        g = grp.getgrgid(gid)
-        me = pwd.getpwuid(_UID).pw_name
-    except KeyError:
-        return False
-    if any(m != me for m in g.gr_mem):
-        return False
-    return not any(p.pw_gid == gid and p.pw_uid != _UID for p in pwd.getpwall())
-
-
-def _dir_ok(st):
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != _UID or (st.st_mode & 0o002):
-        return False
-    if st.st_mode & 0o020:
-        return _group_exclusive(st.st_gid)
-    return True
-
-
-def _dirfd(path, create=False, mode=0o700):
-    """Open a directory under $HOME by walking every component from the
-    $HOME anchor with O_NOFOLLOW|O_DIRECTORY, validating each directory
-    (ours, never world-writable, group-writable only if exclusive). A
-    symlink anywhere on the path is refused. Returns the leaf descriptor;
-    callers keep it for every relative operation that follows."""
-    path = os.path.abspath(path)
-    if path != _HOME and not path.startswith(_HOME + os.sep):
-        raise PermissionError("outside $HOME: " + path)
-    fd = os.open(_HOME, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
-    try:
-        if not _dir_ok(os.fstat(fd)):
-            raise PermissionError("untrusted $HOME")
-        for comp in [c for c in path[len(_HOME):].split(os.sep) if c]:
-            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-            try:
-                nfd = os.open(comp, flags, dir_fd=fd)
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(comp, mode, dir_fd=fd)
-                nfd = os.open(comp, flags, dir_fd=fd)
-            os.close(fd)
-            fd = nfd
-            if not _dir_ok(os.fstat(fd)):
-                raise PermissionError("untrusted directory: " + path)
-        return fd
-    except BaseException:
-        os.close(fd)
-        raise
 
 
 def secure_read(name, cap):
@@ -139,31 +79,10 @@ def secure_read(name, cap):
 
 
 def secure_write(name, data):
+    """Replace the state file atomically, 0600, under a validated DATA fd."""
     dfd = _dirfd(DATA, create=True)
-    tmp = ".%s.%s.tmp" % (name, secrets.token_hex(8))
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                     0o600, dir_fd=dfd)
-        try:
-            view = memoryview(data)
-            while view:
-                view = view[os.write(fd, view):]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        try:
-            if not stat.S_ISREG(os.stat(name, dir_fd=dfd, follow_symlinks=False).st_mode):
-                raise PermissionError("refusing to replace non-regular file")
-        except FileNotFoundError:
-            pass
-        os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
-        os.fsync(dfd)
-    except BaseException:
-        try:
-            os.unlink(tmp, dir_fd=dfd)
-        except OSError:
-            pass
-        raise
+        _write(dfd, name, data, 0o600)
     finally:
         os.close(dfd)
 
@@ -228,7 +147,6 @@ class Day:
     def reset(self):
         self.start = time.time()
         self.used_special = False
-        self.workspace_switches = 0
         self.workspaces = set()
         self.opens_by_class = {}
         self.total_opens = 0
@@ -248,7 +166,6 @@ class Day:
         if ev == "workspace":
             name = data.strip()
             self.workspaces.add(name)
-            self.workspace_switches += 1
             if name.startswith("special"):
                 self.used_special = True
         elif ev in ("activespecial", "activespecialv2"):
@@ -287,10 +204,6 @@ class Day:
 
 def main():
     day = Day()
-    if "--stdin" in sys.argv:  # test mode: feed events on stdin
-        for line in sys.stdin:
-            day.on_event(line.strip())
-        return
     run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     while True:
         try:

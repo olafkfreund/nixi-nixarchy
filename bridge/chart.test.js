@@ -58,5 +58,5 @@ test("through the bridge, at Guide: split chart drawn, bad one left as code", as
   const run = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_CHART" }] });
   const shown = run.events.filter((e) => e.type === "text").map((e) => e.text).join("");
   assert.match(shown, new RegExp(
-    `^Sizes:\\n\\n!\\[Store\\]\\(file://${run.home}/\\.local/share/nixi/media/[0-9a-f]{16}\\.svg\\)\\nDone\\.\\n\`\`\`nixi-chart\\nbad line\\n\`\`\`\\n$`));
+    `^Sizes:\\n\\n!\\[Store\\]\\(file://${run.home}/\\.local/share/nixi/images/[0-9a-f]{16}\\.svg\\)\\nDone\\.\\n\`\`\`nixi-chart\\nbad line\\n\`\`\`\\n$`));
 });

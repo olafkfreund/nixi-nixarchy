@@ -26,7 +26,7 @@ test("an event only counts when its name and qualifiers match", () => {
 });
 
 test("a step with a count needs that many matching events", () => {
-  let state = Tour.start(tour);
+  let state = Tour.start();
   state = Tour.onCheck(state, tour, { defaultAgent: true });           // step 0 is the agent check
   const focusStep = tour.steps.findIndex((s) => s.count === 4);
   state = { ...state, step: focusStep, hits: 0 };
@@ -40,7 +40,7 @@ test("a step with a count needs that many matching events", () => {
 });
 
 test("the agent check advances only when an agent is configured", () => {
-  let state = Tour.start(tour);
+  let state = Tour.start();
   assert.equal(Tour.onCheck(state, tour, { defaultAgent: false }).step, 0);
   state = Tour.onCheck(state, tour, { defaultAgent: true });
   assert.equal(state.step, 1);
@@ -49,14 +49,14 @@ test("the agent check advances only when an agent is configured", () => {
 
 test("the last step completes on summon, and only on summon", () => {
   const last = tour.steps.length - 1;
-  let state = { ...Tour.start(tour), step: last };
+  let state = { ...Tour.start(), step: last };
   state = Tour.onEvent(state, tour, "openwindow", "80a1,1,org.example,127.0.0.1");
   assert.equal(state.finished, false, "a window event must not finish the tour");
   state = Tour.onOpened(state, tour);
   assert.equal(state.finished, true);
   // Summoning the card must never complete an ordinary step.
   const terminalStep = tour.steps.findIndex((s) => s.match.classAny);
-  const mid = { ...Tour.start(tour), step: terminalStep };
+  const mid = { ...Tour.start(), step: terminalStep };
   assert.deepEqual(Tour.onOpened(mid, tour), mid, "reopening the card skipped a step");
   assert.equal(state.active, false);
 });
@@ -70,7 +70,7 @@ test("nothing moves when the tour is not running", () => {
 });
 
 test("the whole real tour can be completed", () => {
-  let state = Tour.start(tour);
+  let state = Tour.start();
   for (const step of tour.steps) {
     const before = state.step;
     for (let i = 0; i < step.count; i++) {

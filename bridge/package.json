@@ -4,7 +4,6 @@
   "type": "module",
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
-    "@ff-labs/fff-node": "0.10.5",
     "mathjs": "15.2.0"
   }
 }

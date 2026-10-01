@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nixi — your nixarchy guide</title>
+<meta name="description" content="Nixi is an Omarchy overlay card: press a key, ask how to do something on nixarchy, and get an answer grounded in the local manual and your own machine.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+<style>
+  :root {
+    --bg: #f6f4ef; --fg: #1f1f1c; --muted: #5d5b54; --card: #ffffff;
+    --line: #dcd8cd; --accent: #3f7d73; --warn: #8a5a12; --warn-bg: #fbf1dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1c1a; --fg: #e8e5dc; --muted: #a39f94; --card: #242522;
+      --line: #3a3b37; --accent: #7fbfb2; --warn: #e3b86a; --warn-bg: #2e2818;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 80px; }
+  h1 { font-size: 2.6rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.6rem; margin: 64px 0 8px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.15rem; margin: 0 0 6px; }
+  .tagline { color: var(--muted); font-size: 1.2rem; margin: 0 0 28px; }
+  a { color: var(--accent); }
+  code { font: 0.92em ui-monospace, "JetBrains Mono", monospace; }
+  video, img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+  .lede { max-width: 720px; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 20px 0 0; padding: 0; list-style: none; }
+  .scene { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; align-items: center; margin: 36px 0; }
+  .scene .n { color: var(--accent); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .scene p { margin: 0 0 8px; }
+  .note { background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 8px 12px; font-size: 0.92rem; }
+  .note a { color: inherit; }
+  .grid3 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 18px; }
+  .grid3 figure { margin: 0; }
+  figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 6px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; background: var(--card); }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  footer { margin-top: 72px; color: var(--muted); font-size: 0.9rem; }
+  @media (max-width: 760px) {
+    h1 { font-size: 2rem; }
+    .scene, .grid3 { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>✨ Nixi</h1>
+<p class="tagline">Your nixarchy guide: a guided tour, a learning path, and an AI tutor that actually knows your machine.</p>
+
+<video controls muted loop playsinline preload="metadata" poster="media/nixi-demo-poster.png">
+  <source src="media/nixi-demo.mp4" type="video/mp4">
+  <a href="media/nixi-demo.gif">Watch the demo (GIF)</a>
+</video>
+
+<div class="lede">
+<p>Nixi is an Omarchy overlay card. Press a key, ask "how do I…" about
+<a href="https://github.com/olafkfreund/nixarchy">nixarchy</a> (Omarchy on NixOS), and it
+answers from the local nixarchy manual and from your own machine, including the part that
+trips up every newcomer: <strong>packages are declarative here</strong>.</p>
+<ul class="links">
+  <li><a href="https://github.com/olafkfreund/nixi-nixarchy#install">Install</a></li>
+  <li><a href="https://github.com/olafkfreund/nixi-nixarchy#using-it">Using it</a></li>
+  <li><a href="https://github.com/olafkfreund/nixi-nixarchy#trust-what-nixi-may-change">Trust levels</a></li>
+  <li><a href="https://github.com/olafkfreund/nixi-nixarchy">Source</a></li>
+</ul>
+</div>
+
+<h2>Sam's first session</h2>
+<p class="lede">Sam has just installed nixarchy. Sam knows Arch well and NixOS not at all.
+Everything below is one real session on a laptop running nixarchy (Nixi 0.10.0, Claude Code,
+NixOS 26.11), captured as it happened.</p>
+
+<section class="scene">
+  <img src="media/01-search.png" alt="The Nixi card with 'install' typed, showing matching Omarchy menu entries, files and repositories" loading="lazy">
+  <div>
+    <div class="n">1 · Open it</div>
+    <h3>Typing searches before it asks</h3>
+    <p>Sam clicks the ✨ in the bar and types <code>install</code>. Before any AI is involved, the
+    card matches Omarchy menu entries, apps, files and git repositories. Pressing Enter sends the
+    text to the agent as a question instead.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/02-answer.png" alt="Nixi answering 'how do I install an app?' with Install ▸ Packages" loading="lazy">
+  <div>
+    <div class="n">2 · Ask</div>
+    <h3>The answer is nixarchy's, not Arch's</h3>
+    <p>"How do I install an app?" Sam's Arch habit says <code>pacman -S</code>. Nixi points to
+    nixarchy's own tool for the job: the <strong>Packages</strong> panel (Install ▸ Packages), where
+    picking an app only queues it until you apply. The terminal version comes second:
+    <code>nixarchy pkg add</code>, then <code>nixarchy apply</code>.</p>
+    <p>It checked first: the panel is on, and its key isn't bound on this laptop, so it says so
+    instead of naming one. Before every question Nixi also searches a local, hash-verified copy of
+    the nixarchy and Omarchy manuals.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/03-your-machine.png" alt="Nixi reporting NixOS generation 2916 and 59% disk use" loading="lazy">
+  <div>
+    <div class="n">3 · Your machine</div>
+    <h3>It looks, rather than guessing</h3>
+    <p>"What NixOS generation am I on, how full is my disk, when did I last update?" Nixi runs
+    read-only checks and answers with this laptop's numbers: generation 2916, 59% of 938 GB,
+    updated today at 14:22. Each one matched <code>readlink /nix/var/nix/profiles/system</code>
+    and <code>df</code> when we checked.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/04-guide-changes-nothing.png" alt="In Guide, Nixi explains instead of adding btop" loading="lazy">
+  <div>
+    <div class="n">4 · Guide</div>
+    <h3>Guide explains, and changes nothing</h3>
+    <p>"Please add btop to my apps for me." Nixi starts in <strong>Guide</strong>, and in Guide the
+    bridge cancels every permission request it receives, so nothing changes. So it explains instead:
+    btop is already installed, and this is where it would go if it weren't.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/05-mechanic-asks.png" alt="Mechanic showing a Permission required dialog with Deny and Allow" loading="lazy">
+  <div>
+    <div class="n">5 · Mechanic</div>
+    <h3>Mechanic does it, but asks first</h3>
+    <p>Sam types <code>/mechanic</code>, then "put btop on SUPER+ALT+T for me". Nixi checks that
+    the key is free, finds where this machine keeps its own bindings, backs the file up, and asks
+    before each step, showing the whole command, here the exact line it will append. Sam answers
+    with <strong>Y</strong> or <strong>N</strong>, or the buttons, and can deny any step.</p>
+    <p class="note">Most lookups no longer ask: reading files does not, except for secrets such as
+    <code>~/.ssh</code>. An occasional search still arrives as a shell command and asks.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/06-mechanic-done.png" alt="Nixi reporting the new binding, how it verified it, and how to undo it" loading="lazy">
+  <div>
+    <div class="n">6 · Done, and checked</div>
+    <h3>It proves the change took</h3>
+    <p>One line is added to <code>~/.config/hypr/bindings.lua</code>. Nixi reloads Hyprland,
+    confirms the live keybinding list shows SUPER+ALT+T, and tells Sam where the backup is.</p>
+  </div>
+</section>
+
+<section class="scene">
+  <img src="media/07-undo.png" alt="Nixi restoring bindings.lua from its backup" loading="lazy">
+  <div>
+    <div class="n">7 · Undo</div>
+    <h3>Changed your mind? Say so</h3>
+    <p>"Now undo it." Nixi first checks that the backup differs only by the lines it added, then
+    restores it and checks the binding is gone. The file is byte-for-byte what it was.
+    <code>/guide</code> puts Nixi back into read-only mode.</p>
+  </div>
+</section>
+
+<h2>No AI needed</h2>
+<p class="lede">The FAQ, the tour, the learning path and the calculator run without an agent and without the network.</p>
+<div class="grid3">
+  <figure><img src="media/11-faq.png" alt="A written FAQ answer shown in the card" loading="lazy"><figcaption>Written answers: they show up in search as you type; choose one and it's in the card.</figcaption></figure>
+  <figure><img src="media/08-tour.png" alt="Tour step 2 of 11" loading="lazy"><figcaption><code>/tour</code>: eleven steps that watch Hyprland, so a step completes when you actually do it.</figcaption></figure>
+  <figure><img src="media/09-learn.png" alt="Learning path lesson on the Omarchy menu" loading="lazy"><figcaption><code>/learn</code>: the next of 16 topics you have not covered yet.</figcaption></figure>
+  <figure><img src="media/10-calculator.png" alt="72 F to C converted in the card" loading="lazy"><figcaption>Sums and unit conversions, answered as you type.</figcaption></figure>
+</div>
+
+<h2>Guide and Mechanic</h2>
+<table>
+  <thead><tr><th></th><th>Guide (default)</th><th>Mechanic</th></tr></thead>
+  <tbody>
+    <tr><td>What it does</td><td>Explains and instructs. Nothing on your machine changes.</td><td>Makes the change, and every step needs your yes.</td></tr>
+    <tr><td>How it's enforced</td><td>The bridge cancels every permission request it receives, and the agent runs in its most restrictive mode. Reading and searching are the exception, in both levels: they never produce a request, so Nixi can read your configuration to explain it. Secrets still ask.</td><td>Requests are shown in the card. With Claude, reading and searching files does not ask, except for secrets; set <code>"askBeforeReading": true</code> in <code>~/.config/omarchy/nixi.json</code> to be asked for those too. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
+    <tr><td>Claude</td><td><code>plan</code> mode, requests cancelled</td><td><code>default</code> mode, asks</td></tr>
+    <tr><td>Codex</td><td><code>read-only</code>, requests cancelled</td><td><code>read-only</code>, asks before each edit</td></tr>
+    <tr><td>OpenCode</td><td><code>plan</code>, requests cancelled</td><td><code>build</code>, asks</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  Nixi is MIT-licensed and part of <a href="https://github.com/olafkfreund/nixarchy">nixarchy</a>.
+  It began as a fork of Archy by Luke Warren Wills and uses omarchy-ask's card.
+  <a href="https://github.com/olafkfreund/nixi-nixarchy">github.com/olafkfreund/nixi-nixarchy</a>
+</footer>
+
+</main>
+</body>
+</html>

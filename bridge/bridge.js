@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { resolveHarness, resolveExecutable, resolveAdapter, resolveAiMirror } from "./harness-policy.js";
+import { existsSync, readFileSync } from "node:fs";
+import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { permissionDetail } from "./permission-detail.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -28,17 +31,10 @@ function startupValue(resolve) {
 }
 const agentName = startupValue(() => resolveHarness());
 function configuredAgentCommand() {
-  const specificName = { codex: "NIXI_CODEX_ACP_COMMAND", opencode: "NIXI_OPENCODE_COMMAND" }[agentName]
-    || "NIXI_CLAUDE_ACP_COMMAND";
-  const raw = String(process.env[specificName]
-    || process.env.NIXI_ACP_COMMAND || "").trim();
+  const raw = adapterOverride(agentName);
   if (!raw) return resolveAdapter(agentName);
-  let command;
-  try { command = JSON.parse(raw); }
-  catch { throw new Error("NIXI_ACP_COMMAND must be a JSON array of arguments"); }
-  if (!Array.isArray(command) || command.length === 0
-      || command.some((argument) => typeof argument !== "string" || argument === ""))
-    throw new Error("NIXI_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
+  const command = parseCommand(raw);
+  if (!command) throw new Error("NIXI_ACP_COMMAND must be a non-empty JSON array of non-empty strings");
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
@@ -52,8 +48,38 @@ const nixiConfigDir = join(process.env.HOME || "", ".config", "nixi");
 const cwd = process.env.NIXI_CWD
   || (process.env.HOME && existsSync(nixiConfigDir) ? nixiConfigDir : "")
   || process.env.HOME || process.cwd();
+// Nixi chose this directory and never writes .codex into it, so the directory
+// being there is always either a mistake or someone else's doing. codex loads
+// <cwd>/.codex/config.toml as a project config layer when the directory is
+// trusted in the user's own ~/.codex/config.toml, and an mcp_servers entry
+// there runs AT SESSION START, outside any permission request -- so neither
+// Guide nor Mechanic ever sees it (#74).
+//
+// Not parsed. Whether a given file is dangerous is codex's business, and its
+// config format and trust rules both move; existence is the durable signal.
+// A diagnostic rather than a refusal: the file is inert unless the directory
+// is ALSO trusted, so refusing would block sessions that are provably safe.
+function noticeUnaccountedEnvironment() {
+  if (existsSync(join(cwd, ".codex")))
+    emit({ type: "diagnostic", text: `Unexpected .codex directory in ${cwd} — Nixi never creates one. If you did not put it there, remove it: codex can run commands from it at session start.` });
+  // These three cannot be pinned by the build -- two are HOME-relative and
+  // NIXI_CWD is derived from whether ~/.config/nixi exists -- so saying they
+  // are set is the honest equivalent of pinning them (#74, after #76/#77).
+  for (const name of ["NIXI_CWD", "NIXI_DIR", "NIXI_DATA"])
+    if (process.env[name])
+      emit({ type: "diagnostic", text: `${name} is set in the environment; Nixi does not set it. It changes where the agent runs or what it is told.` });
+}
+
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
 const settingsPath = join(settingsDir, "nixi.json");
+
+// "Ask for everything" (#27). Read once, synchronously: the agent's permission
+// rules are fixed when it is spawned (OpenCode) or its session starts (Claude),
+// so a change applies from the next session.
+const askBeforeReading = (() => {
+  try { return JSON.parse(readFileSync(settingsPath, "utf8")).askBeforeReading === true; }
+  catch { return false; }
+})();
 
 let permissionMode = "permission";
 // Guide unless nixi.json says otherwise; unknown values are Guide too.
@@ -99,9 +125,8 @@ function emit(event) {
 }
 
 function messageText(content) {
-  if (!content) return "";
   if (typeof content === "string") return content;
-  if (content.type === "text") return content.text || "";
+  if (content?.type === "text") return content.text || "";
   // Media becomes markdown here, synchronously, so it keeps its place in the
   // stream. The text goes through the LEARNED filter like any other, but it
   // starts at a line break and its first character is "!" or "[", so it can
@@ -112,19 +137,11 @@ function messageText(content) {
   return markdown;
 }
 
-function flatOptions(options) {
-  const result = [];
-  for (const option of options || []) {
-    if (Array.isArray(option.options)) result.push(...option.options);
-    else result.push(option);
-  }
-  return result;
-}
-
+// Config options may be grouped one level deep.
 function matchingValue(config, wanted) {
   if (!wanted) return "";
-  const option = flatOptions(config?.options).find(candidate => candidate.value === wanted);
-  return option?.value || "";
+  const options = (config?.options || []).flatMap((option) => option.options ?? [option]);
+  return options.some((option) => option.value === wanted) ? wanted : "";
 }
 
 async function applyRequestedModel(configOptions) {
@@ -157,7 +174,7 @@ async function applyRequestedModel(configOptions) {
   }
 }
 
-const childEnvironment = { ...process.env, HUGINN_INTERNAL: "1" };
+const childEnvironment = { ...process.env };
 // ACP is the transport adapter; the installed system harness owns execution.
 // Explicit deployment overrides retain precedence. Never silently use the
 // adapter's transitive harness dependency when the system install is absent.
@@ -167,8 +184,24 @@ else if (agentName === "claude")
   childEnvironment.CLAUDE_CODE_EXECUTABLE = startupValue(() => resolveExecutable(agentName));
 // Replaces any value from the environment: Nixi's permission rules are what
 // make Guide safe with OpenCode, so the user's env must not be able to weaken them.
-if (agentName === "opencode")
-  childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(OPENCODE_PERMISSIONS);
+if (agentName === "opencode") {
+  childEnvironment.OPENCODE_CONFIG_CONTENT = JSON.stringify(opencodePermissions(askBeforeReading));
+  // ...and the cwd must not be able to weaken them either (#63). The agent's
+  // cwd is ~/.config/nixi, which is unmanaged, so OpenCode was reading a second
+  // config layer from a directory the agent can write to. Nixi's rules do not
+  // win against it: an `opencode.json` there introduces `bash`/`edit`/`write`,
+  // the keys the `"*": "ask"` wildcard never names, and a named key beats the
+  // wildcard -- while a `.opencode/agent/*.md` permission block is appended
+  // AFTER Nixi's rules, and the last matching rule is the one that applies, so
+  // it overrides even `plan_exit: "deny"`. Both make a write produce no
+  // permission request at all, which is precisely what Guide cannot cancel.
+  //
+  // This is #66's answer in OpenCode's dialect: remove the capability rather
+  // than police a path. It drops only the cwd-derived layer -- the user's own
+  // ~/.opencode and ~/.config/opencode still load, so it constrains the AGENT
+  // against itself and leaves what the PERSON configured alone.
+  childEnvironment.OPENCODE_DISABLE_PROJECT_CONFIG = "1";
+}
 if (agentName === "codex") {
   let codexConfig = {};
   try { codexConfig = JSON.parse(process.env.CODEX_CONFIG || "{}"); } catch {}
@@ -198,8 +231,9 @@ let connection = null;
 let turnRunning = false;
 let steeringSupported = false;
 let shuttingDown = false;
-let childExitResolve;
-const childExited = new Promise((resolve) => { childExitResolve = resolve; });
+// Settles when the child exits. A spawn error rejects once(); the exit path
+// only races this against a timeout, so a failed spawn just ends the wait.
+const childExited = once(child, "exit").catch(() => {});
 
 // #74: an MCP server named by a project config file is spawned at session start,
 // outside the permission layer, and Nixi cannot stop it. It can notice it.
@@ -245,7 +279,6 @@ const client = {
       case "tool_call_update":
         emit({
           type: "tool",
-          id: update.toolCallId || "",
           title: update.title || update.name || "Using a tool",
           status: update.status || "in_progress",
         });
@@ -276,14 +309,12 @@ const client = {
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
     if (policy.permission === "yolo") {
-      const option = options.find((item) => item.kind === "allow_once");
-      if (option) {
-        emit({ type: "status", text: `YOLO · ${title}` });
-        return Promise.resolve({ outcome: { outcome: "selected", optionId: option.id } });
-      }
-      return Promise.resolve({ outcome: { outcome: "cancelled" } });
+      const outcome = choose(options, "allow_once");
+      if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
+      return Promise.resolve(outcome);
     }
-    emit({ type: "permission", id: requestId, title, options });
+    const { detail, omitted } = permissionDetail(params.toolCall);
+    emit({ type: "permission", id: requestId, title, options, detail, omitted });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options });
     });
@@ -302,15 +333,31 @@ async function start() {
     clientCapabilities: { session: { configOptions: {} } },
   });
   steeringSupported = initialized?._meta?.steering?.supported === true;
+  const model = process.env.NIXI_MODEL;
   // Fixed for the life of the session: ACP has no way to attach or detach a
   // server afterwards. A session started at Guide therefore has no desktop
   // control even if the user switches to Mechanic later -- see the note in the
   // trust handler, which says so rather than leaving it a mystery.
   const session = await connection.newSession({ cwd, mcpServers: currentPolicy().mcpServers,
-    ...(agentName === "claude" && process.env.NIXI_MODEL ? {
+    ...(agentName === "claude" ? {
       _meta: { claudeCode: { options: {
-        model: process.env.NIXI_MODEL,
-        settings: { model: process.env.NIXI_MODEL, availableModels: [process.env.NIXI_MODEL] },
+        ...(model ? { model } : {}),
+        // The agent's cwd is ~/.config/nixi, so Claude Code would read
+        // .claude/settings.json and PreToolUse hooks from a directory the agent
+        // can write to -- letting an approved write grant it standing
+        // permissions, or install a hook that runs a shell command with no
+        // prompt (#63). The adapter's default is ["user","project","local"];
+        // naming only "user" drops the two that live in the cwd.
+        //
+        // "user", not [], because Nixi is a card on someone else's machine: it
+        // constrains what the AGENT can do to itself and leaves what the PERSON
+        // configured alone. CLAUDE.md is unaffected -- measured, not assumed:
+        // the tutor brief still loads under restricted sources.
+        settingSources: ["user"],
+        settings: {
+          ...(model ? { model, availableModels: [model] } : {}),
+          permissions: claudePermissions(askBeforeReading),
+        },
       } } },
     } : {}),
   });
@@ -320,11 +367,13 @@ async function start() {
   configOptions = session.configOptions || [];
   await applyRequestedModel(configOptions);
   await applyTrustMode();
+  // Before ready, not after: the card reads this stdout from the moment it
+  // spawns the bridge, so there is nothing to wait for -- and anything emitted
+  // after ready races every consumer that treats ready as "the session is up
+  // and I can look at what arrived".
+  noticeUnaccountedEnvironment();
   emit({
     type: "ready",
-    agent: agentName,
-    sessionId,
-    capabilities: initialized.agentCapabilities || {},
     steeringSupported,
     permissionMode,
     trust,
@@ -338,7 +387,7 @@ let charts = createChartFilter("");
 let lastMessageId = "";
 const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd(), ".local", "share", "nixi");
 // Images the agent sends, written by the bridge. Pruned once, here at startup.
-const mediaDir = join(learnedDir, "media");
+const mediaDir = join(learnedDir, "images");
 try { prepareMediaDir(mediaDir); }
 catch (error) { emit({ type: "diagnostic", text: `Media directory unavailable: ${error.message}` }); }
 
@@ -346,8 +395,22 @@ async function finishLearned() {
   const { facts, visible: tail } = learned.flush();
   const visible = charts.push(tail) + charts.flush();
   if (visible) emit({ type: "text", text: visible, messageId: lastMessageId });
-  try { await appendLearned(facts, learnedDir); }
-  catch (error) { emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` }); }
+  // Guide does not write. LEARNED.md is a write, and one that steers later
+  // sessions -- nixi-context reads it as a notes source and grounding.js
+  // prepends the result to future prompts. #41 settled that reading is not
+  // changing and writing is, which is why Guide keeps unprompted reads; the
+  // same distinction says it must not accumulate durable state that alters its
+  // own future behaviour behind a promise that nothing changes (#51).
+  if (resolveTrust(trust) === "guide" || facts.length === 0) return;
+  try {
+    await appendLearned(facts, learnedDir);
+    // Kept, so say so. Hiding the write was deliberate -- a bare LEARNED: line
+    // is noise -- but the user could not see their tutor forming a belief about
+    // their machine, or correct it.
+    emit({ type: "learned", facts });
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` });
+  }
 }
 
 async function prompt(text) {
@@ -387,21 +450,47 @@ async function steer(text) {
   });
   const outcome = response?.outcome || "failed";
   if (outcome === "failed") throw new Error("The agent could not apply the steering prompt");
-  emit({ type: "steered", outcome });
+  ack("steer", true, { outcome });
 }
 
 function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
-  const wantedKind = message.allow ? "allow_once" : "reject_once";
-  const option = pending.options.find((item) => item.kind === wantedKind);
-  if (option) {
-    pending.resolve({ outcome: { outcome: "selected", optionId: option.id } });
-  } else {
-    pending.resolve({ outcome: { outcome: "cancelled" } });
-  }
-  emit({ type: "status", text: message.allow ? "Working…" : "Tool denied" });
+  pending.resolve(select(pending.options, String(message.optionId || "")));
+  const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
+}
+
+// The ACP answer for the option of this kind, or cancelled if there is none.
+// Honour the option the user actually picked. choose() below selects a KIND on
+// the user's behalf, which is right for YOLO and the allow-all path and wrong
+// for an answer -- collapsing every answer to allow_once is what discarded the
+// agent's "allow always" entirely (#53).
+function select(options, id) {
+  // The SDK delivers options to the client as { id, label, kind }; only the
+  // ACP response back to the agent calls the field optionId. choose() below
+  // already matched on .id -- select() must too.
+  const option = options.find((item) => item.id === id);
+  return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };
+}
+
+// #44: one acknowledgement shape for every request the card makes. There were
+// three near-identical triples -- trust/trust_error, permission_mode/
+// permission_mode_error, steered/steering_error -- each with its own pending
+// flag on the card and its own reset path. Two of the three forgot to reset,
+// which is #40. One shape means one place to clear, so that class of bug
+// cannot recur per-request-kind.
+//
+// `of` names the request being answered and matches the inbound message type,
+// so a reader can follow one word from the card's write to the bridge's reply.
+function ack(of, ok, extra = {}) {
+  emit({ type: "ack", of, ok, ...extra });
+}
+
+function choose(options, kind) {
+  const option = options.find((item) => item.kind === kind);
+  return { outcome: option ? { outcome: "selected", optionId: option.id } : { outcome: "cancelled" } };
 }
 
 function cancelAllPendingPermissions() {
@@ -420,17 +509,34 @@ let attachedMcpServers = 0;
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
 // cancelled regardless -- so a missing mode is reported, not fatal.
-async function applyTrustMode() {
-  const { modeId } = currentPolicy();
+// An agent that never answers leaves the card's trustPending set forever, so
+// /mechanic, /guide and the YOLO badge become silent no-ops for the life of the
+// conversation (#40). Bounded like shutdown()'s close, but this one REJECTS:
+// the caller has to be able to tell a hang from a success. ref: false so the
+// losing timer cannot hold the bridge open.
+const MODE_TIMEOUT_MS = Number(process.env.NIXI_MODE_TIMEOUT_MS) || 8000;
+async function withModeTimeout(promise) {
+  const expired = Symbol("expired");
+  const result = await Promise.race([promise, delay(MODE_TIMEOUT_MS, expired, { ref: false })]);
+  if (result === expired)
+    throw new Error(`the agent did not answer within ${MODE_TIMEOUT_MS / 1000}s`);
+  return result;
+}
+
+// targetTrust is explicit so the mode can be applied BEFORE the global `trust`
+// is updated -- currentPolicy() reads that global, so computing the policy
+// after the move would apply the mode we are leaving.
+async function applyTrustMode(targetTrust = trust) {
+  const { modeId } = trustPolicy(agentName, targetTrust, permissionMode);
   const offered = (sessionModes?.availableModes || []).map((mode) => mode.id);
   if (offered.includes(modeId)) {
-    await connection.setSessionMode({ sessionId, modeId });
+    await withModeTimeout(connection.setSessionMode({ sessionId, modeId }));
     return;
   }
   // OpenCode offers its modes as a config option rather than ACP session modes.
   const option = (configOptions || []).find((item) => item.category === "mode");
   if (option && (option.options || []).some((item) => item.value === modeId)) {
-    const response = await connection.setSessionConfigOption({ sessionId, configId: option.id, value: modeId });
+    const response = await withModeTimeout(connection.setSessionConfigOption({ sessionId, configId: option.id, value: modeId }));
     configOptions = response.configOptions || configOptions;
     return;
   }
@@ -439,22 +545,15 @@ async function applyTrustMode() {
 
 function allowAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
-    const option = pending.options.find((item) => item.kind === "allow_once");
     pendingPermissions.delete(id);
-    pending.resolve(option
-      ? { outcome: { outcome: "selected", optionId: option.id } }
-      : { outcome: { outcome: "cancelled" } });
+    pending.resolve(choose(pending.options, "allow_once"));
   }
 }
 
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const { resolve } of pendingPermissions.values()) {
-    resolve({ outcome: { outcome: "cancelled" } });
-  }
-  pendingPermissions.clear();
-  const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  cancelAllPendingPermissions();
   // Bound graceful ACP close before signalling the child. Remain alive long
   // enough to reap it; a detached kill timer cannot help after bridge exit.
   try {
@@ -487,18 +586,23 @@ input.on("line", (line) => {
     });
   } else if (message.type === "steer") {
     steer(String(message.text || "")).catch((error) => {
-      emit({ type: "steering_error", message: error.message || String(error) });
+      ack("steer", false, { message: error.message || String(error) });
     });
   } else if (message.type === "permission") {
     answerPermission(message);
   } else if (message.type === "trust") {
     const next = resolveTrust(message.trust);
-    mergeSettings({ trust: next }).then(async () => {
+    // Apply the ACP mode FIRST, then persist and publish. The old order set
+    // `trust` before the mode call, so a failure reported the level the session
+    // had NOT moved to (#40). On failure nothing is written and `trust` still
+    // holds the level actually in force, which is what the failed ack carries.
+    (async () => {
+      if (connection && sessionId) await applyTrustMode(next);
+      await mergeSettings({ trust: next });
       trust = next;
       // Leaving Mechanic must not leave an approval waiting in the card.
       if (trust === "guide") cancelAllPendingPermissions();
-      if (connection && sessionId) await applyTrustMode();
-      emit({ type: "trust", trust });
+      ack("trust", true, { trust });
       // The session's MCP servers were fixed when it was created. Switching up
       // to Mechanic cannot attach ai-mirror to a session that started at Guide,
       // and silently lacking desktop control would read as a broken feature.
@@ -506,19 +610,15 @@ input.on("line", (line) => {
       if (trust === "mechanic" && attachedMcpServers === 0
           && currentPolicy().mcpServers.length > 0)
         emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
-    }).catch((error) => {
-      emit({ type: "trust_error", trust, message: `Could not change trust level: ${error.message}` });
+    })().catch((error) => {
+      ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
     });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
       if (permissionMode === "yolo") allowAllPendingPermissions();
-      emit({ type: "permission_mode", mode: permissionMode });
+      ack("permission_mode", true, { mode: permissionMode });
     }).catch((error) => {
-      emit({
-        type: "permission_mode_error",
-        mode: permissionMode,
-        message: `Could not save permission mode: ${error.message}`,
-      });
+      ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
     });
   } else if (message.type === "cancel" && connection && sessionId) {
     connection.cancel({ sessionId }).catch(() => {});
@@ -529,7 +629,6 @@ input.on("line", (line) => {
 input.on("close", () => shutdown());
 
 child.on("exit", (code, signal) => {
-  childExitResolve({ code, signal });
   if (!shuttingDown) {
     emit({ type: "fatal", message: `ACP agent exited (${signal || code})` });
     process.exit(code || 0);

@@ -6,6 +6,26 @@ import qs.Commons
 
 PanelWindow {
   id: root
+
+  // Zoom (Ctrl+=) applied only to the transcript, so this window stayed at a
+  // fixed size while the conversation grew (#38). Supplied by Ask.qml.
+  property real fontScale: 1
+
+  // A selectable pill: the agent and thinking-effort rows differ only in size.
+  component Chip: Rectangle {
+    property string label
+    property bool selected
+    property real padding: Style.space(24)
+    property real textSize: Style.font.body * root.fontScale
+    signal clicked()
+    width: chipLabel.implicitWidth + padding
+    height: Style.space(36)
+    radius: Style.cornerRadius
+    color: selected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+    border.color: selected ? Color.accent : Color.menu.border
+    Text { id: chipLabel; anchors.centerIn: parent; text: parent.label; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: parent.textSize }
+    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: parent.clicked() }
+  }
   visible: false
   anchors { top: true; bottom: true; left: true; right: true }
   color: "transparent"
@@ -48,12 +68,8 @@ PanelWindow {
 
   function syncModelIndex() {
     if (!picksModel) { modelSelect.currentIndex = -1; return }
-    for (var i = 0; i < modelChoices.length; i++) {
-      if (modelChoices[i].value === draftModel) {
-        modelSelect.currentIndex = i
-        return
-      }
-    }
+    var index = modelSelect.indexOfValue(draftModel)
+    if (index >= 0) { modelSelect.currentIndex = index; return }
     modelSelect.currentIndex = 0
     draftModel = modelChoices[0].value
   }
@@ -84,7 +100,9 @@ PanelWindow {
   Rectangle {
     id: card
     width: Math.min(Style.space(520), parent.width - Style.gapsOut * 2)
-    height: content.implicitHeight + Style.space(52)
+    // Width was clamped and height was not, so at a large theme base-size on a
+    // small panel the agent/model/effort column ran off both ends (#38).
+    height: Math.min(content.implicitHeight + Style.space(52), parent.height - Style.gapsOut * 2)
     anchors.centerIn: parent
     color: Color.menu.background
     border.color: Color.menu.border
@@ -99,13 +117,13 @@ PanelWindow {
       anchors.margins: Style.space(26)
       spacing: Style.space(14)
 
-      Text { text: "Agent"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
+      Text { text: "Agent"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.title * root.fontScale; font.bold: true }
       Text {
         width: parent.width
         text: "Applies to new conversations and survives shell restarts."
         color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.58)
         font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.caption * root.fontScale
         wrapMode: Text.Wrap
       }
 
@@ -113,20 +131,16 @@ PanelWindow {
         spacing: Style.space(8)
         Repeater {
           model: ["", "codex", "claude", "opencode"]
-          delegate: Rectangle {
+          delegate: Chip {
             required property string modelData
-            width: harnessLabel.implicitWidth + Style.space(24)
-            height: Style.space(36)
-            radius: Style.cornerRadius
-            color: root.draftAgent === modelData ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
-            border.color: root.draftAgent === modelData ? Color.accent : Color.menu.border
-            Text { id: harnessLabel; anchors.centerIn: parent; text: modelData || "Omarchy default"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body }
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.chooseAgent(modelData) }
+            label: modelData || "Omarchy default"
+            selected: root.draftAgent === modelData
+            onClicked: root.chooseAgent(modelData)
           }
         }
       }
 
-      Text { text: "Model"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body }
+      Text { text: "Model"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
       ComboBox {
         id: modelSelect
         enabled: root.picksModel
@@ -138,30 +152,29 @@ PanelWindow {
         textRole: "label"
         valueRole: "value"
         font.family: Style.font.family
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.body * root.fontScale
         onActivated: root.draftModel = currentValue
       }
 
-      Text { text: "Thinking"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body }
+      Text { text: "Thinking"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
       Row {
         spacing: Style.space(7)
         enabled: root.picksModel
         Repeater {
           model: ["low", "medium", "high", "xhigh", "max"]
-          delegate: Rectangle {
+          delegate: Chip {
             required property string modelData
-            width: effortLabel.implicitWidth + Style.space(18)
+            label: modelData
+            selected: root.draftReasoningEffort === modelData
+            padding: Style.space(18)
             height: Style.space(34)
-            radius: Style.cornerRadius
-            color: root.draftReasoningEffort === modelData ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
-            border.color: root.draftReasoningEffort === modelData ? Color.accent : Color.menu.border
-            Text { id: effortLabel; anchors.centerIn: parent; text: modelData; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.draftReasoningEffort = modelData }
+            textSize: Style.font.caption * root.fontScale
+            onClicked: root.draftReasoningEffort = modelData
           }
         }
       }
 
-      Text { text: "Return to save"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+      Text { text: "Return to save"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption * root.fontScale }
     }
   }
 }

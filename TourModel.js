@@ -10,8 +10,8 @@ function idle() {
   return { active: false, step: 0, hits: 0, finished: false }
 }
 
-function start(tour) {
-  return { active: true, step: 0, hits: 0, finished: false, total: tour.steps.length }
+function start() {
+  return { active: true, step: 0, hits: 0, finished: false }
 }
 
 function currentStep(state, tour) {
