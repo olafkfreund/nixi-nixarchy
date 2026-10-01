@@ -15,7 +15,7 @@ new AgentSideConnection((conn) => ({
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
   },
   async newSession(params) {
-    log({ method: "newSession", cwd: params.cwd, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
+    log({ method: "newSession", cwd: params.cwd, mcpServers: params.mcpServers ?? [], opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null });
     // FAKE_AGENT_MODES=config: modes only as a config option, the way OpenCode offers them.
     if (process.env.FAKE_AGENT_MODES === "config") return {
       sessionId: "fake-session",

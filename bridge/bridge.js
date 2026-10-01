@@ -6,7 +6,7 @@ import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
@@ -42,6 +42,9 @@ function configuredAgentCommand() {
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
+// Desktop control. Null unless a build pinned ai-mirror, and even then the trust
+// policy decides whether a session may attach it (never at Guide).
+const aiMirrorCommand = startupValue(() => resolveAiMirror());
 // The agent runs in nixi's config directory when it exists, so Claude Code loads
 // nixi's CLAUDE.md -- the tutor brief that points it at the nixi skill and the
 // local manual. Without it, HOME, as upstream did.
@@ -88,7 +91,7 @@ async function savePermissionMode(mode) {
 }
 
 function currentPolicy() {
-  return trustPolicy(agentName, trust, permissionMode);
+  return trustPolicy(agentName, trust, permissionMode, aiMirrorCommand);
 }
 
 function emit(event) {
@@ -198,6 +201,36 @@ let shuttingDown = false;
 let childExitResolve;
 const childExited = new Promise((resolve) => { childExitResolve = resolve; });
 
+// #74: an MCP server named by a project config file is spawned at session start,
+// outside the permission layer, and Nixi cannot stop it. It can notice it.
+// claude-agent-acp forwards _meta.claudeCode.mcpServer = { name, source } on a
+// permission request (dist/acp-agent.js:5627), where source "sdk" means the host
+// registered it -- that is Nixi's own ai-mirror and nothing else. A request from
+// any other server is one Nixi never attached, so it is reported.
+//
+// This is detection, not a control: the request is still handled by the policy
+// below, cancelled at Guide like everything else. Its absence is logged once,
+// because an adapter bump that drops the field would otherwise go quiet.
+let mcpNoticed = false;
+let mcpFieldSeen = false;
+function noticeMcpSource(params) {
+  const tool = params.toolCall?._meta?.claudeCode;
+  if (!tool) return;
+  if (tool.mcpServer === undefined) {
+    if (!mcpFieldSeen && String(tool.toolName || "").startsWith("mcp__")) {
+      mcpFieldSeen = true;
+      emit({ type: "diagnostic", text: "This adapter does not say which MCP server a tool came from; unregistered servers cannot be noticed." });
+    }
+    return;
+  }
+  mcpFieldSeen = true;
+  const registered = currentPolicy().mcpServers.some((server) => server.name === tool.mcpServer.name);
+  if (tool.mcpServer.source === "sdk" && registered) return;
+  if (mcpNoticed) return;
+  mcpNoticed = true;
+  emit({ type: "diagnostic", text: `A tool arrived from an MCP server Nixi did not attach: ${String(tool.mcpServer.name).slice(0, 60)} (${String(tool.mcpServer.source).slice(0, 20)}). Nixi's permission rules still apply to it.` });
+}
+
 const client = {
   sessionUpdate(params) {
     const update = params.update || {};
@@ -234,6 +267,7 @@ const client = {
       label: option.name,
       kind: option.kind,
     }));
+    noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
     // to approve. This, not the session mode, is Guide's guarantee.
@@ -268,7 +302,11 @@ async function start() {
     clientCapabilities: { session: { configOptions: {} } },
   });
   steeringSupported = initialized?._meta?.steering?.supported === true;
-  const session = await connection.newSession({ cwd, mcpServers: [],
+  // Fixed for the life of the session: ACP has no way to attach or detach a
+  // server afterwards. A session started at Guide therefore has no desktop
+  // control even if the user switches to Mechanic later -- see the note in the
+  // trust handler, which says so rather than leaving it a mystery.
+  const session = await connection.newSession({ cwd, mcpServers: currentPolicy().mcpServers,
     ...(agentName === "claude" && process.env.NIXI_MODEL ? {
       _meta: { claudeCode: { options: {
         model: process.env.NIXI_MODEL,
@@ -277,6 +315,7 @@ async function start() {
     } : {}),
   });
   sessionId = session.sessionId;
+  attachedMcpServers = currentPolicy().mcpServers.length;
   sessionModes = session.modes || null;
   configOptions = session.configOptions || [];
   await applyRequestedModel(configOptions);
@@ -368,6 +407,9 @@ function cancelAllPendingPermissions() {
 
 let sessionModes = null;
 let configOptions = [];
+// How many MCP servers this session was created with. ACP fixes them at
+// newSession, so a later trust change cannot add one.
+let attachedMcpServers = 0;
 
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
@@ -451,6 +493,13 @@ input.on("line", (line) => {
       if (trust === "guide") cancelAllPendingPermissions();
       if (connection && sessionId) await applyTrustMode();
       emit({ type: "trust", trust });
+      // The session's MCP servers were fixed when it was created. Switching up
+      // to Mechanic cannot attach ai-mirror to a session that started at Guide,
+      // and silently lacking desktop control would read as a broken feature.
+      // Rebuilding the session here would instead discard the conversation.
+      if (trust === "mechanic" && attachedMcpServers === 0
+          && currentPolicy().mcpServers.length > 0)
+        emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
     }).catch((error) => {
       emit({ type: "trust_error", trust, message: `Could not change trust level: ${error.message}` });
     });

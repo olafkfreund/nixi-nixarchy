@@ -150,3 +150,24 @@ test("other agents never receive OpenCode's config", async () => {
   const run = await runBridge({ env: { OPENCODE_CONFIG_CONTENT: "" } });
   assert.equal(run.agent.find((e) => e.method === "newSession").opencodeConfig, "");
 });
+
+test("the session is created with ai-mirror only at Mechanic", async () => {
+  // Asserts on what the bridge actually SENT over ACP, not on the policy object.
+  const command = JSON.stringify(["/nix/store/x/bin/ai-mirror", "mcp"]);
+  const attached = async (trust) => {
+    const run = await runBridge({
+      settings: { trust },
+      env: { NIXI_AI_MIRROR_COMMAND: command },
+    });
+    return run.agent.find((entry) => entry.method === "newSession").mcpServers;
+  };
+
+  assert.deepEqual(await attached("guide"), [], "Guide attaches nothing");
+  assert.deepEqual(await attached("mechanic"), [{
+    name: "ai-mirror", command: "/nix/store/x/bin/ai-mirror", args: ["mcp"], env: [],
+  }], "Mechanic attaches ai-mirror");
+
+  // No pinned package: no desktop control even at Mechanic.
+  const none = await runBridge({ settings: { trust: "mechanic" } });
+  assert.deepEqual(none.agent.find((e) => e.method === "newSession").mcpServers, []);
+});
