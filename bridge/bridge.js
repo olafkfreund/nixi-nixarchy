@@ -10,6 +10,7 @@ import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-pol
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
+import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
 import {
   ClientSideConnection,
@@ -97,7 +98,14 @@ function messageText(content) {
   if (!content) return "";
   if (typeof content === "string") return content;
   if (content.type === "text") return content.text || "";
-  return "";
+  // Media becomes markdown here, synchronously, so it keeps its place in the
+  // stream. The text goes through the LEARNED filter like any other, but it
+  // starts at a line break and its first character is "!" or "[", so it can
+  // never read as a LEARNED line.
+  // Guide never reads a named local file off disk; see blockMarkdown.
+  const { markdown, error } = blockMarkdown(content, mediaDir, currentPolicy().permission !== "cancel");
+  if (error) emit({ type: "diagnostic", text: `Media skipped: ${error}` });
+  return markdown;
 }
 
 function flatOptions(options) {
@@ -287,6 +295,10 @@ async function start() {
 let learned = createLearnedFilter();
 let lastMessageId = "";
 const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd(), ".local", "share", "nixi");
+// Images the agent sends, written by the bridge. Pruned once, here at startup.
+const mediaDir = join(learnedDir, "media");
+try { prepareMediaDir(mediaDir); }
+catch (error) { emit({ type: "diagnostic", text: `Media directory unavailable: ${error.message}` }); }
 
 async function finishLearned() {
   const { visible, facts } = learned.flush();

@@ -62,12 +62,24 @@ new AgentSideConnection((conn) => ({
       log({ method: "permissionOutcome", outcome: outcome.outcome });
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
-    const chunks = text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
+    const chunks = text.includes("PLEASE_IMAGE") ? [] : text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
     for (const chunk of chunks)
       await conn.sessionUpdate({
         sessionId: params.sessionId,
         update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: chunk } },
       });
+    // PLEASE_IMAGE: text, an image block, a link block, then text, in that order.
+    if (text.includes("PLEASE_IMAGE")) {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]).toString("base64");
+      for (const content of [
+        { type: "text", text: "before" },
+        { type: "image", data: png, mimeType: "image/png" },
+        { type: "resource_link", name: "Manual", uri: "https://example.com/a b" },
+        { type: "image", data: "!!notbase64", mimeType: "image/png" },
+        { type: "text", text: "after" },
+      ]) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content } });
+      return { stopReason: "end_turn" };
+    }
     return { stopReason: "end_turn" };
   },
 }), ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));
