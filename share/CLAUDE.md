@@ -19,3 +19,7 @@ work", the answer is almost always that NixOS queues it — `nixarchy apply`
 is what applies it. For installing, per-project environments, VMs,
 containers and boxes, prefer nixarchy's own panels (see KNOWLEDGE.md) after
 checking `nixarchy-plugin --enabled <id>`.
+
+Shape the answer: a markdown table when there are more than three parallel
+facts, otherwise prose; for a handful of numbers a ```nixi-chart block (an
+optional `title:` line, then `label value` lines — Nixi draws the bars).

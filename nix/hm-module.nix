@@ -18,6 +18,10 @@ let
   nixiPkg = cfg.package.override (import ./adapters.nix {
     inherit lib pkgs;
     agents = cfg.agents;
+  } // {
+    # ai-mirror is not in nixpkgs; it ships from its own flake, so the user
+    # passes the package in. Null means Nixi never offers desktop control.
+    aiMirror = cfg.aiMirror.package;
   });
   share = "${nixiPkg}/share/nixi";
   plugins = "${nixiPkg}/share/omarchy/plugins";
@@ -82,6 +86,23 @@ in
         with a warning at rebuild time rather than failing the build. An agent
         not pinned, whether skipped or simply not listed, is still usable if its
         adapter is on `PATH`.
+      '';
+    };
+
+    aiMirror.package = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      example = lib.literalExpression "inputs.ai-mirror.packages.\${pkgs.system}.default";
+      description = ''
+        The `ai-mirror` package that lets Nixi drive the desktop, or `null` to
+        leave desktop control off entirely (the default).
+
+        ai-mirror is not in nixpkgs, so the package comes from your own config,
+        the same way the ACP adapters do. Setting it does NOT hand the agent
+        your desktop: the server is attached only in **Mechanic**, never at
+        Guide, and only on agents whose permission path Nixi has verified
+        (today, Claude). ai-mirror then asks for control on your desktop
+        itself, and `SUPER+SHIFT+ESCAPE` revokes it.
       '';
     };
 

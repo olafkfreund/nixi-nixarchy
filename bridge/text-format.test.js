@@ -90,3 +90,35 @@ test("a paragraph break still gets its spacer", () => {
 test("unbalanced fences terminate", () => {
   assert.doesNotThrow(() => md("a\n```\nb\nc"));
 });
+
+test("an image form that cannot be proved local never renders, whatever its shape", () => {
+  const root = "/home/u/.local/share/nixi/images";
+  // Each of these reached the network through an earlier version of an image
+  // allowlist on this branch, and the first three were fetched for real by the
+  // card -- a listener logged GET /a.png?via=NESTED, /b.png?via=ESCAPED and
+  // /c.png?via=SHORTCUT. The shortcut reference is the one this file missed:
+  // it has no "](" at all, so the scanner had nothing to match and passed the
+  // rest of the line through unchecked.
+  const forms = [
+    "![leak]\n\n[leak]: http://evil/c.png",          // shortcut reference
+    "![a][r]\n\n[r]: http://evil/f.png",              // full reference
+    "![a][]\n\n[a]: http://evil/g.png",               // collapsed reference
+    "![see [this] shot](http://evil/a.png)",          // balanced brackets in alt
+    "![a\\]b](http://evil/b.png)",                    // escaped bracket in alt
+    "![x](javascript:alert(1)",                       // unbalanced parens
+    "![d](data:image/png;base64,AAAA)",               // data uri
+    "![p](//evil/h.png)",                             // protocol-relative
+    "![o](file:///etc/shadow.png)",                   // outside the root
+    `![s](file://${root}-evil/x.png)`,                // lookalike sibling
+    `![t](file://${root}/../../secret.png)`,          // traversal
+  ];
+  for (const form of forms)
+    assert.ok(!/!\[/.test(T.spacedMarkdown(form, root)), form);
+
+  // and the one that must still render
+  assert.match(T.spacedMarkdown(`![image](file://${root}/abc123.png)`, root),
+    /!\[image\]\(file:\/\/\/home\/u\/\.local\/share\/nixi\/images\/abc123\.png\)/);
+
+  // an empty root allows nothing at all
+  assert.ok(!/!\[/.test(T.spacedMarkdown(`![image](file://${root}/abc.png)`, "")));
+});

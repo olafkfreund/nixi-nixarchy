@@ -18,6 +18,11 @@
 , codexAcp ? null
   # OpenCode speaks ACP itself (`opencode acp`); nixpkgs' opencode is MIT.
 , opencodeAcp ? null
+  # Desktop control (ai-mirror) is attached only at Mechanic, and only when a
+  # package is passed here. It is not in nixpkgs -- it comes from its own flake
+  # -- so the user's config supplies it, like the adapters above. Left null, the
+  # bridge never offers desktop control at all.
+, aiMirror ? null
 , runCommandLocal
   # Omarchy's source, for MenuModel.js. The flake passes its pinned input;
   # left null, MenuSearch keeps its /run/current-system import.
@@ -76,6 +81,8 @@ let
       "--set NIXI_CODEX_ACP_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${codexAcp}/bin/codex-acp" ])}"
     ++ lib.optional (opencodeAcp != null)
       "--set NIXI_OPENCODE_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${opencodeAcp}/bin/opencode" "acp" ])}"
+    ++ lib.optional (aiMirror != null)
+      "--set NIXI_AI_MIRROR_COMMAND ${lib.escapeShellArg (builtins.toJSON [ "${aiMirror}/bin/ai-mirror" "mcp" ])}"
   );
 
   # One file, not ${omarchySrc}: the tree is 128 MiB and would become a runtime dependency.
@@ -156,6 +163,8 @@ stdenvNoCC.mkDerivation {
     # Tour logic shared with the node tests, and the tour/learning data.
     install -Dm644 TourModel.js $plugin/TourModel.js
     install -Dm644 TextFormat.js $plugin/TextFormat.js
+    # The chart renderer, shared with the bridge and the node tests.
+    install -Dm644 MediaModel.js $plugin/MediaModel.js
     install -Dm644 share/tour.json $plugin/share/tour.json
     install -Dm644 share/learn.json $plugin/share/learn.json
     # The FAQ is searchable from the card, so it ships beside the QML.
@@ -240,7 +249,8 @@ stdenvNoCC.mkDerivation {
     # ---- overlay plugin ----
     plugin=$out/share/omarchy/plugins/${pluginId}
     for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js TextFormat.js \
-             share/tour.json share/learn.json share/faq.json bridge/bridge.js bridge/grounding.js \
+             MediaModel.js share/tour.json share/learn.json share/faq.json \
+             bridge/bridge.js bridge/chart.js bridge/grounding.js bridge/media.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done

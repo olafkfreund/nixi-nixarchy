@@ -19,7 +19,8 @@ new AgentSideConnection((conn) => ({
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} };
   },
   async newSession(params) {
-    log({ method: "newSession", cwd: params.cwd, meta: params._meta ?? null, opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null,
+    log({ method: "newSession", cwd: params.cwd, mcpServers: params.mcpServers ?? [], meta: params._meta ?? null,
+      opencodeConfig: process.env.OPENCODE_CONFIG_CONTENT ?? null,
       disableProjectConfig: process.env.OPENCODE_DISABLE_PROJECT_CONFIG ?? null });
     // FAKE_AGENT_MODES=config: modes only as a config option, the way OpenCode offers them.
     if (process.env.FAKE_AGENT_MODES === "config") return {
@@ -91,12 +92,25 @@ new AgentSideConnection((conn) => ({
       log({ method: "permissionOutcome", outcome: outcome.outcome });
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
-    const chunks = text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
+    const chunks = text.includes("PLEASE_IMAGE") ? []
+      : text.includes("PLEASE_CHART") ? ["Sizes:\n``", "`nixi-chart\ntitle: Store\nnix", "pkgs 12\nhome 3\n`", "``\nDone.\n```nixi-chart\nbad line\n```\n"] : text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
     for (const chunk of chunks)
       await conn.sessionUpdate({
         sessionId: params.sessionId,
         update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: chunk } },
       });
+    // PLEASE_IMAGE: text, an image block, a link block, then text, in that order.
+    if (text.includes("PLEASE_IMAGE")) {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]).toString("base64");
+      for (const content of [
+        { type: "text", text: "before" },
+        { type: "image", data: png, mimeType: "image/png" },
+        { type: "resource_link", name: "Manual", uri: "https://example.com/a b" },
+        { type: "image", data: "!!notbase64", mimeType: "image/png" },
+        { type: "text", text: "after" },
+      ]) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content } });
+      return { stopReason: "end_turn" };
+    }
     return { stopReason: "end_turn" };
   },
 }), ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

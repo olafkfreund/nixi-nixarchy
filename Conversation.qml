@@ -21,6 +21,7 @@ Item {
     return decodeURIComponent(String(Qt.resolvedUrl("bridge/" + name)).replace(/^file:\/\//, ""))
   }
 
+
   signal closed()
   signal copyConfirmed()
   signal permissionModeConfirmed(string mode)
@@ -160,7 +161,30 @@ Item {
   // which fetched an http:// image with its query string intact, on render,
   // with no user action (#42). TextFormat rewrites any image that is not a
   // contained local file to its alt text before it can reach the renderer.
-  readonly property string imageRoot: Quickshell.env("HOME") + "/.local/share/nixi/images"
+  // Honours NIXI_DATA, like the bridge's data directory, and normalises the way
+  // node's path.join does -- a NIXI_DATA of "/foo//bar" would otherwise make the
+  // card and the bridge disagree, and every image would silently become text.
+  readonly property string imageRoot: {
+    var data = String(Quickshell.env("NIXI_DATA") || "")
+    if (data === "") {
+      var home = String(Quickshell.env("HOME") || "")
+      if (home === "") return ""
+      data = home + "/.local/share/nixi"
+    }
+    // Lexical normalisation matching node's path.join, which the bridge uses:
+    // "//" collapsed, "." dropped and ".." RESOLVED. Leaving ".." unresolved
+    // made "/tmp/a/../b" disagree with the bridge's "/tmp/b", and every image
+    // would then quietly become a link.
+    var parts = data.split("/")
+    var stack = []
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i]
+      if (part === "" || part === ".") continue
+      if (part === "..") { stack.pop(); continue }
+      stack.push(part)
+    }
+    return "/" + stack.join("/") + "/images"
+  }
 
   // Read only so the card can SAY it ignored this, never to build a command
   // from it (#77). A deployment that set it would otherwise change behaviour

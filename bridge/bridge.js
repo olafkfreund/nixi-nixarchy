@@ -8,10 +8,12 @@ import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
+import { blockMarkdown, prepareMediaDir } from "./media.js";
+import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { permissionDetail } from "./permission-detail.js";
 import {
@@ -36,6 +38,9 @@ function configuredAgentCommand() {
   return command;
 }
 const agentCommand = startupValue(configuredAgentCommand);
+// Desktop control. Null unless a build pinned ai-mirror, and even then the trust
+// policy decides whether a session may attach it (never at Guide).
+const aiMirrorCommand = startupValue(() => resolveAiMirror());
 // The agent runs in nixi's config directory when it exists, so Claude Code loads
 // nixi's CLAUDE.md -- the tutor brief that points it at the nixi skill and the
 // local manual. Without it, HOME, as upstream did.
@@ -112,7 +117,7 @@ async function savePermissionMode(mode) {
 }
 
 function currentPolicy() {
-  return trustPolicy(agentName, trust, permissionMode);
+  return trustPolicy(agentName, trust, permissionMode, aiMirrorCommand);
 }
 
 function emit(event) {
@@ -121,7 +126,15 @@ function emit(event) {
 
 function messageText(content) {
   if (typeof content === "string") return content;
-  return content?.type === "text" ? content.text || "" : "";
+  if (content?.type === "text") return content.text || "";
+  // Media becomes markdown here, synchronously, so it keeps its place in the
+  // stream. The text goes through the LEARNED filter like any other, but it
+  // starts at a line break and its first character is "!" or "[", so it can
+  // never read as a LEARNED line.
+  // Guide never reads a named local file off disk; see blockMarkdown.
+  const { markdown, error } = blockMarkdown(content, mediaDir, currentPolicy().permission !== "cancel");
+  if (error) emit({ type: "diagnostic", text: `Media skipped: ${error}` });
+  return markdown;
 }
 
 // Config options may be grouped one level deep.
@@ -222,12 +235,42 @@ let shuttingDown = false;
 // only races this against a timeout, so a failed spawn just ends the wait.
 const childExited = once(child, "exit").catch(() => {});
 
+// #74: an MCP server named by a project config file is spawned at session start,
+// outside the permission layer, and Nixi cannot stop it. It can notice it.
+// claude-agent-acp forwards _meta.claudeCode.mcpServer = { name, source } on a
+// permission request (dist/acp-agent.js:5627), where source "sdk" means the host
+// registered it -- that is Nixi's own ai-mirror and nothing else. A request from
+// any other server is one Nixi never attached, so it is reported.
+//
+// This is detection, not a control: the request is still handled by the policy
+// below, cancelled at Guide like everything else. Its absence is logged once,
+// because an adapter bump that drops the field would otherwise go quiet.
+let mcpNoticed = false;
+let mcpFieldSeen = false;
+function noticeMcpSource(params) {
+  const tool = params.toolCall?._meta?.claudeCode;
+  if (!tool) return;
+  if (tool.mcpServer === undefined) {
+    if (!mcpFieldSeen && String(tool.toolName || "").startsWith("mcp__")) {
+      mcpFieldSeen = true;
+      emit({ type: "diagnostic", text: "This adapter does not say which MCP server a tool came from; unregistered servers cannot be noticed." });
+    }
+    return;
+  }
+  mcpFieldSeen = true;
+  const registered = attachedMcpServers.indexOf(tool.mcpServer.name) >= 0;
+  if (tool.mcpServer.source === "sdk" && registered) return;
+  if (mcpNoticed) return;
+  mcpNoticed = true;
+  emit({ type: "diagnostic", text: `A tool arrived from an MCP server Nixi did not attach: ${String(tool.mcpServer.name).slice(0, 60)} (${String(tool.mcpServer.source).slice(0, 20)}). Nixi's permission rules still apply to it.` });
+}
+
 const client = {
   sessionUpdate(params) {
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
-        const text = learned.push(messageText(update.content) || "");
+        const text = charts.push(learned.push(messageText(update.content) || ""));
         lastMessageId = update.messageId || lastMessageId;
         if (text) emit({ type: "text", text, messageId: update.messageId || "" });
         break;
@@ -257,6 +300,7 @@ const client = {
       label: option.name,
       kind: option.kind,
     }));
+    noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
     // to approve. This, not the session mode, is Guide's guarantee.
@@ -290,7 +334,11 @@ async function start() {
   });
   steeringSupported = initialized?._meta?.steering?.supported === true;
   const model = process.env.NIXI_MODEL;
-  const session = await connection.newSession({ cwd, mcpServers: [],
+  // Fixed for the life of the session: ACP has no way to attach or detach a
+  // server afterwards. A session started at Guide therefore has no desktop
+  // control even if the user switches to Mechanic later -- see the note in the
+  // trust handler, which says so rather than leaving it a mystery.
+  const session = await connection.newSession({ cwd, mcpServers: currentPolicy().mcpServers,
     ...(agentName === "claude" ? {
       _meta: { claudeCode: { options: {
         ...(model ? { model } : {}),
@@ -314,6 +362,7 @@ async function start() {
     } : {}),
   });
   sessionId = session.sessionId;
+  attachedMcpServers = currentPolicy().mcpServers.map((server) => server.name);
   sessionModes = session.modes || null;
   configOptions = session.configOptions || [];
   await applyRequestedModel(configOptions);
@@ -333,11 +382,18 @@ async function start() {
 
 // One filter per turn: a LEARNED line split across chunks is still caught.
 let learned = createLearnedFilter();
+// After it: the card sees text with each nixi-chart block already drawn.
+let charts = createChartFilter("");
 let lastMessageId = "";
 const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd(), ".local", "share", "nixi");
+// Images the agent sends, written by the bridge. Pruned once, here at startup.
+const mediaDir = join(learnedDir, "images");
+try { prepareMediaDir(mediaDir); }
+catch (error) { emit({ type: "diagnostic", text: `Media directory unavailable: ${error.message}` }); }
 
 async function finishLearned() {
-  const { visible, facts } = learned.flush();
+  const { facts, visible: tail } = learned.flush();
+  const visible = charts.push(tail) + charts.flush();
   if (visible) emit({ type: "text", text: visible, messageId: lastMessageId });
   // Guide does not write. LEARNED.md is a write, and one that steers later
   // sessions -- nixi-context reads it as a notes source and grounding.js
@@ -366,6 +422,7 @@ async function prompt(text) {
     const grounding = await groundPrompt(text);
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     learned = createLearnedFilter();
+    charts = createChartFilter(mediaDir);
     const response = await connection.prompt({
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
@@ -374,6 +431,12 @@ async function prompt(text) {
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;
+    // A cancelled or failed turn never reaches finishLearned, so anything the
+    // chart filter is still holding -- a block whose closing fence never
+    // arrived -- would be dropped. flush() is idempotent: on the success path
+    // it has already run and returns nothing.
+    const held = charts.flush();
+    if (held) emit({ type: "text", text: held, messageId: lastMessageId });
   }
 }
 
@@ -439,6 +502,10 @@ function cancelAllPendingPermissions() {
 
 let sessionModes = null;
 let configOptions = [];
+// The MCP servers this session was created with. ACP fixes them at newSession,
+// so a later trust change cannot add or remove one -- which is exactly why the
+// diagnostic below must compare against THIS, not against the current policy.
+let attachedMcpServers = [];
 
 // The session mode is the second layer under the permission policy. An agent
 // that does not offer the mode is still safe in Guide, because every request is
@@ -537,6 +604,13 @@ input.on("line", (line) => {
       // Leaving Mechanic must not leave an approval waiting in the card.
       if (trust === "guide") cancelAllPendingPermissions();
       ack("trust", true, { trust });
+      // The session's MCP servers were fixed when it was created. Switching up
+      // to Mechanic cannot attach ai-mirror to a session that started at Guide,
+      // and silently lacking desktop control would read as a broken feature.
+      // Rebuilding the session here would instead discard the conversation.
+      if (trust === "mechanic" && attachedMcpServers.length === 0
+          && currentPolicy().mcpServers.length > 0)
+        emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
     })().catch((error) => {
       ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
     });

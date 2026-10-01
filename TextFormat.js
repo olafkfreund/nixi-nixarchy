@@ -63,8 +63,18 @@ function safeImagesInLine(line, root) {
   while (i < line.length) {
     var start = line.indexOf("![", i)
     if (start < 0) { out += line.slice(i); break }
+    // No "](" after this "![": the form is a reference image (![a][r]), a
+    // SHORTCUT reference (![leak], resolved by a later "[leak]: url"), or
+    // something unparseable. Passing the rest of the line through would leave
+    // it an image nobody checked -- and a shortcut reference to an http:// URL
+    // was fetched for real by the card. Drop the "!" instead and keep scanning:
+    // what cannot be proved local is never an image.
     var altEnd = line.indexOf("](", start)
-    if (altEnd < 0) { out += line.slice(i); break }
+    if (altEnd < 0) {
+      out += line.slice(i, start) + "["
+      i = start + 2
+      continue
+    }
     // Markdown allows balanced parens inside a URL, so scan with a depth
     // counter rather than matching to the first ")" -- a regex doing that
     // leaves the trailing paren behind on ![x](javascript:alert(1)).
@@ -74,7 +84,13 @@ function safeImagesInLine(line, root) {
       if (line.charAt(j) === "(") depth++
       else if (line.charAt(j) === ")") depth--
     }
-    if (depth !== 0) { out += line.slice(i); break }
+    // Unbalanced parens: the destination cannot be read, so it cannot be proved
+    // local. Same rule -- deny by default rather than pass an unchecked image.
+    if (depth !== 0) {
+      out += line.slice(i, start) + "["
+      i = start + 2
+      continue
+    }
     var alt = line.slice(start + 2, altEnd)
     var source = line.slice(altEnd + 2, j - 1)
     out += line.slice(i, start)
