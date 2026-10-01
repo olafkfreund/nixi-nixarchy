@@ -111,3 +111,22 @@ export function resolveAdapter(agent, env = process.env) {
   const unfree = agent === "claude" ? " It needs unfree allowed, which nixarchy sets by default." : "";
   throw new Error(`${agent === "codex" ? "Codex" : "Claude Code"}'s ACP adapter (${name}) is not on the system PATH. On nixarchy add services.nixi.agents = [ "${agent}" ] to your Home Manager configuration; on plain NixOS add pkgs.${name}.${unfree} Either way: rebuild, then run omarchy-restart-shell -- a rebuild alone does not reach a shell that is already running. Or point ${variable} at an adapter you already have.`);
 }
+
+// Desktop control, resolved like the adapters above: nix/package.nix pins the
+// command with --set-default, so the environment can still override it, and a
+// machine that was never given an ai-mirror package has none.
+//
+// Validated exactly as bridge.js validates NIXI_ACP_COMMAND, because this is a
+// program Nixi spawns on the user's behalf: a malformed value must fail here
+// rather than reach spawn as something unintended.
+export function resolveAiMirror(env = process.env) {
+  const raw = String(env.NIXI_AI_MIRROR_COMMAND || "").trim();
+  if (!raw) return null;
+  let command;
+  try { command = JSON.parse(raw); }
+  catch { throw new Error("NIXI_AI_MIRROR_COMMAND must be a JSON array of arguments"); }
+  if (!Array.isArray(command) || command.length === 0
+      || command.some((argument) => typeof argument !== "string" || argument === ""))
+    throw new Error("NIXI_AI_MIRROR_COMMAND must be a non-empty JSON array of non-empty strings");
+  return command;
+}

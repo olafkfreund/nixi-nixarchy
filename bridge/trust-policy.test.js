@@ -20,8 +20,32 @@ test("every row of the trust table", () => {
     ["opencode", "mechanic", "yolo",       "build",   "yolo"],
   ];
   for (const [agent, trust, permissionMode, modeId, permission] of rows)
-    assert.deepEqual(trustPolicy(agent, trust, permissionMode), { trust, modeId, permission },
+    assert.deepEqual(trustPolicy(agent, trust, permissionMode), { trust, modeId, permission, mcpServers: [] },
       `${agent} / ${trust} / ${permissionMode}`);
+});
+
+test("ai-mirror is attached only at Mechanic, and only where the path is proved", () => {
+  const command = ["/nix/store/x/bin/ai-mirror", "mcp"];
+  const servers = (agent, trust, mode = "permission") =>
+    trustPolicy(agent, trust, mode, command).mcpServers;
+
+  // Guide's promise is that the agent cannot act on the machine. A desktop it
+  // can drive after ai-mirror's own dialog is still a desktop it can drive.
+  for (const agent of ["claude", "codex", "opencode"])
+    assert.deepEqual(servers(agent, "guide"), [], `${agent} at Guide`);
+  assert.deepEqual(servers("claude", "root"), [], "an unknown level is Guide");
+
+  // Only Claude: #74 showed MCP servers can sit outside the permission layer,
+  // and the attached-server path is read and proved for Claude alone.
+  assert.deepEqual(servers("claude", "mechanic"), [{
+    name: "ai-mirror", command: command[0], args: ["mcp"], env: [],
+  }]);
+  for (const agent of ["codex", "opencode"])
+    assert.deepEqual(servers(agent, "mechanic"), [], `${agent} is not proved`);
+
+  // No package pinned means no desktop control at all, at any level.
+  assert.deepEqual(trustPolicy("claude", "mechanic", "permission", null).mcpServers, []);
+  assert.deepEqual(trustPolicy("claude", "mechanic", "yolo", command).mcpServers.length, 1);
 });
 
 test("anything that is not a known trust level is Guide", () => {

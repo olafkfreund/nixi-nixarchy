@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { resolveHarness, resolveExecutable, resolveAdapter } from "./harness-policy.js";
+import { resolveHarness, resolveExecutable, resolveAdapter, resolveAiMirror } from "./harness-policy.js";
 
 test("system default, explicit override, and missing/unsupported defaults", () => {
   const home = mkdtempSync(join(tmpdir(), "ask-policy-"));
@@ -178,4 +178,19 @@ test("OpenCode is its own ACP server: `opencode acp`, found like any harness", (
     assert.throws(() => resolveAdapter("opencode", { PATH: bin, OPENCODE_PATH: join(bin, "missing") }),
       /configured executable is missing/);
   } finally { rmSync(bin, { recursive: true }); }
+});
+
+test("the ai-mirror command is pinned, validated, and absent by default", () => {
+  // No package pinned on this machine: Nixi offers no desktop control at all.
+  assert.equal(resolveAiMirror({}), null);
+  assert.equal(resolveAiMirror({ NIXI_AI_MIRROR_COMMAND: "   " }), null);
+
+  assert.deepEqual(
+    resolveAiMirror({ NIXI_AI_MIRROR_COMMAND: '["/nix/store/x/bin/ai-mirror","mcp"]' }),
+    ["/nix/store/x/bin/ai-mirror", "mcp"]);
+
+  // This value names a program Nixi spawns for the user, so a malformed one
+  // fails here rather than reaching spawn as something unintended.
+  for (const bad of ['"ai-mirror"', "[]", "[1]", '[""]', "not json", "{}", '["a",null]'])
+    assert.throws(() => resolveAiMirror({ NIXI_AI_MIRROR_COMMAND: bad }), /NIXI_AI_MIRROR_COMMAND/, bad);
 });

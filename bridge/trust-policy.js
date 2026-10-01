@@ -43,10 +43,30 @@ export const OPENCODE_PERMISSIONS = {
   },
 };
 
+// Agents whose MCP permission path Nixi has VERIFIED, not assumed. Read from
+// claude-agent-acp 0.81.2: ACP `mcpServers` are mapped into the Claude Code
+// SDK's own mcpServers option (dist/acp-agent.js:6214), and an `mcp__*` tool
+// call arrives at canUseTool (:5552) which ends in requestPermissionFromClient
+// (:5657) -- an ordinary ACP session/request_permission. So a server attached
+// here is INSIDE the permission layer.
+//
+// That is not true in general. Issue #74 established that an MCP server named
+// by a project config file is spawned at session start, outside the turn
+// sandbox, with no permission request at all. Codex and OpenCode are not on
+// this list because nobody has proved the attached-server path for them; an
+// agent joins it when someone does, not when it seems likely.
+export const MCP_CAPABLE_AGENTS = ["claude"];
+
 // permission: "cancel" (never shown), "ask" (queued in the card), "yolo" (auto allow_once)
-export function trustPolicy(agent, trust, permissionMode) {
+// mcpServers: what newSession may attach. Empty at Guide -- a desktop the agent
+// can drive after a dialog is still a desktop it can drive, and Guide's promise
+// is that it cannot act on the machine at all.
+export function trustPolicy(agent, trust, permissionMode, aiMirror = null) {
   const level = resolveTrust(trust);
   const modeId = (MODES[agent] || MODES.claude)[level];
-  if (level === "guide") return { trust: level, modeId, permission: "cancel" };
-  return { trust: level, modeId, permission: permissionMode === "yolo" ? "yolo" : "ask" };
+  if (level === "guide") return { trust: level, modeId, permission: "cancel", mcpServers: [] };
+  const mcpServers = aiMirror && MCP_CAPABLE_AGENTS.includes(agent)
+    ? [{ name: "ai-mirror", command: aiMirror[0], args: aiMirror.slice(1), env: [] }]
+    : [];
+  return { trust: level, modeId, permission: permissionMode === "yolo" ? "yolo" : "ask", mcpServers };
 }
