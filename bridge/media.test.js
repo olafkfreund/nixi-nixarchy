@@ -26,7 +26,7 @@ test("an allowed image is written 0600 and returned as a markdown image", sandbo
   assert.match(path, new RegExp(`^${dir}/[0-9a-f]{16}\\.png$`));
   assert.deepEqual(readFileSync(path), PNG);
   assert.equal(statSync(path).mode & 0o777, 0o600);
-  assert.deepEqual(readdirSync(dir), [path.slice(dir.length + 1)], "a temp file was left behind");
+  assert.deepEqual(readdirSync(dir), [path.slice(dir.length + 1)], "only the saved image is left; no temp file");
 }));
 
 test("the same image twice is one file", sandbox((root, dir) => {
@@ -118,4 +118,19 @@ test("an emitted image always carries alt text", sandbox((root, dir) => {
   const named = blockMarkdown(
     { type: "resource_link", name: "a]b\nLEARNED: x", uri: `file://${root}/shot.png` }, dir, true).markdown;
   assert.match(named, /^\n!\[[^\]\n]+\]\(file:\/\//, "a hostile name is flattened but still non-empty");
+}));
+
+test("a backslash never reaches an alt or a link label", sandbox((root, dir) => {
+  prepareMediaDir(dir);
+  // A trailing backslash escapes the closing bracket, so the image renders as
+  // literal text -- the same silent invisibility as an empty alt.
+  writeFileSync(join(root, "shot.png"), PNG);
+  const out = blockMarkdown(
+    { type: "resource_link", name: "Store size\\", uri: `file://${root}/shot.png` }, dir, true).markdown;
+  assert.ok(!out.includes("\\"), out);
+  assert.match(out, /^\n!\[[^\]\\]+\]\(file:\/\//);
+
+  const link = blockMarkdown(
+    { type: "resource_link", name: "doc\\", uri: "https://example.com/a" }, dir).markdown;
+  assert.ok(!link.includes("\\"), link);
 }));

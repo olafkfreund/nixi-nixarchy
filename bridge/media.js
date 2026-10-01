@@ -83,7 +83,7 @@ function fromBase64(data) {
 
 const percent = (c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`;
 function link(name, uri) {
-  const label = String(name).replace(/[\u0000-\u001f\u007f[\]]/g, " ").trim().slice(0, 200) || "link";
+  const label = String(name).replace(/[\u0000-\u001f\u007f[\]\\]/g, " ").trim().slice(0, 200) || "link";
   return `\n[${label}](${String(uri).replace(/[\u0000- \u007f()<>]/g, percent)})\n`;
 }
 // The alt text is never empty. Qt's markdown importer drops an image whose alt
@@ -91,7 +91,7 @@ function link(name, uri) {
 // renders -- so an empty alt would mean every image the bridge writes is
 // silently invisible in the card. Proved against a live Quickshell window.
 function image(path, alt) {
-  const label = String(alt || "").replace(/[\u0000-\u001f\u007f[\]]/g, " ").trim().slice(0, 80) || "image";
+  const label = String(alt || "").replace(/[\u0000-\u001f\u007f[\]\\]/g, " ").trim().slice(0, 80) || "image";
   return `\n![${label}](file://${path})\n`;
 }
 

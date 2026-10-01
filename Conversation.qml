@@ -30,7 +30,10 @@ Item {
       if (home === "") return ""
       data = home + "/.local/share/nixi"
     }
-    return data.replace(/\/+$/, "") + "/media"
+    // Normalised the way node's path.join does it in the bridge, or the two
+    // disagree on a NIXI_DATA like "/foo//bar" and every image silently
+    // becomes a link.
+    return data.replace(/\/+/g, "/").replace(/\/\.(?=\/|$)/g, "").replace(/\/+$/, "") + "/media"
   }
 
   signal closed()

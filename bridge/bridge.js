@@ -368,6 +368,12 @@ async function prompt(text) {
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;
+    // A cancelled or failed turn never reaches finishLearned, so anything the
+    // chart filter is still holding -- a block whose closing fence never
+    // arrived -- would be dropped. flush() is idempotent: on the success path
+    // it has already run and returns nothing.
+    const held = charts.flush();
+    if (held) emit({ type: "text", text: held, messageId: lastMessageId });
   }
 }
 

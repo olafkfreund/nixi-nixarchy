@@ -11,10 +11,25 @@ var MAX_LABEL = 48
 var MAX_TITLE = 80
 var MAX_VALUE = 1e15
 
-// "![alt](url "title")" and "![alt][ref]". Group 1 is the whole image minus the
-// leading "!"; group 2 the inline url (angle brackets allowed), if any.
-var IMAGE = /!(\[[^\]]*\](?:\(\s*(<[^>]*>|[^)\s]*)[^)]*\)|\[[^\]]*\]))/g
+// DEFAULT DENY. Every "![" outside a fenced block loses its "!" -- becoming an
+// ordinary link -- unless what follows it matches ALLOWED exactly and names a
+// file inside the media directory.
+//
+// The earlier version matched images with a regex and passed anything it did
+// not recognise through untouched. That is default-ALLOW on no-match, and
+// CommonMark has more image forms than a regex of that shape can hold: nested
+// brackets in the alt (`![see [this] shot](url)`), an escaped bracket
+// (`![a\]b](url)`), and the shortcut reference (`![leak]` with a later
+// `[leak]: url`) all slipped past and were fetched for real by the card --
+// proved against a listener, which logged all three.
+//
+// So the question is inverted. Nothing is an image until it is proved to be a
+// local one, and an unrecognised form loses its "!" like everything else.
 var FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+// ![alt](url) on one line: no brackets, backslash or whitespace anywhere in the
+// alt or the url. A backslash could escape the closing bracket; whitespace
+// could hide a second destination. Anything richer is not worth admitting.
+var ALLOWED = /^!\[([^\[\]\\]*)\]\((file:\/\/\/[^\s()<>\\\]\[]*)\)/
 
 // An image renders only from a file:// path inside the media directory. The
 // trailing separator stops "/media-evil/" passing as "/media/"; ".." and an
@@ -24,6 +39,28 @@ function allowed(url, dir) {
   if (url.indexOf("..") !== -1 || /%2e/i.test(url) || url.indexOf("\\") !== -1) return false
   var path = url.slice(7)
   return path.length > dir.length && path.slice(0, dir.length) === dir
+}
+
+// Linear: one pass, no backtracking. The binding re-runs this over the whole
+// accumulated body on every streamed chunk, so it cannot afford an ambiguous
+// pattern -- the previous one went quadratic on an unterminated "![a](".
+function denyImages(line, dir) {
+  var out = ""
+  var i = 0
+  while (true) {
+    var at = line.indexOf("![", i)
+    if (at < 0) return out + line.slice(i)
+    out += line.slice(i, at)
+    var match = ALLOWED.exec(line.slice(at))
+    if (match && allowed(match[2], dir)) {
+      out += match[0]
+      i = at + match[0].length
+    } else {
+      // Drop the "!": an image nobody proved local is a link.
+      out += "["
+      i = at + 2
+    }
+  }
 }
 
 function sanitize(markdown, mediaDir) {
@@ -43,12 +80,7 @@ function sanitize(markdown, mediaDir) {
       }
       if (f) { fence = { ch: f[1][0], len: f[1].length }; continue }
       if (line.indexOf("![") === -1) continue
-      lines[i] = line.replace(IMAGE, function(whole, rest, url) {
-        // A reference-style image has no inline url, so it can never be proved
-        // local: it becomes a link too.
-        if (url !== undefined && allowed(url.replace(/^<|>$/g, ""), dir)) return whole
-        return rest
-      })
+      lines[i] = denyImages(line, dir)
     }
     return lines.join("\n")
   } catch (e) {

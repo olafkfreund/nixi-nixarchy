@@ -208,7 +208,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     plugin=$out/share/omarchy/plugins/${pluginId}
     for f in manifest.json Ask.qml Conversation.qml MenuSearch.qml Tour.qml TourModel.js \
              MediaModel.js share/tour.json share/learn.json share/faq.json \
-             bridge/bridge.js bridge/grounding.js bridge/media.js \
+             bridge/bridge.js bridge/chart.js bridge/grounding.js bridge/media.js \
              bridge/trust-policy.js bridge/nixi-node; do
       test -s "$plugin/$f" || { echo "overlay plugin is missing $f"; exit 1; }
     done

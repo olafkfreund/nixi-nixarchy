@@ -18,6 +18,11 @@ const OPEN_PREFIX = "```nixi-chart";
 export function createChartFilter(mediaDir) {
   let pending = "";
   let block = null;   // { lines, raw } while inside a nixi-chart fence
+  // A fence is only a fence at the START of a line. Without this the filter
+  // forgets it is mid-line after flushing a partial one, and the rest of a
+  // sentence like "Open a block with ```nixi-chart" gets held and then read as
+  // an opening fence -- so the output depended on where the stream was chunked.
+  let atLineStart = true;
 
   function finish() {
     const done = block;
@@ -27,14 +32,16 @@ export function createChartFilter(mediaDir) {
     return markdown || done.raw;
   }
 
-  function line(text, terminator) {
+  // whole says this text began at a line start; a tail left over from a line
+  // already partly emitted can never open or close a fence.
+  function line(text, terminator, whole) {
     if (block) {
       block.raw += text + terminator;
-      if (CLOSE.test(text)) return finish();
+      if (whole && CLOSE.test(text)) return finish();
       block.lines.push(text);
       return "";
     }
-    if (OPEN.test(text)) { block = { lines: [], raw: text + terminator }; return ""; }
+    if (whole && OPEN.test(text)) { block = { lines: [], raw: text + terminator }; return ""; }
     return text + terminator;
   }
 
@@ -52,14 +59,21 @@ export function createChartFilter(mediaDir) {
       while ((index = pending.indexOf("\n")) >= 0) {
         const text = pending.slice(0, index);
         pending = pending.slice(index + 1);
-        out += line(text, "\n");
+        out += line(text, "\n", atLineStart);
+        atLineStart = true;
       }
-      if (!block && pending && !couldBeOpen(pending)) { out += pending; pending = ""; }
+      // Hold a partial line only where it could still become an opening fence,
+      // which it can only do at the start of a line.
+      if (!block && pending && !(atLineStart && couldBeOpen(pending))) {
+        out += pending;
+        pending = "";
+        atLineStart = false;
+      }
       return out;
     },
     flush() {
       let out = "";
-      if (block && CLOSE.test(pending)) { block.raw += pending; pending = ""; out = finish(); }
+      if (block && atLineStart && CLOSE.test(pending)) { block.raw += pending; pending = ""; out = finish(); }
       if (block) { out = block.raw; block = null; }
       out += pending;
       pending = "";

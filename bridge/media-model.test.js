@@ -108,3 +108,43 @@ test("sanitize fails closed when something inside it throws", () => {
   assert.ok(!out.includes("!["), "no image survives the fallback");
   assert.ok(out.includes("http://evil/?a=1"), "the text is still readable as a link");
 });
+
+test("no image survives unless it is proved local, whatever form it takes", () => {
+  const dir = "/home/u/.local/share/nixi/media";
+  // Every one of these reached the network through the first version of this
+  // allowlist. The first three were fetched for real by the card -- a listener
+  // logged GET /a.png?via=NESTED, /b.png?via=ESCAPED and /c.png?via=SHORTCUT --
+  // because that version matched images with a regex and let anything it did
+  // not recognise through. These are the regression tests for default-deny.
+  const bypasses = [
+    "![see [this] shot](http://evil/a.png)",        // balanced brackets in the alt
+    "![a\\]b](http://evil/b.png)",                  // backslash-escaped bracket
+    "![leak]\n\n[leak]: http://evil/c.png",         // shortcut reference
+    "![a](\nhttp://evil/d.png)",                    // destination on the next line
+    "![a\nb](http://evil/e.png)",                   // alt spanning two lines
+    "![a][r]\n\n[r]: http://evil/f.png",            // full reference
+    "![a][]\n\n[a]: http://evil/g.png",             // collapsed reference
+    "![a](<http://evil/h.png>)",                    // angle-bracketed destination
+    '![a](http://evil/i.png "title")',              // destination with a title
+    "![d](data:image/png;base64,AAAA)",             // data uri
+    "![o](file:///etc/shadow.png)",                 // outside the media directory
+    `![s](file://${dir}-evil/x.png)`,               // sibling directory
+    `![u](file://${dir}/../../secret.png)`,         // traversal
+    `![e](file://${dir}/%2e%2e/secret.png)`,        // encoded traversal
+  ];
+  for (const input of bypasses)
+    assert.ok(!/!\[/.test(Media.sanitize(input, dir)), input);
+
+  // and the one that must still work
+  assert.match(Media.sanitize(`![image](file://${dir}/abc123.png)`, dir),
+    new RegExp(`^!\\[image\\]\\(file://${dir}/abc123\\.png\\)$`));
+});
+
+test("sanitize stays linear on a hostile line", () => {
+  // The first version's pattern was ambiguous and went quadratic on an
+  // unterminated "![a](" -- 266ms for one 20k line, re-run on every chunk.
+  const line = "![a](" + "x".repeat(20000);
+  const started = Date.now();
+  Media.sanitize(line, "/home/u/.local/share/nixi/media");
+  assert.ok(Date.now() - started < 50, `took ${Date.now() - started}ms`);
+});
