@@ -86,7 +86,14 @@ function link(name, uri) {
   const label = String(name).replace(/[\u0000-\u001f\u007f[\]]/g, " ").trim().slice(0, 200) || "link";
   return `\n[${label}](${String(uri).replace(/[\u0000- \u007f()<>]/g, percent)})\n`;
 }
-const image = (path) => `\n![](file://${path})\n`;
+// The alt text is never empty. Qt's markdown importer drops an image whose alt
+// is "" -- `![](file://x.png)` renders nothing at all, while `![image](...)`
+// renders -- so an empty alt would mean every image the bridge writes is
+// silently invisible in the card. Proved against a live Quickshell window.
+function image(path, alt) {
+  const label = String(alt || "").replace(/[\u0000-\u001f\u007f[\]]/g, " ").trim().slice(0, 80) || "image";
+  return `\n![${label}](file://${path})\n`;
+}
 
 // Returns { markdown, error }. markdown is "" when nothing could be shown;
 // error says why, for a diagnostic.
@@ -103,7 +110,7 @@ export function blockMarkdown(block, dir, localFiles = false) {
       if (!bytes || !looksLike(mime, bytes)) return { markdown: "", error: "image data is not valid" };
       const hash = createHash("sha256").update(block.data).digest("hex").slice(0, 16);
       const path = save(dir, bytes, hash, mime);
-      return path ? { markdown: image(path) } : { markdown: "", error: "could not write the image" };
+      return path ? { markdown: image(path, "image") } : { markdown: "", error: "could not write the image" };
     }
     if (block.type === "resource_link") {
       if (typeof block.name !== "string" || typeof block.uri !== "string" || !block.name || !block.uri)
@@ -117,7 +124,7 @@ export function blockMarkdown(block, dir, localFiles = false) {
           if (looksLike(mime, bytes)) {
             const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
             const path = save(dir, bytes, hash, mime);
-            if (path) return { markdown: image(path) };
+            if (path) return { markdown: image(path, block.name) };
           }
         }
       }

@@ -22,7 +22,7 @@ test("an allowed image is written 0600 and returned as a markdown image", sandbo
   assert.equal(statSync(dir).mode & 0o777, 0o700);
   const { markdown, error } = blockMarkdown(png, dir);
   assert.equal(error, undefined);
-  const [, path] = markdown.match(/^\n!\[\]\(file:\/\/(.+)\)\n$/);
+  const [, path] = markdown.match(/^\n!\[[^\]]+\]\(file:\/\/(.+)\)\n$/);
   assert.match(path, new RegExp(`^${dir}/[0-9a-f]{16}\\.png$`));
   assert.deepEqual(readFileSync(path), PNG);
   assert.equal(statSync(path).mode & 0o777, 0o600);
@@ -74,7 +74,7 @@ test("a local image file is copied in and shown; a fake one is a link", sandbox(
   writeFileSync(join(root, "fake.png"), "text pretending to be a png");
   symlinkSync(join(root, "shot.png"), join(root, "ln.png"));
   const shown = blockMarkdown({ type: "resource_link", name: "shot", uri: `file://${root}/shot.png` }, dir, true).markdown;
-  assert.match(shown, new RegExp(`^\\n!\\[\\]\\(file://${dir}/[0-9a-f]{16}\\.png\\)\\n$`));
+  assert.match(shown, new RegExp(`^\\n!\\[[^\\]]+\\]\\(file://${dir}/[0-9a-f]{16}\\.png\\)\\n$`));
   for (const name of ["fake.png", "ln.png", "missing.png"])
     assert.match(blockMarkdown({ type: "resource_link", name, uri: `file://${root}/${name}` }, dir, true).markdown, /^\n\[/, name);
 
@@ -102,6 +102,20 @@ test("through the bridge: media keeps its place in the stream", async () => {
   const run = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_IMAGE" }] });
   const shown = run.events.filter((e) => e.type === "text").map((e) => e.text).join("");
   assert.match(shown, new RegExp(
-    `^before\\n!\\[\\]\\(file://${run.home}/\\.local/share/nixi/media/[0-9a-f]{16}\\.png\\)\\n\\n\\[Manual\\]\\(https://example\\.com/a%20b\\)\\nafter$`));
+    `^before\\n!\\[[^\\]]+\\]\\(file://${run.home}/\\.local/share/nixi/media/[0-9a-f]{16}\\.png\\)\\n\\n\\[Manual\\]\\(https://example\\.com/a%20b\\)\\nafter$`));
   assert.ok(run.events.some((e) => e.type === "diagnostic" && /Media skipped/.test(e.text)), "bad data is reported");
 });
+
+test("an emitted image always carries alt text", sandbox((root, dir) => {
+  prepareMediaDir(dir);
+  // Qt's markdown importer renders nothing for `![](url)` -- an empty alt makes
+  // the image invisible in the card. Proved against a live Quickshell window,
+  // so this is a rendering requirement, not a style preference.
+  const png = { type: "image", mimeType: "image/png", data: PNG.toString("base64") };
+  assert.match(blockMarkdown(png, dir).markdown, /^\n!\[[^\]]+\]\(file:\/\//);
+
+  writeFileSync(join(root, "shot.png"), PNG);
+  const named = blockMarkdown(
+    { type: "resource_link", name: "a]b\nLEARNED: x", uri: `file://${root}/shot.png` }, dir, true).markdown;
+  assert.match(named, /^\n!\[[^\]\n]+\]\(file:\/\//, "a hostile name is flattened but still non-empty");
+}));

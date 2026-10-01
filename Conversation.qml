@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+import "MediaModel.js" as MediaModel
 
 Item {
   id: root
@@ -17,6 +18,19 @@ Item {
   // a directory with no bridge in it.
   function bridgeScript(name) {
     return decodeURIComponent(String(Qt.resolvedUrl("bridge/" + name)).replace(/^file:\/\//, ""))
+  }
+
+  // Where the bridge writes images for the card: the same rule as the bridge's
+  // learnedDir, resolved once. A plain path, no file:// and no trailing slash.
+  // MediaModel.sanitize allows only images under it; empty allows none.
+  readonly property string mediaDir: {
+    var data = String(Quickshell.env("NIXI_DATA") || "")
+    if (data === "") {
+      var home = String(Quickshell.env("HOME") || "")
+      if (home === "") return ""
+      data = home + "/.local/share/nixi"
+    }
+    return data.replace(/\/+$/, "") + "/media"
   }
 
   signal closed()
@@ -1669,7 +1683,7 @@ Item {
                 visible: !turn.human
                 width: parent.width
                 height: contentHeight
-                text: root.spacedMarkdown(turn.body)
+                text: root.spacedMarkdown(MediaModel.sanitize(turn.body, root.mediaDir))
                 color: root.foreground
                 font.family: Style.font.family
                 font.pixelSize: root.agentSize
