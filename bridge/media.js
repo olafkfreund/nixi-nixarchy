@@ -138,3 +138,12 @@ export function blockMarkdown(block, dir, localFiles = false) {
     return { markdown: "", error: "could not read the content block" };
   }
 }
+
+// A chart the bridge drew itself (MediaModel.chartSvg), saved like any image.
+// Returns the markdown image, or null when it could not be written.
+export function svgMarkdown(svg, title, dir) {
+  const bytes = Buffer.from(svg, "utf8");
+  if (bytes.length > LIMITS.bytes) return null;
+  const path = save(dir, bytes, createHash("sha256").update(bytes).digest("hex").slice(0, 16), "image/svg+xml");
+  return path ? image(path, title || "chart") : null;
+}

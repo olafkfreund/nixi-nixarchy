@@ -62,7 +62,8 @@ new AgentSideConnection((conn) => ({
       log({ method: "permissionOutcome", outcome: outcome.outcome });
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
-    const chunks = text.includes("PLEASE_IMAGE") ? [] : text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
+    const chunks = text.includes("PLEASE_IMAGE") ? []
+      : text.includes("PLEASE_CHART") ? ["Sizes:\n``", "`nixi-chart\ntitle: Store\nnix", "pkgs 12\nhome 3\n`", "``\nDone.\n```nixi-chart\nbad line\n```\n"] : text.includes("PLEASE_LEARN") ? ["Use nixarchy apply.\nLEAR", "NED: apps queue in apps.nix"] : ["ok"];
     for (const chunk of chunks)
       await conn.sessionUpdate({
         sessionId: params.sessionId,

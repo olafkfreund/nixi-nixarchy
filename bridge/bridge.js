@@ -11,6 +11,7 @@ import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
+import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS } from "./trust-policy.js";
 import {
   ClientSideConnection,
@@ -202,7 +203,7 @@ const client = {
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
-        const text = learned.push(messageText(update.content) || "");
+        const text = charts.push(learned.push(messageText(update.content) || ""));
         lastMessageId = update.messageId || lastMessageId;
         if (text) emit({ type: "text", text, messageId: update.messageId || "" });
         break;
@@ -293,6 +294,8 @@ async function start() {
 
 // One filter per turn: a LEARNED line split across chunks is still caught.
 let learned = createLearnedFilter();
+// After it: the card sees text with each nixi-chart block already drawn.
+let charts = createChartFilter("");
 let lastMessageId = "";
 const learnedDir = process.env.NIXI_DATA || join(process.env.HOME || process.cwd(), ".local", "share", "nixi");
 // Images the agent sends, written by the bridge. Pruned once, here at startup.
@@ -301,7 +304,8 @@ try { prepareMediaDir(mediaDir); }
 catch (error) { emit({ type: "diagnostic", text: `Media directory unavailable: ${error.message}` }); }
 
 async function finishLearned() {
-  const { visible, facts } = learned.flush();
+  const { facts, visible: tail } = learned.flush();
+  const visible = charts.push(tail) + charts.flush();
   if (visible) emit({ type: "text", text: visible, messageId: lastMessageId });
   try { await appendLearned(facts, learnedDir); }
   catch (error) { emit({ type: "diagnostic", text: `Could not record LEARNED facts: ${error.message}` }); }
@@ -316,6 +320,7 @@ async function prompt(text) {
     const grounding = await groundPrompt(text);
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     learned = createLearnedFilter();
+    charts = createChartFilter(mediaDir);
     const response = await connection.prompt({
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
