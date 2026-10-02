@@ -2343,7 +2343,12 @@ Item {
           // shown below in the urgent colour instead.
           Flickable {
             width: parent.width
-            height: Math.min(detailText.implicitHeight, permissionLayer.height * 0.45)
+            // Stacked options add two or three button heights. The detail is
+            // scrollable and the buttons are not, so the detail gives way: a
+            // reject button pushed off the card cannot be clicked, and "I could
+            // not find No" must never be a reason someone approves.
+            height: Math.min(detailText.implicitHeight,
+              permissionLayer.height * ((root.pendingPermission.options || []).length > 2 ? 0.28 : 0.45))
             visible: root.pendingPermission.detail !== ""
             clip: true
             contentWidth: width
@@ -2419,9 +2424,12 @@ Item {
                 // The agent's own words, never Nixi's: only the agent knows
                 // what its "always" scopes to (#53). Elided to fit rather than
                 // reworded, with the whole label on hover.
+                // Bounded for rendering only: the hover text carries the whole
+                // scope the agent named, or the tooltip would quietly withhold
+                // the very thing it exists to show.
                 readonly property string fullLabel:
                   (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
-                  + String(modelData.label || modelData.id || "").slice(0, 160)
+                  + String(modelData.label || modelData.id || "")
                 width: (optionGrid.width - optionGrid.spacing * (optionGrid.columns - 1)) / optionGrid.columns
                 text: labelMetrics.elidedText
                 tooltipText: fullLabel === labelMetrics.elidedText ? "" : fullLabel

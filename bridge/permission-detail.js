@@ -29,12 +29,22 @@ const shellQuote = (arg) => SHELL_SAFE.test(String(arg))
 // before approving. Anything that is not a scalar keeps its JSON, because its
 // shape is the part worth seeing -- and every key is still printed, which is
 // the property that matters (#50).
+// A value may not forge a field. "key: value" is only readable if the value
+// cannot contain a newline -- a model-written `description` of
+// "harmless\ntimeout: unlimited" printed a second `timeout` line above the real
+// one, in the prompt someone reads before approving a command. A string with any
+// control character is therefore quoted, which escapes the newline and makes the
+// quoting itself the signal that this value contains something unusual.
+const CONTROL = /[\u0000-\u001f\u007f]/;
+const scalarText = (value) =>
+  typeof value === "string" && CONTROL.test(value) ? JSON.stringify(value) : String(value);
+
 function fieldLines(rest) {
   const scalar = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
   const flat = Object.keys(rest).filter((key) => scalar(rest[key]));
   const deep = Object.keys(rest).filter((key) => !scalar(rest[key]));
   return [
-    ...flat.map((key) => `${key}: ${String(rest[key])}`),
+    ...flat.map((key) => `${key}: ${scalarText(rest[key])}`),
     ...(deep.length ? [JSON.stringify(Object.fromEntries(deep.map((key) => [key, rest[key]])), null, 2)] : []),
   ].join("\n");
 }
