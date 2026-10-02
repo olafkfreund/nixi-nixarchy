@@ -24,13 +24,28 @@ const shellQuote = (arg) => SHELL_SAFE.test(String(arg))
 // whatever a tool carries beside it invisible on the card being approved, and
 // an allowlist would only move that gap to the NEXT tool's new field, silently
 // (#50). `command` goes first because it is the part that must be read.
+// A scalar reads as "key: value". A JSON blob around a one-line description
+// was three lines of punctuation for one fact, on the card someone has to read
+// before approving. Anything that is not a scalar keeps its JSON, because its
+// shape is the part worth seeing -- and every key is still printed, which is
+// the property that matters (#50).
+function fieldLines(rest) {
+  const scalar = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
+  const flat = Object.keys(rest).filter((key) => scalar(rest[key]));
+  const deep = Object.keys(rest).filter((key) => !scalar(rest[key]));
+  return [
+    ...flat.map((key) => `${key}: ${String(rest[key])}`),
+    ...(deep.length ? [JSON.stringify(Object.fromEntries(deep.map((key) => [key, rest[key]])), null, 2)] : []),
+  ].join("\n");
+}
+
 function rawInputText(rawInput) {
   if (!rawInput || typeof rawInput !== "object") return "";
   const { command, ...rest } = rawInput;
   const head = typeof command === "string" ? command
     : Array.isArray(command) ? command.map(shellQuote).join(" ")
     : command === undefined ? "" : JSON.stringify(command, null, 2);
-  const tail = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : "";
+  const tail = Object.keys(rest).length ? fieldLines(rest) : "";
   return [head, tail].filter(Boolean).join("\n");
 }
 
