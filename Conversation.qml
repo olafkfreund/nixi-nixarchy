@@ -954,6 +954,14 @@ Item {
       setTrust(text.slice(1))
       return
     }
+    // Undo is answered by the bridge, never the agent: like /guide it must not
+    // fall through to prompt. Matched exactly, like the other slash commands.
+    if (text === "/undo") {
+      prompt.text = ""
+      if (bridgeReady && agent.running) agent.write(JSON.stringify({ type: "undo" }) + "\n")
+      else showNixiMessage("Undo needs the agent bridge running.")
+      return
+    }
     // The tour and the learning path are typed, not permanent buttons.
     if (text === "/tour" || text === "/learn") {
       prompt.text = ""
@@ -1199,6 +1207,11 @@ Item {
         var facts = event.facts || []
         for (var f = 0; f < facts.length; f++)
           showNixiMessage("Noted: " + String(facts[f]))
+      } else if (event.type === "notice") {
+        // The bridge speaking for itself (#90): a backup it could not make, a
+        // Hyprland change it restored, the result of /undo. Paths in it are
+        // already in code spans, with backticks stripped (#42).
+        showNixiMessage(String(event.text || ""))
       } else if (event.type === "status") {
         statusText = String(event.text || "Working…")
       } else if (event.type === "tool") {
