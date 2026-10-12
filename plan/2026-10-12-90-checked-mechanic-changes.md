@@ -287,3 +287,7 @@ With the revert, the skill text goes back to telling the agent to make
   not be checked". Notices wrap paths in code spans (#42), which step 5 asked
   for. Known gap, left for review: a restore that fails partway through a
   multi-file `/undo` leaves the earlier files restored but not marked.
+- **Step 2 (coder):** `guarded()` checks Mechanic itself. The YOLO branch
+  passes the already-filtered options. Left for review: `changes.endTurn()`
+  runs only when `prompt()` succeeds. A turn that errors leaves its change set
+  open, and the next turn's edits join it.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
@@ -16,6 +16,7 @@ import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { permissionDetail } from "./permission-detail.js";
+import { createChanges } from "./changes.js";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -229,6 +230,29 @@ let permissionSequence = 0;
 let sessionId = null;
 let connection = null;
 let turnRunning = false;
+
+// #90: Mechanic backs up a file before the agent is allowed to write it. The
+// agent writes after we answer, so the answer waits for the copy. Shell edits
+// arrive as `execute` and are not covered. Edits get no "allow always" (see
+// requestPermission): a standing yes would skip this backup on later edits.
+const EDIT_KINDS = new Set(["edit", "delete", "move"]);
+const stateHome = process.env.XDG_STATE_HOME || join(process.env.HOME || process.cwd(), ".local", "state");
+const changes = createChanges({
+  stateDir: join(stateHome, "nixi", "changes"),
+  cwd,
+  home: process.env.HOME || process.cwd(),
+  exec: (args) => new Promise((resolve) =>
+    execFile("hyprctl", args, { timeout: 5000 }, (error, stdout) => resolve({ ok: !error, stdout: String(stdout || "") }))),
+});
+
+async function guarded(toolCall, outcome, options) {
+  // Only an allow* answer is a yes; a reject must not copy anything.
+  const picked = options.find((o) => o.id === outcome.outcome.optionId);
+  if (!String(picked?.kind || "").startsWith("allow")) return outcome;
+  if (trust !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
+  for (const text of await changes.backup(toolCall)) emit({ type: "notice", text });
+  return outcome;
+}
 let steeringSupported = false;
 let shuttingDown = false;
 // Settles when the child exits. A spawn error rejects once(); the exit path
@@ -277,6 +301,10 @@ const client = {
       }
       case "tool_call":
       case "tool_call_update":
+        if (update.status === "completed") {
+          changes.completed(update.toolCallId).catch((error) =>
+            emit({ type: "diagnostic", text: `Could not record the finished edit: ${error.message}` }));
+        }
         emit({
           type: "tool",
           title: update.title || update.name || "Using a tool",
@@ -299,7 +327,7 @@ const client = {
       id: option.optionId,
       label: option.name,
       kind: option.kind,
-    }));
+    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"));
     noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
@@ -311,12 +339,12 @@ const client = {
     if (policy.permission === "yolo") {
       const outcome = choose(options, "allow_once");
       if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
-      return Promise.resolve(outcome);
+      return guarded(params.toolCall, outcome, options);
     }
     const { detail, omitted } = permissionDetail(params.toolCall);
     emit({ type: "permission", id: requestId, title, options, detail, omitted });
     return new Promise((resolve) => {
-      pendingPermissions.set(requestId, { resolve, options });
+      pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
     });
   },
 };
@@ -428,6 +456,7 @@ async function prompt(text) {
       prompt: [{ type: "text", text: grounding.prompt }],
     });
     await finishLearned();
+    for (const text of await changes.endTurn()) emit({ type: "notice", text });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;
@@ -457,7 +486,7 @@ function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
-  pending.resolve(select(pending.options, String(message.optionId || "")));
+  pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
@@ -547,7 +576,7 @@ async function applyTrustMode(targetTrust = trust) {
 function allowAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
     pendingPermissions.delete(id);
-    pending.resolve(choose(pending.options, "allow_once"));
+    pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
   }
 }
 
@@ -589,6 +618,11 @@ input.on("line", (line) => {
     steer(String(message.text || "")).catch((error) => {
       ack("steer", false, { message: error.message || String(error) });
     });
+  } else if (message.type === "undo") {
+    // Undo changes the machine; Guide promises nothing does. Leaving Guide is typed.
+    if (turnRunning) emit({ type: "notice", text: "Undo is refused while a turn is running." });
+    else if (trust === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
+    else changes.undo().then((result) => emit({ type: "notice", text: result.message }));
   } else if (message.type === "permission") {
     answerPermission(message);
   } else if (message.type === "trust") {

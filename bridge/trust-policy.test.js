@@ -312,12 +312,16 @@ test("Guide and Mechanic still grant the same reads; only askBeforeReading withd
 // a boolean, which collapsed every choice to allow_once and discarded it.
 
 const always = { FAKE_AGENT_OPTIONS: "always" };
+// #90: edits (kind edit/delete/move) never offer allow_always, so these two
+// #53 tests use an execute request, where every option still reaches the card.
+// The edit side is asserted in changes-bridge.test.js.
+const execute = run;
 
 test("the chosen option reaches the agent, not a derived one (#53)", async () => {
   for (const [optionId, expected] of [["allow-all", "allow-all"], ["reject-all", "reject-all"],
                                       ["allow", "allow"], ["reject", "reject"]]) {
     const run = await runBridge({
-      env: always, settings: { trust: "mechanic" }, messages: [write],
+      env: always, settings: { trust: "mechanic" }, messages: [execute],
       onPermission: (event) => ({ type: "permission", id: event.id, optionId }),
     });
     const outcome = run.agent.find((e) => e.method === "permissionOutcome").outcome;
@@ -329,7 +333,7 @@ test("the chosen option reaches the agent, not a derived one (#53)", async () =>
 test("the card is offered every option the agent sends, with its own labels (#53)", async () => {
   let seen = null;
   await runBridge({
-    env: always, settings: { trust: "mechanic" }, messages: [write],
+    env: always, settings: { trust: "mechanic" }, messages: [execute],
     onPermission: (event) => { seen = event.options; return { type: "permission", id: event.id, optionId: "reject" }; },
   });
   assert.equal(seen.length, 4, "the card did not receive every option");
