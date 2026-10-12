@@ -152,8 +152,20 @@ permission mode in `nixi.json`; anything else is Guide.
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.
-- `/guide` and `/mechanic` are handled in `Conversation.qml.submit()` and never
-  reach the agent.
+- `/guide`, `/mechanic` and `/undo` are handled in `Conversation.qml.submit()` and
+  never reach the agent. `/undo` is answered by the bridge and works only at
+  Mechanic: it changes the machine, and Guide promises nothing does.
+- `bridge/changes.js` (#90) backs up files before the agent edits them. For a
+  permission request of kind `edit`, `delete` or `move` answered with an allow
+  option at Mechanic, the bridge copies each `toolCall.locations[].path` and only
+  then answers, so the agent cannot skip the backup. Such requests never offer
+  "allow always". Copies and a `manifest.json` (with sha256 before and after) go
+  in `${XDG_STATE_HOME:-~/.local/state}/nixi/changes/<turn>/`, mode 0700/0600,
+  newest 20 turns kept. At the end of a turn that touched `~/.config/hypr/`, the
+  bridge runs `hyprctl reload` and `hyprctl configerrors`; errors not present
+  before the edit restore those files. `/undo` restores the newest change set,
+  all or nothing, and refuses if a file changed since. Symlinks, Nix store paths
+  and files over 1 MiB are not copied, and shell edits are not covered.
 - OpenCode is always spawned with `OPENCODE_CONFIG_CONTENT` set to Nixi's
   permission rules, replacing any inherited value. Without them its defaults
   run tools with no request for Guide to cancel.

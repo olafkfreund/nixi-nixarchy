@@ -137,6 +137,16 @@ opposed to YOLO.
 4. Type `/mechanic`. Repeat the request; confirm the dialog appears, No leaves
    no file, Yes creates it. Click MECHANIC to reach YOLO; `/guide` returns to
    GUIDE and a queued dialog disappears.
+   Checked changes (#90), at Mechanic:
+   - Ask "put btop on SUPER+ALT+T" and approve. A backup appears under
+     `~/.local/state/nixi/changes/`. `/undo` removes the binding.
+   - Redo it, edit `bindings.lua` by hand, then `/undo`: it refuses and names the
+     file. At Guide, `/undo` says to type `/mechanic` first.
+   - Ask for a deliberately invalid bind: the file is restored automatically and
+     the card names the file and the error.
+   - With Codex, ask for the same bind. If the file changes with no permission
+     prompt, open an issue ("Codex 1.12 read-only writes inside $HOME without
+     asking").
 5. Ask "how do I install an app". Confirm the answer uses `nixarchy apply`.
 6. Correct the agent on a fact. Confirm no `LEARNED:` line is shown and
    `~/.local/share/nixi/LEARNED.md` gains a dated line.
