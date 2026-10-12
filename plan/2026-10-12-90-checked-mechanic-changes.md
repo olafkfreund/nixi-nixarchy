@@ -283,10 +283,9 @@ With the revert, the skill text goes back to telling the agent to make
   `toolCallId` to that entry. Manifest entries add `mode`, so a restore keeps
   the file's mode, and `ids`. Undo finds the newest turn from disk, not memory.
   The automatic restore skips a Hyprland file whose hash no longer matches its
-  `after`, so a hand edit is never overwritten. A failed baseline means "could
+  `after` (a hand edit), and a file with no `after` that still equals `before`. A failed baseline means "could
   not be checked". Notices wrap paths in code spans (#42), which step 5 asked
-  for. Known gap, left for review: a restore that fails partway through a
-  multi-file `/undo` leaves the earlier files restored but not marked.
+  for. (The partial-restore gap first noted here was fixed at review; see below.)
 - **Step 2 (coder):** `guarded()` checks Mechanic itself. The YOLO branch
   passes the already-filtered options. Left for review: `changes.endTurn()`
   runs only when `prompt()` succeeds. A turn that errors leaves its change set
@@ -298,3 +297,19 @@ With the revert, the skill text goes back to telling the agent to make
   function messages, which run between messages to read or change files while
   the bridge runs, and now waits for `error` as well as `done`, and for the
   notice after `undo`.
+- **Review fixes (Opus reviewer, coder):**
+  - **Partial restore.** In `/undo` and the automatic restore, each file is
+    marked as it is restored, and the manifest is saved in a `finally`. The
+    message names what was restored and what was not. A file that cannot be
+    restored still blocks the next `/undo`, and the message names it.
+  - **Line numbers.** `configerrors` lines are compared with `:N` and `line N`
+    in place of the numbers, so an existing error that moved lines is not
+    blamed on the edit.
+  - **Unverified edits.** A Hyprland file with no completion seen is restored
+    only if it changed, and the notice says the edit could not be verified.
+  - **No file named.** An edit naming no file reports "Not backed up: the agent
+    named no file."
+  - **Late completion.** A completion that arrives after the turn closed is
+    recorded in the newest manifest on disk.
+  - **Accepted, not fixed:** switching to Guide mid-turn still lets the end of
+    the turn restore Mechanic's own edit.

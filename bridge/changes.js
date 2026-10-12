@@ -18,6 +18,9 @@ export const isStorePath = (real) => real === "/nix/store" || real.startsWith("/
 // a code span that cannot be closed early.
 const show = (path) => "`" + String(path).replace(/[`\r\n]/g, "") + "`";
 
+// A file that only moved lines is the same error: "x.lua:42: bad" == "x.lua:44: bad".
+const sameKind = (line) => line.replace(/:\d+/g, ":N").replace(/line \d+/gi, "line N");
+
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 // Current state of a path: sha256, null if missing, "symlink" for a link (never
@@ -123,8 +126,10 @@ export function createChanges({ stateDir, cwd, home, exec }) {
   return {
     backup: (toolCall) => serial(async () => {
       const notices = [];
+      let named = 0;
       for (const location of toolCall?.locations || []) {
         if (typeof location?.path !== "string" || !location.path) continue;
+        named++;
         const path = resolve(cwd, location.path);
         try {
           const notice = await backupOne(path, toolCall.toolCallId);
@@ -133,15 +138,27 @@ export function createChanges({ stateDir, cwd, home, exec }) {
           notices.push(`Not backed up: ${show(path)} (${show(error.code || error.message)}).`);
         }
       }
+      if (!named) notices.push("Not backed up: the agent named no file.");
       return notices;
     }),
 
     completed: (toolCallId) => serial(async () => {
-      if (!turn) return;
-      const hit = turn.entries.filter((e) => e.ids.includes(toolCallId));
+      if (turn) {
+        const hit = turn.entries.filter((e) => e.ids.includes(toolCallId));
+        if (!hit.length) return;
+        for (const entry of hit) entry.after = await hashOf(entry.path);
+        await saveManifest(turn);
+        return;
+      }
+      // Arrived after the turn closed (a late update): the newest manifest on disk.
+      const [name] = (await readdir(stateDir).catch(() => [])).filter((n) => /^\d+-\d+$/.test(n)).sort().reverse();
+      if (!name) return;
+      const dir = join(stateDir, name);
+      const manifest = JSON.parse(await readFile(join(dir, "manifest.json"), "utf8"));
+      const hit = manifest.entries.filter((e) => e.ids?.includes(toolCallId));
       if (!hit.length) return;
       for (const entry of hit) entry.after = await hashOf(entry.path);
-      await saveManifest(turn);
+      await writeAtomic(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), 0o600);
     }),
 
     endTurn: () => serial(async () => {
@@ -155,21 +172,41 @@ export function createChanges({ stateDir, cwd, home, exec }) {
         if (!now || !done.baseline) {
           return ["The Hyprland change could not be checked (hyprctl failed); nothing was restored."];
         }
-        const fresh = [...now].filter((line) => !done.baseline.has(line));
+        const known = new Set([...done.baseline].map(sameKind));
+        const fresh = [...now].filter((line) => !known.has(sameKind(line)));
         if (!fresh.length) return [];
         const restored = [];
-        for (const entry of hypr) {
-          // Skip a file someone changed since the agent wrote it.
-          if (entry.after !== undefined && (await hashOf(entry.path)) !== entry.after) continue;
-          await restore(entry, done.dir);
-          entry.restored = true;
-          restored.push(show(entry.path));
+        const unverified = [];
+        const failed = [];
+        try {
+          for (const entry of hypr) {
+            try {
+              const current = await hashOf(entry.path);
+              if (entry.after !== undefined) {
+                // Someone changed it since the agent wrote it: leave it.
+                if (current !== entry.after) continue;
+              } else {
+                // No completion seen: nothing to restore if it is untouched.
+                if (current === entry.before) continue;
+                unverified.push(show(entry.path));
+              }
+              await restore(entry, done.dir);
+              entry.restored = true;
+              restored.push(show(entry.path));
+            } catch (error) {
+              failed.push(`${show(entry.path)} (${show(error.code || error.message)})`);
+            }
+          }
+        } finally {
+          await saveManifest(done);
         }
-        await saveManifest(done);
         await reloadHypr();
-        return [`Hyprland reported an error, so Nixi restored ${restored.join(", ") || "nothing"}: ${show(fresh.join("; "))}`];
+        return [`Hyprland reported an error: ${show(fresh.join("; "))}. ` +
+          `Nixi restored ${restored.join(", ") || "nothing"}` +
+          (unverified.length ? ` (the edit to ${unverified.join(", ")} could not be verified)` : "") +
+          (failed.length ? `; could not restore ${failed.join(", ")}` : "") + "."];
       } catch (error) {
-        return [`The Hyprland change could not be checked (${show(error.code || error.message)}); nothing was restored.`];
+        return [`The Hyprland change could not be checked (${show(error.code || error.message)}).`];
       }
     }),
 
@@ -191,12 +228,25 @@ export function createChanges({ stateDir, cwd, home, exec }) {
               return { ok: false, message: `Not undone: ${show(entry.path)} changed since Nixi's edit. Nothing was restored.` };
             }
           }
-          for (const entry of todo) { await restore(entry, dir); entry.restored = true; }
-          await writeAtomic(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), 0o600);
-          const reloadFailed = todo.some((e) => isHypr(e.path)) && !(await reloadHypr());
+          // Not atomic once writing starts: record each file as it is restored, so a
+          // failure part-way never leaves this turn blocking the older ones.
+          const done = [];
+          let failure = null;
+          try {
+            for (const entry of todo) {
+              try { await restore(entry, dir); }
+              catch (error) { failure = `${show(entry.path)} (${show(error.code || error.message)})`; break; }
+              entry.restored = true;
+              done.push(entry);
+            }
+          } finally {
+            await writeAtomic(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), 0o600);
+          }
+          const reloadFailed = done.some((e) => isHypr(e.path)) && !(await reloadHypr());
+          const names = done.map((e) => show(e.path)).join(", ") || "nothing";
           return {
-            ok: true,
-            message: `Undone: restored ${todo.map((e) => show(e.path)).join(", ")}.` +
+            ok: !failure,
+            message: (failure ? `Undo stopped: restored ${names}; could not restore ${failure}.` : `Undone: restored ${names}.`) +
               (reloadFailed ? " Hyprland could not be reloaded." : ""),
           };
         }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChanges, isStorePath } from "./changes.js";
@@ -166,4 +166,85 @@ test("endTurn: a turn that touched no Hyprland file never calls hyprctl", async 
   await changes.backup(call("t1", file));
   assert.deepEqual(await changes.endTurn(), []);
   assert.deepEqual(calls, []);
+});
+
+test("a failed restore part-way is reported, marks what was restored, and unblocks older turns", async () => {
+  const { home, stateDir, changes } = await setup();
+  const old = join(home, "old.txt");
+  await writeFile(old, "o0");
+  await changes.backup(call("t0", old));
+  await writeFile(old, "o1");
+  await changes.completed("t0");
+  await changes.endTurn();
+  const a = join(home, "a.txt");
+  const b = join(home, "b.txt");
+  await writeFile(a, "a0");
+  await writeFile(b, "b0");
+  await changes.backup(call("t1", a, b));
+  await writeFile(a, "a1");
+  await writeFile(b, "b1");
+  await changes.completed("t1");
+  await changes.endTurn();
+  const turn = (await readdir(stateDir)).sort().pop();
+  await rm(join(stateDir, turn, "1-b.txt"));
+  const result = await changes.undo();
+  assert.equal(result.ok, false);
+  assert.match(result.message, /restored `[^`]*a\.txt`.*could not restore `[^`]*b\.txt`/);
+  assert.equal(await readFile(a, "utf8"), "a0");
+  // The turn is not stuck: b is still pending, a is done, so the next /undo retries b only.
+  const manifest = JSON.parse(await readFile(join(stateDir, turn, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.entries.map((e) => !!e.restored), [true, false]);
+  await rm(join(stateDir, turn), { recursive: true });
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(old, "utf8"), "o0");
+});
+
+test("endTurn: an existing error that only moved lines is not blamed on the edit", async () => {
+  let errors = "bindings.lua:42: bad";
+  const { home, changes } = await setup(() => errors);
+  const file = join(home, ".config", "hypr", "bindings.lua");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "good\n");
+  await changes.completed("t1");
+  errors = "bindings.lua:44: bad";
+  assert.deepEqual(await changes.endTurn(), []);
+  assert.equal(await readFile(file, "utf8"), "good\n");
+});
+
+test("endTurn: with no completion seen, an untouched file is left and a changed one is restored, unverified", async () => {
+  let errors = "";
+  const { home, changes } = await setup(() => errors);
+  const same = join(home, ".config", "hypr", "same.lua");
+  const moved = join(home, ".config", "hypr", "moved.lua");
+  await writeFile(same, "s\n");
+  await writeFile(moved, "m\n");
+  await changes.backup(call("t1", same, moved));
+  await writeFile(moved, "BROKEN\n");
+  errors = "error: bad bind";
+  const [notice] = await changes.endTurn();
+  assert.match(notice, /moved\.lua/);
+  assert.doesNotMatch(notice, /restored[^(]*same\.lua/);
+  assert.match(notice, /could not be verified/);
+  assert.equal(await readFile(moved, "utf8"), "m\n");
+});
+
+test("backup with no usable location says the agent named no file", async () => {
+  const { changes } = await setup();
+  assert.deepEqual(await changes.backup({ toolCallId: "t1", kind: "edit" }),
+    ["Not backed up: the agent named no file."]);
+  assert.deepEqual(await changes.backup({ toolCallId: "t1", locations: [{ path: "" }, {}] }),
+    ["Not backed up: the agent named no file."]);
+});
+
+test("a completion that arrives after the turn closed is still recorded", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await changes.endTurn();
+  await writeFile(file, "new\n");
+  await changes.completed("t1");
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "old\n");
 });

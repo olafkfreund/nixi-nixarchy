@@ -65,7 +65,9 @@ test("a Hyprland error the edit caused restores the file and says so (d)", async
   const seen = {};
   const run = await runBridge(setup({ messages: [edit("BROKEN"), (c) => { seen.log = read(c.home, "hyprctl.log"); seen.file = read(c.home); }] }));
   assert.equal(seen.file, "old\n");
-  assert.match(notices(run.events).join("\n"), /bindings\.lua.*bad bind/s);
+  const said = notices(run.events).join("\n");
+  assert.match(said, /bindings\.lua/);
+  assert.match(said, /bad bind/);
   assert.match(seen.log, /^reload$/m);
 });
 
