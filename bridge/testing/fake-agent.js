@@ -4,7 +4,7 @@
 // Every request is appended as one JSON line to $FAKE_AGENT_LOG.
 //
 // Lives in bridge/testing/, outside the bridge/*.js the package ships.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { Readable, Writable } from "node:stream";
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION } from "@agentclientprotocol/sdk";
 
@@ -13,6 +13,19 @@ const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify
 // setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
 // one at session start. See setSessionMode below.
 let modeCalls = 0;
+
+// FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
+// claude-agent-acp and codex-acp both do. Behind a flag so the existing
+// tests' two-option expectations are untouched (#53).
+const permissionOptions = () => process.env.FAKE_AGENT_OPTIONS === "always" ? [
+  { optionId: "allow", name: "Allow", kind: "allow_once" },
+  { optionId: "allow-all", name: "Allow always", kind: "allow_always" },
+  { optionId: "reject", name: "Reject", kind: "reject_once" },
+  { optionId: "reject-all", name: "Never allow", kind: "reject_always" },
+] : [
+  { optionId: "allow", name: "Allow", kind: "allow_once" },
+  { optionId: "reject", name: "Reject", kind: "reject_once" },
+];
 
 new AgentSideConnection((conn) => ({
   async initialize() {
@@ -63,6 +76,22 @@ new AgentSideConnection((conn) => ({
   async prompt(params) {
     const text = (params.prompt || []).map((block) => block.text || "").join("");
     log({ method: "prompt", text });
+    // PLEASE_HYPR <text>: a real edit (#90). Ask permission, and if allowed write
+    // <text> into ~/.config/hypr/bindings.lua and report it completed, the way
+    // the real agents write after the bridge answers. "THEN_FAIL" makes the turn fail.
+    if (text.includes("PLEASE_HYPR")) {
+      const file = `${process.env.HOME}/.config/hypr/bindings.lua`;
+      const toolCall = { toolCallId: "t4", kind: "edit", title: "Edit bindings.lua", locations: [{ path: file }] };
+      await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call", ...toolCall, status: "pending" } });
+      const { outcome } = await conn.requestPermission({ sessionId: params.sessionId, toolCall, options: permissionOptions() });
+      log({ method: "permissionOutcome", outcome });
+      if (outcome.outcome === "selected" && outcome.optionId.startsWith("allow")) {
+        writeFileSync(file, text.slice(text.indexOf("PLEASE_HYPR") + "PLEASE_HYPR ".length) + "\n");
+        await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call_update", toolCallId: "t4", status: "completed" } });
+      }
+      if (text.includes("THEN_FAIL")) throw new Error("fake agent failed after the edit");
+      return { stopReason: "end_turn" };
+    }
     // A prompt asking for a change triggers a permission request, so tests can
     // observe how the bridge answers it.
     // PLEASE_EDIT carries a diff and PLEASE_RUN a 2 KB command, for the detail.
@@ -76,18 +105,7 @@ new AgentSideConnection((conn) => ({
       const outcome = await conn.requestPermission({
         sessionId: params.sessionId,
         toolCall,
-        // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
-        // claude-agent-acp and codex-acp both do. Behind a flag so the existing
-        // tests' two-option expectations are untouched (#53).
-        options: process.env.FAKE_AGENT_OPTIONS === "always" ? [
-          { optionId: "allow", name: "Allow", kind: "allow_once" },
-          { optionId: "allow-all", name: "Allow always", kind: "allow_always" },
-          { optionId: "reject", name: "Reject", kind: "reject_once" },
-          { optionId: "reject-all", name: "Never allow", kind: "reject_always" },
-        ] : [
-          { optionId: "allow", name: "Allow", kind: "allow_once" },
-          { optionId: "reject", name: "Reject", kind: "reject_once" },
-        ],
+        options: permissionOptions(),
       });
       log({ method: "permissionOutcome", outcome: outcome.outcome });
     }

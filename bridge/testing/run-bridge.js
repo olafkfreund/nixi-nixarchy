@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const here = new URL(".", import.meta.url).pathname;
 const bridge = join(here, "..", "bridge.js");
@@ -17,7 +17,13 @@ function executable(path, body) {
 // options.context: text the stub nixi-context prints (null = no stub on PATH)
 // options.configDir: create ~/.config/nixi before starting
 // options.codexProjectDir: also create ~/.config/nixi/.codex
-// options.messages: stdin messages sent in order, each after the previous turn
+// options.hyprctl: a stub hyprctl on PATH. It appends its arguments to
+//   <home>/hyprctl.log; `configerrors` prints "error: bad bind" while
+//   ~/.config/hypr/bindings.lua contains BROKEN, then <home>/hypr-baseline-errors.
+// options.files: { "relative/path": "text" } created under HOME before start
+// options.messages: stdin messages sent in order, each after the previous turn.
+//   An "undo" waits for its notice. A function is called as fn({ home, events })
+//   between messages, to change or read files while the bridge is running.
 export async function runBridge(options = {}) {
   const home = mkdtempSync(join(tmpdir(), "nixi-bridge-"));
   const bin = join(home, "bin");
@@ -29,6 +35,20 @@ export async function runBridge(options = {}) {
   if (options.context !== null && options.context !== undefined) {
     executable(join(bin, "nixi-context"),
       `#!/bin/sh\nprintf '%s\\n' "$*" > "${join(home, "context-args")}"\ncat <<'NIXI_EOF'\n${options.context}\nNIXI_EOF\n`);
+  }
+  if (options.hyprctl) {
+    executable(join(bin, "hyprctl"), `#!/bin/sh
+echo "$*" >> "${join(home, "hyprctl.log")}"
+if [ "$1" = configerrors ]; then
+  grep -qs BROKEN "${join(home, ".config", "hypr", "bindings.lua")}" && echo "error: bad bind"
+  cat "${join(home, "hypr-baseline-errors")}" 2>/dev/null
+fi
+exit 0
+`);
+  }
+  for (const [path, text] of Object.entries(options.files || {})) {
+    mkdirSync(dirname(join(home, path)), { recursive: true });
+    writeFileSync(join(home, path), text);
   }
   if (options.configDir) mkdirSync(join(home, ".config", "nixi"), { recursive: true });
   // options.codexProjectDir: plant <cwd>/.codex, the directory codex reads a
@@ -79,10 +99,15 @@ export async function runBridge(options = {}) {
     if (ready.type === "fatal") throw new Error(`bridge fatal: ${ready.message}`);
     let turns = 0;
     for (const message of options.messages || []) {
+      if (typeof message === "function") { await message({ home, events }); continue; }
       child.stdin.write(JSON.stringify(message) + "\n");
       if (message.type === "prompt") {
         const target = ++turns;
-        await until(() => events.filter((e) => e.type === "done").length >= target, `turn ${target}`);
+        // A failed turn ends with an error rather than done.
+        await until(() => events.filter((e) => e.type === "done" || e.type === "error").length >= target, `turn ${target}`);
+      } else if (message.type === "undo") {
+        const count = events.filter((e) => e.type === "notice").length;
+        await until(() => events.filter((e) => e.type === "notice").length > count, "undo notice");
       } else if (message.type === "trust" || message.type === "permission_mode") {
         // One ack shape since #44: { type: "ack", of, ok }. `of` matches the
         // inbound message type, so waiting for a reply is the same expression
