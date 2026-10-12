@@ -274,3 +274,16 @@ Revert the implementation commits. The only state created is
 `~/.local/state/nixi/changes/`, which nothing else reads; it can be deleted.
 With the revert, the skill text goes back to telling the agent to make
 `.bak-nixi` copies.
+
+## Deviations recorded during implementation
+
+- **Step 1 (coder):** `createChanges` also exports `isStorePath` for direct
+  testing. All four methods run serially, so allow-all-pending cannot race. A
+  second edit of one path in a turn keeps the first backup and adds the new
+  `toolCallId` to that entry. Manifest entries add `mode`, so a restore keeps
+  the file's mode, and `ids`. Undo finds the newest turn from disk, not memory.
+  The automatic restore skips a Hyprland file whose hash no longer matches its
+  `after`, so a hand edit is never overwritten. A failed baseline means "could
+  not be checked". Notices wrap paths in code spans (#42), which step 5 asked
+  for. Known gap, left for review: a restore that fails partway through a
+  multi-file `/undo` leaves the earlier files restored but not marked.
