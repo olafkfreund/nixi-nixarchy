@@ -313,3 +313,8 @@ With the revert, the skill text goes back to telling the agent to make
     recorded in the newest manifest on disk.
   - **Accepted, not fixed:** switching to Guide mid-turn still lets the end of
     the turn restore Mechanic's own edit.
+- **Step 7 not run.** The live check did not happen: the desktop control
+  request went unanswered, and the user asked to merge without it. The
+  bridge-level tests (a–j) cover the same cases with a stubbed `hyprctl`. The
+  Codex 1.12 risk (a write inside `$HOME` with no prompt) is still unverified;
+  run step 7 by hand after merge.
