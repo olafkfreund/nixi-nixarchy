@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createLearnedFilter, appendLearned } from "./learned.js";
+import { createChartFilter } from "./chart.js";
 import { runBridge } from "./testing/run-bridge.js";
 
 function streamed(chunks) {
@@ -24,6 +25,46 @@ test("LEARNED lines never reach the card, however the stream is split", () => {
     const split = streamed([answer.slice(0, i), answer.slice(i)]);
     assert.equal(split.visible, whole.visible, `split at ${i}`);
     assert.deepEqual(split.facts, whole.facts, `split at ${i}`);
+  }
+});
+
+// A partial line already sent to the card can never become a LEARNED line: the
+// chunk after it is the rest of that line, not a new one (#89).
+const REPLIES = [
+  "Done LEARNED: not a fact\n",
+  "Use apply.\nLEARNED: apps are queued\nok LEARNED: no\n  LEARNED: yes",
+  "a\nLEAR\nLEARNED: x\nLEARNEDy\n",
+];
+const chunked = (text, size) => Array.from({ length: Math.ceil(text.length / size) }, (_, i) => text.slice(i * size, (i + 1) * size));
+
+test("a reply means the same thing at every chunk size (#89)", () => {
+  assert.deepEqual(streamed([REPLIES[0]]), { visible: REPLIES[0], facts: [] });
+  for (const reply of REPLIES) {
+    const whole = streamed([reply]);
+    for (let size = 1; size < reply.length; size++)
+      assert.deepEqual(streamed(chunked(reply, size)), whole, `${JSON.stringify(reply)} in chunks of ${size}`);
+  }
+});
+
+test("learned and chart agree at every chunk size (#89)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "nixi-learned-chart-"));
+  try {
+    const reply = "Sizes:\n```nixi-chart\ntitle: S\na 1\n```\nDone LEARNED: x\nLEARNED: real\n";
+    // The order bridge.js uses: chart downstream of learned, then finishLearned's flush.
+    const run = (chunks) => {
+      const learned = createLearnedFilter();
+      const chart = createChartFilter(dir);
+      let shown = chunks.map((chunk) => chart.push(learned.push(chunk))).join("");
+      const end = learned.flush();
+      shown += chart.push(end.visible) + chart.flush();
+      return { shown, facts: end.facts };
+    };
+    const whole = run([reply]);
+    assert.deepEqual(whole.facts, ["real"]);
+    for (let size = 1; size < reply.length; size++)
+      assert.deepEqual(run(chunked(reply, size)), whole, `chunks of ${size}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

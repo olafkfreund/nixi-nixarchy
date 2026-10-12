@@ -22,6 +22,10 @@ const KEEP_TAIL = 200000;
 // be a LEARNED line, so the card sees ordinary text as soon as it arrives.
 export function createLearnedFilter() {
   let pending = "";
+  // A marker is a marker only at the START of a line. Without this the filter
+  // forgot it was mid-line after flushing a partial one, so the same reply
+  // harvested different facts depending on where the stream was chunked (#89).
+  let atLineStart = true;
   const facts = [];
 
   function couldBeMark(line) {
@@ -45,17 +49,19 @@ export function createLearnedFilter() {
       while ((index = pending.indexOf("\n")) >= 0) {
         const line = pending.slice(0, index);
         pending = pending.slice(index + 1);
-        const kept = take(line);
+        const kept = atLineStart ? take(line) : line;
         if (kept !== null) visible += kept + "\n";
+        atLineStart = true;
       }
-      if (pending && !couldBeMark(pending)) {
+      if (pending && !(atLineStart && couldBeMark(pending))) {
         visible += pending;
         pending = "";
+        atLineStart = false;
       }
       return visible;
     },
     flush() {
-      const kept = pending ? take(pending) : null;
+      const kept = pending ? (atLineStart ? take(pending) : pending) : null;
       pending = "";
       return { visible: kept || "", facts: facts.splice(0) };
     },
