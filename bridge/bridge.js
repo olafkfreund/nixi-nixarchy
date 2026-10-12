@@ -460,6 +460,9 @@ async function prompt(text) {
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;
+    // A failed or cancelled turn skips the endTurn above; without this its change
+    // set stays open and the next turn's edits join it. A no-op after success.
+    for (const text of await changes.endTurn()) emit({ type: "notice", text });
     // A cancelled or failed turn never reaches finishLearned, so anything the
     // chart filter is still holding -- a block whose closing fence never
     // arrived -- would be dropped. flush() is idempotent: on the success path

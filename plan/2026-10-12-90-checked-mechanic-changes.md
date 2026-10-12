@@ -291,3 +291,10 @@ With the revert, the skill text goes back to telling the agent to make
   passes the already-filtered options. Left for review: `changes.endTurn()`
   runs only when `prompt()` succeeds. A turn that errors leaves its change set
   open, and the next turn's edits join it.
+- **Steps 3–4 (coder):** case (j) was added at review. A turn that fails after
+  an edit must still be checked and closed. It failed against step 2 and was
+  fixed by also running `changes.endTurn()` in `prompt()`'s `finally`, which is
+  a no-op after success. The fake agent gained `THEN_FAIL`. `runBridge` gained
+  function messages, which run between messages to read or change files while
+  the bridge runs, and now waits for `error` as well as `done`, and for the
+  notice after `undo`.
