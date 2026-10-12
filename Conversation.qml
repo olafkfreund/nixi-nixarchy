@@ -2319,8 +2319,14 @@ Item {
             font.italic: true
           }
 
+          // The title is the agent's headline for the call; for a shell tool
+          // it IS the command, which the detail below then repeats verbatim.
+          // Printing it twice made the card look like it was asking about two
+          // different things. The detail is the authoritative one (#50), so the
+          // headline gives way rather than the other way round.
           Text {
             width: parent.width
+            visible: text !== "" && root.pendingPermission.detail.split("\n")[0].trim() !== text.trim()
             text: root.pendingPermission.title
             textFormat: Text.PlainText
             color: root.foreground
@@ -2337,7 +2343,12 @@ Item {
           // shown below in the urgent colour instead.
           Flickable {
             width: parent.width
-            height: Math.min(detailText.implicitHeight, permissionLayer.height * 0.45)
+            // Stacked options add two or three button heights. The detail is
+            // scrollable and the buttons are not, so the detail gives way: a
+            // reject button pushed off the card cannot be clicked, and "I could
+            // not find No" must never be a reason someone approves.
+            height: Math.min(detailText.implicitHeight,
+              permissionLayer.height * ((root.pendingPermission.options || []).length > 2 ? 0.28 : 0.45))
             visible: root.pendingPermission.detail !== ""
             clip: true
             contentWidth: width
@@ -2389,23 +2400,48 @@ Item {
           // would assert a scope Nixi was never told (#53). An agent offering
           // just allow_once/reject_once renders exactly the two buttons this
           // card has always had.
-          Row {
+          // Two options sit side by side, as this card always had. Three or
+          // more stack: an agent's "always" label carries the command it would
+          // apply to, and three of those across one card width overlapped each
+          // other into an unreadable smear -- qs.Ui.Button centres its label
+          // and neither elides nor clips, so a forced width just overflows.
+          Grid {
+            id: optionGrid
             width: parent.width
+            columns: (root.pendingPermission.options || []).length <= 2
+              ? Math.max(1, (root.pendingPermission.options || []).length) : 1
             spacing: Style.space(12)
 
             Repeater {
               model: root.pendingPermission.options || []
 
               Button {
+                id: optionButton
                 required property var modelData
                 readonly property int count: Math.max(1, (root.pendingPermission.options || []).length)
                 readonly property bool isAllow: String(modelData.kind || "").indexOf("allow") === 0
                 readonly property bool isOnce: String(modelData.kind || "").indexOf("_once") > 0
-                width: (parent.width - parent.spacing * (count - 1)) / count
-                // Agent-authored, so plain text and bounded -- the same rule
-                // the detail pane above follows.
-                text: (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
-                  + String(modelData.label || modelData.id || "").slice(0, 48)
+                // The agent's own words, never Nixi's: only the agent knows
+                // what its "always" scopes to (#53). Elided to fit rather than
+                // reworded, with the whole label on hover.
+                // Bounded for rendering only: the hover text carries the whole
+                // scope the agent named, or the tooltip would quietly withhold
+                // the very thing it exists to show.
+                readonly property string fullLabel:
+                  (isAllow && isOnce ? "Y  " : (!isAllow && isOnce ? "N  " : ""))
+                  + String(modelData.label || modelData.id || "")
+                width: (optionGrid.width - optionGrid.spacing * (optionGrid.columns - 1)) / optionGrid.columns
+                text: labelMetrics.elidedText
+                tooltipText: fullLabel === labelMetrics.elidedText ? "" : fullLabel
+
+                TextMetrics {
+                  id: labelMetrics
+                  text: optionButton.fullLabel
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body * root.fontScale
+                  elide: Text.ElideRight
+                  elideWidth: Math.max(0, optionButton.width - optionButton.horizontalPadding * 2 - Style.space(4))
+                }
                 bordered: true
                 selected: isAllow && isOnce
                 foreground: isAllow && isOnce ? root.accent : root.foreground
