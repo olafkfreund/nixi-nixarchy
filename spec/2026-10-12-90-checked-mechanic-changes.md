@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 90
 intent: intent/2026-10-12-90-checked-mechanic-changes.md
 ---
