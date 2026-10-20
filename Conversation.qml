@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 // Pure display formatting, unit tested under node (bridge/text-format.test.js).
 import "TextFormat.js" as TextFormat
@@ -134,11 +135,11 @@ Item {
     ? Math.max(0, surface.height - Math.max(0, stack.height - anchorY))
     : 0
 
-  readonly property color background: Color.menu.background
-  readonly property color foreground: Color.menu.text
-  readonly property color border: Color.menu.border
-  readonly property color accent: Color.accent
-  readonly property color scrim: Color.menu.scrim
+  readonly property color background: Commons.Color.menu.background
+  readonly property color foreground: Commons.Color.menu.text
+  readonly property color border: Commons.Color.menu.border
+  readonly property color accent: Commons.Color.accent
+  readonly property color scrim: Commons.Color.menu.scrim
   readonly property string conversationFont: "Noto Serif"
   readonly property int agentSize: Math.round(Style.font.body * 1.15 * root.fontScale)
   readonly property int humanSize: Math.round(Style.font.body * 2.36 * root.fontScale)
@@ -2392,7 +2393,7 @@ Item {
             visible: root.pendingPermission.omitted > 0
             text: root.pendingPermission.detail.slice(root.pendingPermission.detail.lastIndexOf("\n") + 1)
             textFormat: Text.PlainText
-            color: Color.urgent
+            color: Commons.Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap
