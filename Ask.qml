@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 Item {
@@ -298,16 +299,16 @@ Item {
       height: Style.space(58)
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.round(parent.height * 0.22)
-      color: Color.menu.background
+      color: Commons.Color.menu.background
       radius: Style.cornerRadius
-      borderSpec: Border.surfaceSpec("menu", "border", Color.accent,
+      borderSpec: Border.surfaceSpec("menu", "border", Commons.Color.accent,
         Math.max(1, Style.space(2)))
 
       Text {
         id: copyToastText
         anchors.centerIn: parent
         text: "✓  Copied!"
-        color: Color.accent
+        color: Commons.Color.accent
         font.family: Style.font.family
         font.pixelSize: Math.round(Style.font.body * (4 / 3))
         font.bold: true

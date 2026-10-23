@@ -937,6 +937,17 @@ def test_card_grows_with_content():
     print("  ok  the card grows with its content, with no layout feedback loop")
 
 
+def test_yolo_keeps_click_confirm_cards():
+    """#95: the bridge keeps a herdr write pending when YOLO is switched on, so the
+    card must keep it too. CI does not run QML, so this reads the source."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    assert "event.options, event.confirm)" in card, "the permission event's confirm is dropped"
+    yolo = card[card.index('if (permissionMode === "yolo")'):][:80]
+    assert "clearUnconfirmedPermissions()" in yolo, "switching to YOLO clears every card again"
+    assert 'r.confirm === "click"' in card, "the click-confirm cards are no longer kept"
+    print("  ok  YOLO keeps cards that need a click")
+
+
 def test_one_ack_shape():
     """#44: the card keeps ONE piece of in-flight state, so a reset cannot
     clear one request kind and miss another -- which is exactly how #40

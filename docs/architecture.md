@@ -70,6 +70,29 @@ The durable mode is `permission` or `yolo`, stored in
   Ask mode and the visible request.
 - Tool input, query parameters, credentials, and permission payloads are not
   written to the settings file.
+- A herdr write (#95) is any command containing `herdr [--session S] agent
+  prompt|send-keys` or `herdr … pane send-text|send-keys`, matched anywhere in
+  the command so wrappers and subshells do not hide it. Guide cancels it.
+  Mechanic always shows the card, even in YOLO and even for a card queued before
+  a switch to YOLO, with `allow_always` removed; the `permission` event carries
+  `confirm: "click"` so a front end can refuse a spoken yes (voice can't confirm sends; keyboard Enter or `y` on the card still answer).
+- Each answer to a herdr write appends one JSON line (`ts`, `pane`, `text`,
+  `cwd`, `decision`, `optionKind`) to `~/.local/share/nixi/sends.log`, created
+  0600 and append-only. It records the command, never terminal output.
+- The one exception to "the companion never writes": a front end such as the
+  voice companion may *read* herdr locally (`agent list`, `agent read`). It never
+  writes to a session; every send goes through the bridge and its card.
+- Detection is deliberately a fail-safe, not a parser: any Bash command that
+  mentions `herdr` or `HERDR_SOCKET` (also with quotes and backslashes removed)
+  counts, and Claude's own `Bash(*herdr*)` / `Bash(*HERDR_SOCKET*)` ask rules
+  beat a user's standing allow rules, so a herdr write always reaches the bridge.
+  Cancelled and denied sends are audited too, as `decision: "cancelled"` / `"deny"`.
+- Known limits: `$H agent prompt` with `H` set earlier has no "herdr" text and
+  is not caught. In YOLO, a non-herdr command injected through a session
+  summary still runs on its own. A send to a session whose own agent runs with
+  bypass permissions then acts under that agent's mode. `herdr agent list`
+  exposes no herdr session name, so the companion always uses the default
+  session (`--session` is not supported).
 
 ## Message and scrolling invariants
 
@@ -132,6 +155,15 @@ converted to diagnostic events but is not rendered or persisted by the UI.
 Avoid logging raw ACP request bodies because they may contain sensitive tool
 arguments.
 
+The bridge's stdin commands and stdout events have a second consumer: the
+optional snowflake companion (`services.nixi.companion`, the
+`olafkfreund/nixoarchy-snowflake` fork), whose `app/server.py` runs the same
+`bridge/nixi-node bridge/bridge.js` per conversation and reads `text`, `tool`,
+`permission`, `status`, `notice`, `done`, `error` and `fatal`. Renaming one of
+those, or changing a field it reads, needs the fork updated in step. It only
+reads `nixi.json` and changes trust through the bridge's `trust` command, so
+the file keeps its two writers.
+
 ## Nixi: grounding, trust, tour and learned facts
 
 These are Nixi's additions to the upstream card. Each has a test that fails
@@ -164,6 +196,30 @@ permission mode in `nixi.json`; anything else is Guide.
   three read tools, because Claude matches rules per tool name — a list of
   `Read(...)` patterns alone left Grep and Glob able to reach the same paths
   unprompted (#41).
+
+  **Shell commands and secrets (#96).** At Guide, Claude (plan mode)
+  auto-approves read-only shell commands (`head`, `cat /etc/hostname`), so they
+  never reach ACP either, and `head ~/x.age` ran with no request. Measured: an
+  `ask` rule, bare `Bash` or a wildcard `Bash(*...*)`, beats that auto-approval,
+  so the command becomes a request and Guide cancels it. Rules are fixed per
+  session (passed at `newSession`), so they follow the level the session
+  **starts** at:
+
+  | start level | extra `ask` rules | effect |
+  |---|---|---|
+  | Guide | bare `Bash` | no shell at all; the tutor answers from the manual, `KNOWLEDGE.md` and file tools |
+  | Mechanic | `Bash(*X*)` per `SECRET_PATHS` entry (`secretBashRules`) | every shell command asks (default mode); a secret-path command asks even when the user has allow rules or answered "always allow" for that command |
+
+  The Mechanic set is best effort: `X` is the path without `~/`, so the `~/`,
+  `$HOME/`, absolute, `~user/` and `../../` spellings all match, but not a path
+  a shell builds at run time. Residual: after a Mechanic to Guide switch inside
+  one session, non-secret read-only commands, and anything already granted
+  "always allow" in that session, can run until the next conversation, because
+  the rules cannot change mid-session; secret-path commands are still cancelled.
+  Codex and opencode, same canary
+  at Guide (measured 2026-10-23): Codex read it -- its read-only sandbox permits
+  file reads and nixi has no per-path read rule for Codex (#97); opencode was
+  inconclusive (empty reply).
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.
