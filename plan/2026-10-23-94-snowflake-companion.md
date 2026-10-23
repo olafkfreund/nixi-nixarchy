@@ -479,6 +479,21 @@ coder "snow")
 - Verify: on the three-monitor desktop (DP-1, DP-3, HDMI-A-1), `monitor next` cycles them; with
   "follow" on, focusing another monitor brings Nixi there.
 
+**S18. Voice safety and spoken style in nixi mode** (fork `app/static/index.html`, `app/server.py`;
+coder "bridge")
+*Found by agy's #95 review (2026-10-23), verified in the code.*
+- `askAloud()` (index.html ~1686) tests "always" before "no", and counts "ok/go/please/fine" as
+  yes. In bridge mode:
+  - check "no" first;
+  - yes only for explicit words (yes, yeah, yep, approve, do it, go ahead);
+  - never "always" by voice: answering always is click-only, and the spoken hint says so.
+- `run_bridge()` sends the bare prompt, so nixi's agent answers in markdown that gets read aloud,
+  and the `[mood]` tags never arrive. Prefix bridged prompts with a short spoken-style note (1–4
+  short spoken sentences, no tables or code blocks, an optional leading `[mood]` tag from
+  FACE_TAG_RE). The bridge's grounding is unchanged.
+- Verify: unit-test the answer classifier ("no, not always" → no; "okay" → none; "yes do it" →
+  yes; "always" → none in bridge mode). A live turn gets a short spoken reply.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
