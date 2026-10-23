@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 95
 intent: intent/2026-10-23-95-voice-session-control.md
 ---
