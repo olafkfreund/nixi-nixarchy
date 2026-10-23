@@ -360,6 +360,46 @@ The names to use:
   - `py_compile`, `bash -n`, `nix build .#nixi-companion` and the bridge test (S5) pass.
   - The live window's Hyprland layer namespace is `nixi-companion`.
 
+**S11. "Needs input" nudges from the agents** (fork; coder "bridge")
+*Approved by the user in conversation (2026-10-23).*
+- `bin/nixi-companion attention --from <claude|codex|agy|…> [message]`. It reads the token from
+  `~/.local/share/nixi-companion/runtime.json` and POSTs `/api/attention`. It exits 0 quietly
+  when the companion isn't running, because hooks must never fail.
+- `/api/attention` (token-gated like the other window routes) validates `from` (short,
+  `[a-z0-9-]`) and the message (≤120 chars, one line). It applies a rate limit of one per agent
+  per 30s, then `BUS.pub(t="attention", from=…, text=…)`.
+- The page reacts: the pleading mood, a glow pulse (in notch mode the notch pulses), the caption
+  "<Agent> needs you: <message>", and speech unless muted or hidden.
+- Verify: calling the command twice within 30s shows one reaction, and it is silent with the
+  companion stopped.
+
+**S12. Follow the Omarchy theme** (fork; coder "snow")
+*Approved by the user in conversation (2026-10-23).*
+- The server reads `omarchy theme current`, lowercases the name, and finds `colors.toml` in
+  `~/.config/omarchy/themes/<name>/` first, then in `omarchy theme dir <name>`. `/api/state`
+  returns `theme: {mode, accent, background, darker_background, lighter_background, foreground,
+  bright_foreground, blue, cyan}`, or null when there is no theme.
+- The face, when `look.follow_theme` is true (the default): the lambdas use `blue` and `cyan`
+  (two gradients, derived lighter and darker); the plate uses `darker_background` (or
+  `lighter_background` when `mode = "light"`); the pupils and glow use `accent`; the eye whites
+  use `bright_foreground`. Setting colours by hand turns `follow_theme` off; a Look toggle turns
+  it back on.
+- `/api/theme` (token) re-reads the theme and pushes `t="theme"` on the bus, and the page
+  re-applies it. `nixi-companion theme-changed` calls it.
+- Verify: `omarchy theme set <other>` recolours the live snowflake without a restart.
+
+**S13. Wire the hooks** (lead)
+*Approved by the user in conversation (2026-10-23).*
+- nixi HM module: with the companion enabled, install
+  `~/.config/omarchy/hooks/theme-set.d/nixi-companion`, which runs
+  `nixi-companion theme-changed`.
+- The user's machine (plain files, each backed up first):
+  - `~/.claude/settings.json` `hooks.Notification` runs
+    `nixi-companion attention --from claude "$message"`.
+  - `~/.codex/config.toml` `notify` runs a small wrapper calling `--from codex`.
+  - agy's `hooks.json` `Stop` runs `--from agy`.
+- The companion README documents the three snippets.
+
 ## Tests
 
 | Command | Expected |
