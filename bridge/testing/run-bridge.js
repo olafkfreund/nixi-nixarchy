@@ -144,6 +144,7 @@ exit 0
     };
   } finally {
     child.kill("SIGTERM");
-    rmSync(home, { recursive: true, force: true });
+    // The bridge can still be writing under HOME while it exits: retry ENOTEMPTY.
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }

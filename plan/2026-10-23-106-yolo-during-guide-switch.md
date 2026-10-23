@@ -126,6 +126,10 @@ Each was checked against the code, and the fixes are by the lead:
 - **Follow-up:** the companion's approval card (fork, `server.py` `Approvals.ask_bridge`) can
   likewise outlive a `/guide`. Its answer is dropped by the bridge, so nothing runs.
 
+**Merge note (2026-10-23):** after `master` (#95–#103) was merged in, the new undo test failed once
+with `ENOTEMPTY` while the harness removed the temporary HOME. The bridge was still writing as it
+exited. The harness's `rmSync` now retries (`maxRetries: 5`). The full suite passed 3 runs in a row.
+
 ## Tests
 
 | Command | Expected |
