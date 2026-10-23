@@ -117,6 +117,15 @@ converted to diagnostic events but is not rendered or persisted by the UI.
 Avoid logging raw ACP request bodies because they may contain sensitive tool
 arguments.
 
+The bridge's stdin commands and stdout events have a second consumer: the
+optional snowflake companion (`services.nixi.companion`, the
+`olafkfreund/nixoarchy-snowflake` fork), whose `app/server.py` runs the same
+`bridge/nixi-node bridge/bridge.js` per conversation and reads `text`, `tool`,
+`permission`, `status`, `notice`, `done`, `error` and `fatal`. Renaming one of
+those, or changing a field it reads, needs the fork updated in step. It only
+reads `nixi.json` and changes trust through the bridge's `trust` command, so
+the file keeps its two writers.
+
 ## Nixi: grounding, trust, tour and learned facts
 
 These are Nixi's additions to the upstream card. Each has a test that fails
