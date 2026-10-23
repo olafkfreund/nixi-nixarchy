@@ -373,6 +373,19 @@ The names to use:
 - Verify: calling the command twice within 30s shows one reaction, and it is silent with the
   companion stopped.
 
+**S11b. Click a nudge to jump to that agent** (fork; coder "bridge")
+*Approved by the user in conversation (2026-10-23).*
+- `nixi-companion attention` also sends where the agent lives:
+  - `HERDR_PANE_ID` / `HERDR_SESSION` from its environment when it runs inside herdr.
+  - The pids of its ancestor processes, so the terminal window can be found.
+- The server keeps the target of the last nudge per agent, validated: pane and session match
+  `[A-Za-z0-9:_.-]{1,64}`; pids are integers. Clicking the caption POSTs
+  `/api/attention/focus {from}`, and the server runs:
+  - `herdr --session <s> agent focus <pane>` (argv, no shell, timeout 3).
+  - `hyprctl dispatch focuswindow pid:<p>` for the first ancestor pid that is a Hyprland client.
+- Read-only: it moves focus and never types into the session.
+- Verify: a nudge sent from a herdr pane, then a click, focuses that pane and its terminal.
+
 **S12. Follow the Omarchy theme** (fork; coder "snow")
 *Approved by the user in conversation (2026-10-23).*
 - The server reads `omarchy theme current`, lowercases the name, and finds `colors.toml` in
@@ -428,6 +441,14 @@ The names to use:
   (uses omarchy weather)". The network-backed ones say so in their labels.
 - Verify: with a failing user unit, the amber mark shows and a click lists the unit. A fake event
   10 min ahead shows the glyph and caption. Forcing a cold temperature shows frost.
+
+**S16. A terminal sheet you can read** (fork `app/static/index.html`, maybe `app/window.py`;
+coder "snow")
+*Requested by the user (2026-10-23): "hard to read it at all".*
+- The sheet he holds while working (`CP`, the `.term` styles) gets at least 13px monospace text,
+  about 60+ columns and more lines. The overlay window grows while the sheet is out and shrinks
+  back afterwards, so it isn't squeezed into 340×460.
+- Verify: a screenshot of the sheet during a turn is readable at 100% zoom.
 
 ## Tests
 
