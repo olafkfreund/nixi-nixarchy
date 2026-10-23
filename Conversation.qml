@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 // Pure display formatting, unit tested under node (bridge/text-format.test.js).
 import "TextFormat.js" as TextFormat
@@ -134,11 +135,11 @@ Item {
     ? Math.max(0, surface.height - Math.max(0, stack.height - anchorY))
     : 0
 
-  readonly property color background: Color.menu.background
-  readonly property color foreground: Color.menu.text
-  readonly property color border: Color.menu.border
-  readonly property color accent: Color.accent
-  readonly property color scrim: Color.menu.scrim
+  readonly property color background: Commons.Color.menu.background
+  readonly property color foreground: Commons.Color.menu.text
+  readonly property color border: Commons.Color.menu.border
+  readonly property color accent: Commons.Color.accent
+  readonly property color scrim: Commons.Color.menu.scrim
   readonly property string conversationFont: "Noto Serif"
   readonly property int agentSize: Math.round(Style.font.body * 1.15 * root.fontScale)
   readonly property int humanSize: Math.round(Style.font.body * 2.36 * root.fontScale)
@@ -1107,13 +1108,25 @@ Item {
     permissionSettle.stop()
   }
 
+  // Switching to YOLO clears the queued cards, except a herdr write (#95): the
+  // bridge keeps those pending and they still need their own click.
+  function clearUnconfirmedPermissions() {
+    var keep = permissionQueue.filter(function(r) { return r.confirm === "click" })
+    if (pendingPermission.confirm === "click") { permissionQueue = keep; return }
+    pendingPermission = noPermission
+    permissionQueue = keep
+    permissionSettled = false
+    permissionSettle.stop()
+    if (keep.length > 0) showNextPermission()
+  }
+
   // options is the agent's own list of choices and the card renders one button
   // per entry, so dropping it here left the card with no buttons at all (#58
   // rewired the card and its keys through it but never widened this).
-  function enqueuePermission(id, title, detail, omitted, options) {
+  function enqueuePermission(id, title, detail, omitted, options, confirm) {
     var request = { id: String(id || ""), title: String(title || "Allow tool?"),
                     detail: String(detail || ""), omitted: Number(omitted) || 0,
-                    options: options || [] }
+                    options: options || [], confirm: String(confirm || "") }
     permissionQueue = permissionQueue.concat([request])
     if (pendingPermission.id === "") showNextPermission()
   }
@@ -1186,7 +1199,7 @@ Item {
         } else if (of === "permission_mode") {
           permissionMode = event.mode === "yolo" ? "yolo" : "permission"
           if (event.ok) {
-            if (permissionMode === "yolo") clearPermissions()
+            if (permissionMode === "yolo") clearUnconfirmedPermissions()
             permissionModeConfirmed(permissionMode)
           } else {
             statusText = String(event.message || "Could not change permission mode")
@@ -1219,7 +1232,7 @@ Item {
         var toolStatus = String(event.status || "in_progress")
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
-        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options)
+        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options, event.confirm)
       } else if (event.type === "error") {
         clearPermissions()
         waiting = false
@@ -2392,7 +2405,7 @@ Item {
             visible: root.pendingPermission.omitted > 0
             text: root.pendingPermission.detail.slice(root.pendingPermission.detail.lastIndexOf("\n") + 1)
             textFormat: Text.PlainText
-            color: Color.urgent
+            color: Commons.Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.caption * root.fontScale
             wrapMode: Text.Wrap

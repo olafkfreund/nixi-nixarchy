@@ -116,6 +116,9 @@ new AgentSideConnection((conn) => ({
         content: [{ type: "diff", path: "/tmp/probe", oldText: "a\n", newText: "b\n" }] }
       : text.includes("PLEASE_RUN") ? { toolCallId: "t3", title: "Run a long command", kind: "execute",
         rawInput: { command: "echo " + "x".repeat(2048 - "echo  && echo TAIL".length) + " && echo TAIL" } }
+      // PLEASE_HERDR: a Bash call that types into another session (#95).
+      : text.includes("PLEASE_HERDR") ? { toolCallId: "t5", title: "Bash", kind: "execute",
+        rawInput: { command: 'herdr agent prompt 1-2 "run the tests"' } }
       : null;
     if (toolCall) {
       const outcome = await conn.requestPermission({

@@ -201,7 +201,11 @@ export function secretBashRules() {
 export function claudePermissions(askBeforeReading, trust = "guide") {
   return {
     allow: askBeforeReading ? [] : READ_TOOLS,
-    ask: [...SECRET_READS, ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
+    // ask beats the user's own allow rules (Bash(env:*), Bash(python3:*) ...), which
+    // would otherwise let Claude run a herdr write without ever asking the bridge, so
+    // the bridge's click-only card (#95) could not be skipped by a standing allow.
+    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)",
+      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
     deny: EXEC_WRITES,
   };
 }
