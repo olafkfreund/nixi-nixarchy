@@ -63,7 +63,7 @@ spec: spec/2026-10-23-94-snowflake-companion.md
   - `companion.package` defaults to `null`, like `aiMirror.package`, with an assertion
     that it is set when enabled.
   - `home.packages` gets the package overridden with
-    `nixiBridge = [ "<nodejs-slim>/bin/node" "${plugins}/${pluginId}/bridge/bridge.js" ]`.
+    `nixiBridge = [ "${plugins}/${pluginId}/bridge/nixi-node" "${plugins}/${pluginId}/bridge/bridge.js" ]` (deviation, S6: the card runs the bridge through the `nixi-node` wrapper, which pins the adapters and `NIXI_CONTEXT_COMMAND`; a bare node would drop both).
   - No systemd unit and no Hyprland bind.
   - `docs/architecture.md` notes that the bridge's event names have a second consumer.
 - **Accepted limits** (intent Q1/Q4): no tool output in Void's terminal sheet, no
@@ -237,7 +237,7 @@ Traps: the clone in the scratchpad is shallow; don't work in it.
 - Config, in the `mkMerge` list: `(lib.mkIf cfg.companion.enable { assertions = [ {
   assertion = cfg.companion.package != null; message = "services.nixi.companion.package
   must be set: …"; } ]; home.packages = lib.optional (cfg.companion.package != null)
-  (cfg.companion.package.override { nixiBridge = [ "${pkgs.nodejs-slim}/bin/node"
+  (cfg.companion.package.override { nixiBridge = [ "${plugins}/${pluginId}/bridge/nixi-node"
   "${plugins}/${pluginId}/bridge/bridge.js" ]; }); })`.
 - Before writing this, check `nix/package.nix` for the node the bridge is patched to. If
   it is not `pkgs.nodejs-slim`, use what it uses.
