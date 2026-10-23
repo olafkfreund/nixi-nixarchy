@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 103
 intent: intent/2026-10-23-103-settings-write-race.md
 ---
