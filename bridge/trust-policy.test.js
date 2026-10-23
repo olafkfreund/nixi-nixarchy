@@ -230,6 +230,14 @@ test("Claude's session starts with Nixi's read rules; askBeforeReading withdraws
     claudePermissions(false), "only true counts");
 });
 
+test("Claude's shell rules follow the level the session starts at (#96)", async () => {
+  const guide = sentPermissions(await runBridge({ settings: { trust: "guide" } }));
+  assert.ok(guide.ask.includes("Bash"));
+  const mech = sentPermissions(await runBridge({ settings: { trust: "mechanic" } }));
+  assert.ok(!mech.ask.includes("Bash"));
+  assert.ok(mech.ask.includes("Bash(*.age*)"));
+});
+
 test("the read rules ride alongside a configured model (#27)", async () => {
   const run = await runBridge({ env: { NIXI_MODEL: "x" } });
   const options = run.agent.find((e) => e.method === "newSession").meta.claudeCode.options;
