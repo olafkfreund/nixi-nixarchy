@@ -149,6 +149,30 @@ permission mode in `nixi.json`; anything else is Guide.
   three read tools, because Claude matches rules per tool name — a list of
   `Read(...)` patterns alone left Grep and Glob able to reach the same paths
   unprompted (#41).
+
+  **Shell commands and secrets (#96).** At Guide, Claude (plan mode)
+  auto-approves read-only shell commands (`head`, `cat /etc/hostname`), so they
+  never reach ACP either, and `head ~/x.age` ran with no request. Measured: an
+  `ask` rule, bare `Bash` or a wildcard `Bash(*...*)`, beats that auto-approval,
+  so the command becomes a request and Guide cancels it. Rules are fixed per
+  session (passed at `newSession`), so they follow the level the session
+  **starts** at:
+
+  | start level | extra `ask` rules | effect |
+  |---|---|---|
+  | Guide | bare `Bash` | no shell at all; the tutor answers from the manual, `KNOWLEDGE.md` and file tools |
+  | Mechanic | `Bash(*X*)` per `SECRET_PATHS` entry (`secretBashRules`) | every shell command asks (default mode); a secret-path command asks even when the user has allow rules or answered "always allow" for that command |
+
+  The Mechanic set is best effort: `X` is the path without `~/`, so the `~/`,
+  `$HOME/`, absolute, `~user/` and `../../` spellings all match, but not a path
+  a shell builds at run time. Residual: after a Mechanic to Guide switch inside
+  one session, non-secret read-only commands, and anything already granted
+  "always allow" in that session, can run until the next conversation, because
+  the rules cannot change mid-session; secret-path commands are still cancelled.
+  Codex and opencode, same canary
+  at Guide (measured 2026-10-23): Codex read it -- its read-only sandbox permits
+  file reads and nixi has no per-path read rule for Codex (#97); opencode was
+  inconclusive (empty reply).
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.
