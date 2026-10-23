@@ -44,6 +44,18 @@ If 1–3 hold, take path A (R2–R5). If they hold only without `setSessionMode`
 for Codex. If the profile never applies, take path B (the fallback: R3b replaces R2/R3). Record
 the result here before R2. Revert the throwaway edit.
 
+**R1 result (2026-10-23): path B.**
+- codex 0.163 accepts the profile: `codex exec` with the same `-c default_permissions="nixi"`,
+  `-c permissions.nixi.filesystem={…}` reports no config error.
+- **codex-acp 2.1.1**, the pinned adapter, fails `newSession` with `Internal error` whenever
+  `CODEX_CONFIG` carries a permission profile. Two variants were tried. Without one, Codex starts
+  and reads a `~/.ssh` canary at Guide (the gap, re-confirmed).
+- Found on the way, for a future path A: bubblewrap can't mount `none` on a symlink, and
+  `/run/agenix` is one (→ `/run/agenix.d/N`). Entries must be `realpath`-resolved. Missing paths
+  are fine.
+- So R2/R3 are replaced by R3b. R4 documents path A as future work, for when codex-acp passes
+  permission profiles through.
+
 **R2. `codexPermissions(home)`** (`bridge/trust-policy.js`, `bridge/trust-policy.test.js`)
 - Generate as described above. If R1 shows missing paths break the session, list only the paths
   that exist (an `existsSync` filter, with the filter injectable for tests).
