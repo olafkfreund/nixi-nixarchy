@@ -97,6 +97,9 @@ export const SECRET_PATHS = [
   "~/.claude/.credentials.json", "~/.netrc",
   "/run/agenix/**", "/run/secrets/**",
   "**/.env", "**/.env.*", "**/*.age",
+  // `**/x` is relative to the session directory; `//` is absolute (#95). Without
+  // these a canary ~/foo.age was read with no card. OpenCode has its own list.
+  "//**/.env", "//**/.env.*", "//**/*.age",
 ];
 
 // Writes that will later run with nobody present (#52).

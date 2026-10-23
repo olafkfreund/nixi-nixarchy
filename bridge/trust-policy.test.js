@@ -290,8 +290,14 @@ test("every secret path is guarded for all three allowed read tools (#41)", () =
   assert.equal(ask.length, allow.length * SECRET_PATHS.length, "generated, not hand-listed");
 });
 
+test("secret globs are anchored absolutely as well (#95)", () => {
+  const { ask } = claudePermissions(false);
+  for (const rule of ["Read(//**/*.age)", "Grep(//**/.env)", "Glob(//**/.env.*)"])
+    assert.ok(ask.includes(rule), `${rule} missing`);
+});
+
 test("the secret path list cannot silently shrink (#41)", () => {
-  assert.ok(SECRET_PATHS.length >= 18, `only ${SECRET_PATHS.length} secret paths`);
+  assert.ok(SECRET_PATHS.length >= 21, `only ${SECRET_PATHS.length} secret paths`);
   for (const path of ["~/.ssh/**", "~/.gnupg/**", "/run/agenix/**", "**/.env", "**/*.age"])
     assert.ok(SECRET_PATHS.includes(path), `${path} is no longer guarded`);
   // Paths, not rules: a "Read(...)" here would not generate Grep/Glob cover.
