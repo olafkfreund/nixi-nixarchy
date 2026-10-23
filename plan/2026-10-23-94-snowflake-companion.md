@@ -112,6 +112,29 @@ Traps: the clone in the scratchpad is shallow; don't work in it.
   - Don't change `melt()`, `#gooBall`, `R=84`, `sph()` or the body transform.
   - Keep `pointer-events` as it is.
 
+**S1b. Read as a real snowflake** (fork `app/static/index.html`; coder "snow")
+*Added during implementation after the user saw S1 live (2026-10-23): it read as Void with
+spikes.*
+- `snowPath(core=62, reach=138)`: the same plate, plus long thin arms that taper to a diamond
+  tip, 3 branch pairs per arm (lengths 30/22/13), and 6 secondary spikes from the edge
+  midpoints to r=84.
+- Crystal facets: a stroked `path.ball.facet` (centre-to-vertex lines and an inner hexagon,
+  white at 22%), hidden and faded by the existing `.ball` rules.
+- Icy default look: body `#5aa9e6`, pupils `#1b4f8a`, white eye whites. The glow and sparks
+  follow the pupil colour. The `:root` defaults match.
+- Verify: a live screenshot on the desktop. Eyes stay inside the plate.
+
+**S1c. The NixOS logo as the snowflake** (fork `app/static/index.html`, `app/server.py`; lead)
+*Added at the user's request after S1b (2026-10-23): "make it look like the NixOS logo"; the
+S1b colours looked creepy.*
+- The six lambda polygons from the NixOS logo SVG, scaled by 145/1152 and rotated 60° apart,
+  alternating the logo's dark (`#3e5993`→`#4d6fb7`) and light (`#6d9bbc`→`#77b6e1`)
+  gradients, in a `g.ball.nix`. `snowPath()` is now the flat-topped hexagon plate (inradius
+  58) in the logo's hole (inradius 55.8), under the lambdas. S1b's branches and facets are gone.
+- Default look in both the page and `server.py` (`look()` and `DEFAULTS`): navy body
+  `#1b2a4a`, pupils `#3e5993`, white eyes.
+- Verify: a live screenshot. Eyes sit on the plate and the lambdas stay inside the frame.
+
 **S2. Bridge mode** (fork `app/server.py`; coder "bridge")
 - Near the config constants (~line 93), add `NIXI_BRIDGE = "@nixiBridge@"` and a helper
   `bridge_argv()`. It returns a list only when the value is a JSON non-empty list of
