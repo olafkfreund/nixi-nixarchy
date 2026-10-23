@@ -71,3 +71,16 @@ start at Guide and ask for `head ~/x.age` (a throwaway file) and
 `cat /etc/hostname`; both must be cancelled. Start at Mechanic: both show a card;
 the check is that the secret one still shows a card after "always allow" was
 given for `head`.
+
+## Codex secret-read canary (#97)
+
+Measured 2026-10-23 with codex 0.163.0 and codex-acp 2.1.1: at Guide, Codex ran
+`cat` on a throwaway `~/.ssh` file and returned it, since its `read-only` sandbox
+permits all reads. A permission profile (`default_permissions` with `":root" =
+"read"` and the secret paths `"none"`) is accepted by `codex exec` and denied the
+named files for every spelling, but codex-acp 2.1.1 fails `newSession` with
+`Internal error` when `CODEX_CONFIG` carries one. Nixi therefore refuses Codex at
+Guide. After any codex or codex-acp bump, retry: set the profile in
+`CODEX_CONFIG`, check `newSession` succeeds, then `cat ~/.ssh/<canary>` (and
+`cd ~ && cat .ssh/<canary>`) must be denied while `cat /etc/hostname` works.
+Resolve `/run/agenix` with `realpath` first (bubblewrap rejects symlinks).

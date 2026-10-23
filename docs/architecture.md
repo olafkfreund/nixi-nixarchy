@@ -169,10 +169,24 @@ permission mode in `nixi.json`; anything else is Guide.
   one session, non-secret read-only commands, and anything already granted
   "always allow" in that session, can run until the next conversation, because
   the rules cannot change mid-session; secret-path commands are still cancelled.
-  Codex and opencode, same canary
-  at Guide (measured 2026-10-23): Codex read it -- its read-only sandbox permits
-  file reads and nixi has no per-path read rule for Codex (#97); opencode was
-  inconclusive (empty reply).
+  opencode, same canary at Guide (measured 2026-10-23): inconclusive (empty reply).
+- **Codex (#97).** Measured with the same canary (a throwaway `~/.ssh` file):
+  Codex reads it at Guide, because its `read-only` sandbox permits every file read
+  and nixi has no per-path read rule for it. So **Codex can't be used at Guide**:
+  a session that would start there ends with a `fatal` ("Guide can't keep secrets
+  from Codex — use Claude for Guide, or switch to Mechanic"), no session is
+  created, and a Mechanic to Guide switch is refused (`ack` false). At **Mechanic,
+  Codex can read secrets without asking** (its reads never reach a permission
+  request); treat that as a warning, not a protection.
+  Not available yet (path A): codex 0.163 permission profiles
+  (`default_permissions` + `[permissions.x] filesystem = { ":root" = "read",
+  "<path>" = "none" }`) make the kernel deny named files and folders, but
+  codex-acp 2.1.1 fails `newSession` with `Internal error` when `CODEX_CONFIG`
+  carries one. Globs such as `~/**/*.age` fail closed and scan home before every
+  command, so only named folders could be fenced, not `.env`/`.age` elsewhere.
+  Bubblewrap can't mount `none` on a symlink and `/run/agenix` is one
+  (→ `/run/agenix.d/N`), so entries must be `realpath`-resolved. Revisit when
+  codex-acp passes profiles through.
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.

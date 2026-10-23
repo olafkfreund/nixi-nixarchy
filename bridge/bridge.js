@@ -349,8 +349,17 @@ const client = {
   },
 };
 
+// #97: Codex's read-only sandbox reads every file, and codex-acp 2.1.1 rejects
+// the permission profile that would fence secrets, so Guide can't be kept.
+const CODEX_GUIDE_REFUSAL = "Guide can't keep secrets from Codex — use Claude for Guide, or switch to Mechanic";
+
 async function start() {
   await loadSettings();
+  if (agentName === "codex" && trust === "guide") {
+    emit({ type: "fatal", message: CODEX_GUIDE_REFUSAL });
+    await shutdown(); // reaps the already-spawned codex-acp; no session was made
+    process.exit(0);
+  }
   const stream = ndJsonStream(
     Writable.toWeb(child.stdin),
     Readable.toWeb(child.stdout),
@@ -635,6 +644,7 @@ input.on("line", (line) => {
     // had NOT moved to (#40). On failure nothing is written and `trust` still
     // holds the level actually in force, which is what the failed ack carries.
     (async () => {
+      if (agentName === "codex" && next === "guide") throw new Error(CODEX_GUIDE_REFUSAL);
       if (connection && sessionId) await applyTrustMode(next);
       await mergeSettings({ trust: next });
       trust = next;

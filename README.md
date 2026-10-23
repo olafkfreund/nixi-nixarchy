@@ -167,8 +167,13 @@ Two levels, so that neither claims a boundary it cannot enforce.
 | agent | Guide | Mechanic |
 |---|---|---|
 | Claude | `plan` mode, requests cancelled (reads excepted) | `default` mode, asks |
-| Codex | `read-only`, requests cancelled (reads excepted) | `read-only`, asks before each edit |
+| Codex | not available: Guide can't keep secrets from it, see below | `read-only`, asks before each edit |
 | OpenCode | `plan`, requests cancelled (reads excepted) | `build`, asks |
+
+**Codex and secrets.** Codex's sandbox reads every file, including `~/.ssh` and
+`.env`, and nixi can't fence it yet (measured, #97). So nixi refuses Codex at
+Guide: use Claude for Guide. At Mechanic Codex works, but it can read secrets
+**without asking**; don't use it where that matters.
 
 In **both** trust levels, reading and searching files does not ask, so the
 prompts you see in Mechanic are for something that changes. With Claude that
