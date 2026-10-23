@@ -47,6 +47,18 @@ bridge:
 
 Record the results here, then revert.
 
+**S1 result (2026-10-23, opencode 2.0.32 through the bridge):**
+- The `read` denies work: at Mechanic the read tool didn't return a `~/.ssh` canary, and the
+  model fell back to the shell, which asked (a card, answered no).
+- `glob` path denies are **not applied**: it listed the file names in `~/.ssh`, though no
+  contents.
+- `list` was inconclusive (the model fell back to the shell, cancelled at Guide).
+- `grep` was inconclusive twice: opencode's process ended mid-turn, with no `done`. That is the
+  wedge the S4 guard covers.
+- **Decision (the plan's "otherwise ask" branch):** grep, glob and list become `"ask"` for every
+  path. They never run silently: cancelled at Guide, with S3's notice; a card at Mechanic. `read`
+  is `"*": "allow"` with the secret denies.
+
 **S2. Rules** (`bridge/trust-policy.js` ~38-76, `bridge/trust-policy.test.js`)
 - Add `opencodeSecretDenies(home)` (from `SECRET_PATHS`, as above). `OPENCODE_PERMISSIONS`
   becomes a function of `home` (or the deny list is merged in `opencodePermissions(askBeforeReading,
