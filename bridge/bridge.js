@@ -384,7 +384,7 @@ async function start() {
         settingSources: ["user"],
         settings: {
           ...(model ? { model, availableModels: [model] } : {}),
-          permissions: claudePermissions(askBeforeReading),
+          permissions: claudePermissions(askBeforeReading, trust),
         },
       } } },
     } : {}),

@@ -216,7 +216,10 @@ means its Read, Grep and Glob tools. This is why Guide can answer questions
 about your own configuration: it reads, it just never writes. Secrets still
 ask, in both levels and for all three tools: `~/.ssh`, `~/.gnupg`, cloud and
 GitHub credentials, `/run/agenix`, `.env` and `*.age` files. Shell commands, even `grep` and `ls`,
-still ask. Nixi tells the agent to use its file tools for lookups, and it
+still ask. In a conversation that starts at Guide, Claude has no shell at all, so
+it answers from the manual and its file tools. In one that starts at Mechanic, every
+shell command asks, and one naming a secret path asks even after an "always allow"
+(best effort, not every spelling). Nixi tells the agent to use its file tools for lookups, and it
 mostly does, but an occasional `grep` still arrives as a shell command. Adding
 one key binding typically takes two or three prompts: the live key list,
 perhaps one search, and the edit. To be asked before every read, set
