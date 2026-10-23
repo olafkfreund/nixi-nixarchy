@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 102
 author: olafkfreund
 ---
@@ -65,3 +65,7 @@ an occasional wedged card, and an unverified secret guarantee.
   apply to every agent (recommended) or only opencode?
 3. **If opencode can't be made to keep secrets at Mechanic:** refuse opencode at Guide like Codex
    (#97), or allow it with a warning?
+
+Resolved at approval (2026-10-23): the approver accepted the proposed answers. Q1: decided by
+measurement. Q2: a stalled-turn guard of about 120 s without events, for every agent. Q3: if
+opencode can't keep secrets at Mechanic, refuse it at Guide like Codex.
