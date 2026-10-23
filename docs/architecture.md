@@ -181,9 +181,9 @@ permission mode in `nixi.json`; anything else is Guide.
   could not be shown to, so `grep`, `glob` and `list` ask for every path: cancelled
   at Guide, a card at Mechanic. The shell still asks. `askBeforeReading` makes
   `read` ask too, with the denies kept.
-- **Empty cancelled turn (#102, every agent).** If a turn ends `cancelled` with
-  no text after Guide refused a permission, the bridge emits one notice naming the
-  refused tool and suggesting Mechanic.
+- **Cancelled turn after a refusal (#102, every agent).** If a turn ends `cancelled`
+  after Guide refused a permission, text or not, and the user did not press stop,
+  the bridge emits one notice naming the refused tool and suggesting Mechanic.
 - **Stalled-turn guard (#102, every agent).** A turn with no event for 120 s (15 min
   while a tool is in progress) is cancelled and ends with an `error`, which unlocks
   the UI. Any event resets it and a pending card pauses it. `NIXI_TURN_STALL_MS` is

@@ -104,6 +104,16 @@ case):
 
 Restore the trust and agent settings and delete the canaries.
 
+**S6 result (2026-10-23, live, opencode through this branch's bridge):**
+- Guide: `/etc/hostname` **answers**. The `~/.ssh` canary, `~/x.age` and a `.env` aren't read
+  (read denied; shell fallbacks cancelled).
+- Mechanic: the read-tool read is denied, and the fallback `ls`/`stat` and a shell `cat` show
+  cards.
+- Companion: the old wedging `~/.ssh` request finishes in 8 s.
+- Gap → S3 tweak: opencode often writes partial text before the turn ends cancelled, so the
+  notice condition drops "no text". It still fires once per turn, only after a Guide refusal, and
+  never on a user stop.
+
 **S7. Review (lead):** Codex `review --base fix/97-codex-guide-secret-reads`, agy, and a fresh
 Opus reviewer. Fix confirmed findings and record them here.
 

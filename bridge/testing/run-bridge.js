@@ -101,7 +101,7 @@ exit 0
     if (ready.type === "fatal") throw new Error(`bridge fatal: ${ready.message}`);
     let turns = 0;
     for (const message of options.messages || []) {
-      if (typeof message === "function") { await message({ home, events, exited: () => exited }); continue; }
+      if (typeof message === "function") { await message({ home, events, exited: () => exited, send: (m) => child.stdin.write(JSON.stringify(m) + "\n") }); continue; }
       child.stdin.write(JSON.stringify(message) + "\n");
       if (message.type === "prompt") {
         const target = ++turns;

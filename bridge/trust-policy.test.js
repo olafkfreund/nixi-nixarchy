@@ -691,6 +691,28 @@ test("Guide: an empty cancelled turn after a refusal gets one notice; a normal t
   assert.ok(events.findIndex((e) => e === notices[0]) < events.findIndex((e) => e.type === "done"));
 });
 
+test("Guide: a cancelled turn that had some text still gets the notice (#102)", async () => {
+  const { events } = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL WITH_TEXT" }] });
+  assert.ok(events.some((e) => e.type === "text"));
+  assert.equal(events.filter((e) => e.type === "notice" && e.text.includes("stopped instead of answering")).length, 1);
+});
+
+test("Guide: the stop button after a refusal does not get the Guide notice (#102)", async () => {
+  const { events } = await runBridge({ messages: [async ({ events, send }) => {
+    const waitFor = (predicate) => new Promise((resolve, reject) => {
+      const started = Date.now();
+      const poll = () => events.some(predicate) ? resolve() : Date.now() - started > 10000 ? reject(new Error("timed out")) : setTimeout(poll, 20);
+      poll();
+    });
+    send({ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL WAIT_STOP" });
+    await waitFor((e) => e.type === "status" && e.text.startsWith("Guide · not run"));
+    send({ type: "cancel" });
+    await waitFor((e) => e.type === "done");
+  }] });
+  assert.ok(events.some((e) => e.type === "done" && e.stopReason === "cancelled"));
+  assert.ok(!events.some((e) => e.type === "notice" && e.text.includes("stopped instead of answering")));
+});
+
 const stall = { NIXI_TURN_STALL_MS: "300" };
 
 test("stall guard: a silent turn is cancelled and reported (#102)", async () => {

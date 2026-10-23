@@ -14,6 +14,7 @@ const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify
 // one at session start. See setSessionMode below.
 let modeCalls = 0;
 let stalledOnce = 0;
+let stopTurn = () => {};
 
 // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
 // claude-agent-acp and codex-acp both do. Behind a flag so the existing
@@ -73,7 +74,7 @@ new AgentSideConnection((conn) => ({
     return {};
   },
   async authenticate() { return {}; },
-  async cancel() { log({ method: "cancel" }); },
+  async cancel() { log({ method: "cancel" }); stopTurn(); },
   async prompt(params) {
     const text = (params.prompt || []).map((block) => block.text || "").join("");
     log({ method: "prompt", text });
@@ -121,6 +122,9 @@ new AgentSideConnection((conn) => ({
       });
       log({ method: "permissionOutcome", outcome: outcome.outcome });
       // THEN_CANCEL: end the turn with no text, as opencode does on a refusal (#102).
+      // WITH_TEXT: some words first. WAIT_STOP: end only once the user's stop arrives.
+      if (text.includes("WITH_TEXT")) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Denied, trying the shell" } } });
+      if (text.includes("WAIT_STOP")) await new Promise((resolve) => { stopTurn = resolve; });
       if (text.includes("THEN_CANCEL")) return { stopReason: "cancelled" };
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.

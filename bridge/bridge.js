@@ -266,9 +266,9 @@ let sessionId = null;
 let connection = null;
 let turnRunning = false;
 // #102: opencode ends a turn on any refusal, leaving nothing on screen. Track
-// what Guide refused and whether any text came, to explain an empty turn.
+// what Guide refused, to explain a turn that ends cancelled after it.
 let refusedThisTurn = "";
-let textThisTurn = false;
+let userStopped = false; // the stop button, not a refusal, ended the turn
 
 // #90: Mechanic backs up a file before the agent is allowed to write it. The
 // agent writes after we answer, so the answer waits for the copy. Shell edits
@@ -336,10 +336,7 @@ const client = {
       case "agent_message_chunk": {
         const text = charts.push(learned.push(messageText(update.content) || ""));
         lastMessageId = update.messageId || lastMessageId;
-        if (text) {
-          textThisTurn = true;
-          emit({ type: "text", text, messageId: update.messageId || "" });
-        }
+        if (text) emit({ type: "text", text, messageId: update.messageId || "" });
         break;
       }
       case "tool_call":
@@ -510,7 +507,7 @@ async function prompt(text) {
   const turn = ++turnId;
   abandoned = false;
   refusedThisTurn = "";
-  textThisTurn = false;
+  userStopped = false;
   stalled = false;
   toolsInProgress.clear();
   emit({ type: "status", text: "Thinking…" });
@@ -527,7 +524,7 @@ async function prompt(text) {
     if (turn !== turnId) return;
     await finishLearned();
     for (const text of await changes.endTurn()) emit({ type: "notice", text });
-    if (response.stopReason === "cancelled" && !textThisTurn && refusedThisTurn)
+    if (response.stopReason === "cancelled" && refusedThisTurn && !userStopped)
       emit({ type: "notice", text: `The agent stopped instead of answering — at Guide it can't do what it tried (${refusedThisTurn}). Try Mechanic, or ask differently.` });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
@@ -755,6 +752,7 @@ input.on("line", (line) => {
       ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
     });
   } else if (message.type === "cancel" && connection && sessionId) {
+    userStopped = true;
     connection.cancel({ sessionId }).catch(() => {});
   } else if (message.type === "close") {
     shutdown().finally(() => process.exit(0));
