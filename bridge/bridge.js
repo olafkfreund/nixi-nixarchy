@@ -123,6 +123,41 @@ function currentPolicy() {
 
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}\n`);
+  armStall(); // any event is progress (#102)
+}
+
+// #102: opencode's process once died mid-turn with no `done`, locking the UI.
+// A turn with no event for IDLE (no tool running) or TOOL (one running) is
+// cancelled and reported. A pending card pauses it. NIXI_TURN_STALL_MS is for
+// tests only: it can shorten the limits, never lengthen them, so it cannot
+// switch the guard off.
+const stallOverride = Number(process.env.NIXI_TURN_STALL_MS);
+const stallScale = stallOverride > 0 && stallOverride < 120000 ? stallOverride / 120000 : 1;
+const STALL_IDLE_MS = 120000 * stallScale;
+const STALL_TOOL_MS = 15 * 60000 * stallScale;
+const toolsInProgress = new Set();
+let stallTimer = null;
+let stalled = false;
+let turnId = 0;
+let abandoned = false;
+
+function armStall() {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+  if (!turnRunning || stalled || pendingPermissions.size > 0) return;
+  stallTimer = setTimeout(() => {
+    stalled = true;
+    refusedThisTurn = ""; // the error says it; no second notice from the cancelled done
+    connection?.cancel({ sessionId }).catch(() => {});
+    // End the turn here: a wedged agent may never return from prompt(), and the
+    // next prompt must still start. Whatever the old prompt() does later is
+    // dropped (turnId), and its stray updates are ignored until the next prompt.
+    turnId++;
+    turnRunning = false;
+    abandoned = true;
+    changes.endTurn().then((texts) => { for (const text of texts) emit({ type: "notice", text }); }).catch(() => {});
+    emit({ type: "error", message: "The agent stopped responding, so this turn was ended." });
+  }, toolsInProgress.size ? STALL_TOOL_MS : STALL_IDLE_MS);
 }
 
 function messageText(content) {
@@ -230,6 +265,10 @@ let permissionSequence = 0;
 let sessionId = null;
 let connection = null;
 let turnRunning = false;
+// #102: opencode ends a turn on any refusal, leaving nothing on screen. Track
+// what Guide refused and whether any text came, to explain an empty turn.
+let refusedThisTurn = "";
+let textThisTurn = false;
 
 // #90: Mechanic backs up a file before the agent is allowed to write it. The
 // agent writes after we answer, so the answer waits for the copy. Shell edits
@@ -291,16 +330,22 @@ function noticeMcpSource(params) {
 
 const client = {
   sessionUpdate(params) {
+    if (abandoned && !turnRunning) return Promise.resolve(); // late output of a turn the guard ended (#102)
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
         const text = charts.push(learned.push(messageText(update.content) || ""));
         lastMessageId = update.messageId || lastMessageId;
-        if (text) emit({ type: "text", text, messageId: update.messageId || "" });
+        if (text) {
+          textThisTurn = true;
+          emit({ type: "text", text, messageId: update.messageId || "" });
+        }
         break;
       }
       case "tool_call":
       case "tool_call_update":
+        if (update.status === "completed" || update.status === "failed") toolsInProgress.delete(update.toolCallId);
+        else toolsInProgress.add(update.toolCallId);
         if (update.status === "completed") {
           changes.completed(update.toolCallId).catch((error) =>
             emit({ type: "diagnostic", text: `Could not record the finished edit: ${error.message}` }));
@@ -333,6 +378,7 @@ const client = {
     // Guide: nothing that asks for permission ever runs, and nothing is shown
     // to approve. This, not the session mode, is Guide's guarantee.
     if (policy.permission === "cancel") {
+      refusedThisTurn = title;
       emit({ type: "status", text: `Guide · not run: ${title}` });
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
@@ -345,6 +391,7 @@ const client = {
     emit({ type: "permission", id: requestId, title, options, detail, omitted });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
+      armStall();
     });
   },
 };
@@ -460,9 +507,16 @@ async function prompt(text) {
   if (!connection || !sessionId) throw new Error("ACP session is not ready");
   if (turnRunning) throw new Error("The agent is already handling a prompt");
   turnRunning = true;
+  const turn = ++turnId;
+  abandoned = false;
+  refusedThisTurn = "";
+  textThisTurn = false;
+  stalled = false;
+  toolsInProgress.clear();
   emit({ type: "status", text: "Thinking…" });
   try {
     const grounding = await groundPrompt(text);
+    if (turn !== turnId) return; // the stall guard ended this turn (#102)
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     learned = createLearnedFilter();
     charts = createChartFilter(mediaDir);
@@ -470,11 +524,16 @@ async function prompt(text) {
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
     });
+    if (turn !== turnId) return;
     await finishLearned();
     for (const text of await changes.endTurn()) emit({ type: "notice", text });
+    if (response.stopReason === "cancelled" && !textThisTurn && refusedThisTurn)
+      emit({ type: "notice", text: `The agent stopped instead of answering — at Guide it can't do what it tried (${refusedThisTurn}). Try Mechanic, or ask differently.` });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
+    if (turn !== turnId) return; // superseded: the guard already cleaned up, and a newer turn may be running
     turnRunning = false;
+    armStall(); // clears the timer
     // A failed or cancelled turn skips the endTurn above; without this its change
     // set stays open and the next turn's edits join it. A no-op after success.
     for (const text of await changes.endTurn()) emit({ type: "notice", text });

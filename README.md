@@ -168,7 +168,7 @@ Two levels, so that neither claims a boundary it cannot enforce.
 |---|---|---|
 | Claude | `plan` mode, requests cancelled (reads excepted) | `default` mode, asks |
 | Codex | not available: Guide can't keep secrets from it, see below | `read-only`, asks before each edit |
-| OpenCode | `plan`, requests cancelled (reads excepted) | `build`, asks |
+| OpenCode | `plan`, requests cancelled (`read` excepted; `grep`, `glob` and `list` are cancelled) | `build`, asks |
 
 **Codex and secrets.** Codex's sandbox reads every file, including `~/.ssh` and
 `.env`, and nixi can't fence it yet (measured, #97). So nixi refuses Codex at
@@ -194,7 +194,11 @@ the next session, and to OpenCode as well.
 OpenCode's own defaults let tools run without asking, so Nixi always starts it
 with its own rules — everything asks except reading and searching, and it may
 not leave plan mode — replacing any `OPENCODE_CONFIG_CONTENT` in the
-environment.
+environment. Its `read` tool works anywhere except the secret paths above, which
+OpenCode itself denies; its `grep`, `glob` and `list` tools ask. OpenCode ends a
+turn when anything is refused, so at Guide Nixi says what it tried and suggests
+Mechanic. For every agent, a turn that goes silent for 2 minutes (15 with a tool
+running) is cancelled with an error rather than leaving the card stuck.
 
 ---
 

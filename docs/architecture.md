@@ -169,7 +169,25 @@ permission mode in `nixi.json`; anything else is Guide.
   one session, non-secret read-only commands, and anything already granted
   "always allow" in that session, can run until the next conversation, because
   the rules cannot change mid-session; secret-path commands are still cancelled.
-  opencode, same canary at Guide (measured 2026-10-23): inconclusive (empty reply).
+- **OpenCode (#102).** Measured on opencode 2.0.32 through the bridge: any
+  refusal (ACP reject or cancel, or a config `deny`) ends the whole turn, so at
+  Guide a read outside the project, which opencode asks about
+  (`external_directory`), left an empty reply. Nixi's rules now set
+  `external_directory: "allow"` and `read: { "*": "allow" }` plus a `deny` for
+  every `SECRET_PATHS` entry (`opencodeSecretDenies`: `~/X/**` as `<home>/X/*` and
+  `~/X/*`, exact files in both spellings, `*.env`, `*.env.*`, `*.age`,
+  `/run/{agenix,secrets}/*`); opencode enforces a config deny itself. `glob`
+  applies no path denies (it listed `~/.ssh` file names), and `grep` and `list`
+  could not be shown to, so `grep`, `glob` and `list` ask for every path: cancelled
+  at Guide, a card at Mechanic. The shell still asks. `askBeforeReading` makes
+  `read` ask too, with the denies kept.
+- **Empty cancelled turn (#102, every agent).** If a turn ends `cancelled` with
+  no text after Guide refused a permission, the bridge emits one notice naming the
+  refused tool and suggesting Mechanic.
+- **Stalled-turn guard (#102, every agent).** A turn with no event for 120 s (15 min
+  while a tool is in progress) is cancelled and ends with an `error`, which unlocks
+  the UI. Any event resets it and a pending card pauses it. `NIXI_TURN_STALL_MS` is
+  for tests only: it can shorten the limits, never lengthen them.
 - **Codex (#97).** Measured with the same canary (a throwaway `~/.ssh` file):
   Codex reads it at Guide, because its `read-only` sandbox permits every file read
   and nixi has no per-path read rule for it. So **Codex can't be used at Guide**:

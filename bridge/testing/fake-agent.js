@@ -13,6 +13,7 @@ const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify
 // setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
 // one at session start. See setSessionMode below.
 let modeCalls = 0;
+let stalledOnce = 0;
 
 // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
 // claude-agent-acp and codex-acp both do. Behind a flag so the existing
@@ -72,7 +73,7 @@ new AgentSideConnection((conn) => ({
     return {};
   },
   async authenticate() { return {}; },
-  async cancel() {},
+  async cancel() { log({ method: "cancel" }); },
   async prompt(params) {
     const text = (params.prompt || []).map((block) => block.text || "").join("");
     log({ method: "prompt", text });
@@ -92,6 +93,17 @@ new AgentSideConnection((conn) => ({
       if (text.includes("THEN_FAIL")) throw new Error("fake agent failed after the edit");
       return { stopReason: "end_turn" };
     }
+    // #102 stall guard. STALL_SILENT: never answer. STALL_TOOL: a tool starts, then
+    // 1 s of silence, then the turn ends. NIXI_TURN_STALL_MS in the test is shorter than
+    // that 1 s, so only a tool-aware limit lets the turn finish quietly.
+    // STALL_ONCE: silent only the first time, so a second prompt can be answered.
+    if (text.includes("STALL_ONCE") && !stalledOnce++) await new Promise(() => {});
+    if (text.includes("STALL_SILENT")) await new Promise(() => {});
+    if (text.includes("STALL_TOOL")) {
+      await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call", toolCallId: "t5", title: "Long tool", status: "in_progress" } });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return { stopReason: "end_turn" };
+    }
     // A prompt asking for a change triggers a permission request, so tests can
     // observe how the bridge answers it.
     // PLEASE_EDIT carries a diff and PLEASE_RUN a 2 KB command, for the detail.
@@ -108,6 +120,8 @@ new AgentSideConnection((conn) => ({
         options: permissionOptions(),
       });
       log({ method: "permissionOutcome", outcome: outcome.outcome });
+      // THEN_CANCEL: end the turn with no text, as opencode does on a refusal (#102).
+      if (text.includes("THEN_CANCEL")) return { stopReason: "cancelled" };
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
     const chunks = text.includes("PLEASE_IMAGE") ? []

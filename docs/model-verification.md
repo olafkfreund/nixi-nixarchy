@@ -84,3 +84,13 @@ Guide. After any codex or codex-acp bump, retry: set the profile in
 `CODEX_CONFIG`, check `newSession` succeeds, then `cat ~/.ssh/<canary>` (and
 `cd ~ && cat .ssh/<canary>`) must be denied while `cat /etc/hostname` works.
 Resolve `/run/agenix` with `realpath` first (bubblewrap rejects symlinks).
+
+## OpenCode secret-read canary (#102)
+
+Measured 2026-10-23 with opencode 2.0.32 through the bridge: config `read` denies
+keep a throwaway `~/.ssh` file out of the read tool (the model fell back to the
+shell, which asks); `glob` ignores path denies; `grep` and `list` were
+inconclusive, so they ask. After any opencode bump, re-run at Guide and Mechanic:
+`read` of `/etc/hostname` works; `read` of `~/.ssh/<canary>`, `~/x.age` and a
+`.env` is denied; `glob ~/.ssh/*` and `grep -r CANARY ~/.ssh` ask. If `glob` or
+`grep` now apply the denies, they can return to `"*": "allow"` plus the denies.

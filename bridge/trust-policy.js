@@ -23,6 +23,8 @@
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
 // from Mechanic; it can never be reached from Guide.
 
+import os from "node:os";
+
 export function resolveTrust(value) {
   return value === "mechanic" ? "mechanic" : "guide";
 }
@@ -36,22 +38,47 @@ const MODES = {
 // OpenCode's own defaults resolve every tool to "allow": a write runs without
 // any permission request, so Guide's cancel would have nothing to cancel, and
 // its plan mode still allows bash. Nixi's rules are appended after OpenCode's
-// built-in ones and win: everything asks except reading and searching, and the
-// agent may not leave plan mode itself. `*` also covers MCP and plugin tools
-// from the user's opencode.json. Verified on p620 (plan step 17b).
-export const OPENCODE_PERMISSIONS = {
-  permission: {
+// built-in ones and win: everything asks except reading, and the agent may not
+// leave plan mode itself. `*` also covers MCP and plugin tools from the user's
+// opencode.json. Verified on p620 (plan step 17b).
+//
+// #102: opencode 2.0.32 ends the whole turn on any refusal, and its own
+// external_directory check asks for every read outside the project, so Guide
+// could not read /etc/hostname. external_directory is allowed; `read` is
+// allowed except SECRET_PATHS, which are config denies (a deny is enforced by
+// opencode itself, no card). Measured: grep/glob apply no path denies, so
+// grep/glob/list ask for every path instead of silently reaching ~/.ssh.
+//
+// Home is a parameter because opencode matches the literal path, in either
+// spelling (`~` and the absolute one), and the bridge cannot assume it.
+export function opencodeSecretDenies(home) {
+  const denies = [];
+  for (const path of SECRET_PATHS) {
+    if (path.startsWith("//")) continue; // Claude's absolute spelling; these cover it already
+    const glob = path.replace(/\/\*\*$/, "/*");
+    if (path.startsWith("~/")) denies.push(`${home}/${glob.slice(2)}`, glob);
+    else if (path.startsWith("**/")) denies.push(glob.slice(3).startsWith("*") ? glob.slice(3) : `*${glob.slice(3)}`);
+    else denies.push(glob);
+  }
+  return denies;
+}
+
+function opencodeRules(readDefault, home) {
+  const read = { "*": readDefault };
+  for (const pattern of opencodeSecretDenies(home)) read[pattern] = "deny";
+  return { permission: {
     "*": "ask",
-    read: { "*": "allow", "*.env": "ask", "*.env.*": "ask" },
-    grep: "allow",
-    glob: "allow",
-    list: "allow",
+    external_directory: "allow",
+    read,
+    grep: "ask",
+    glob: "ask",
+    list: "ask",
     lsp: "allow",
     todowrite: "allow",
     question: "allow",
     plan_exit: "deny",
-  },
-};
+  } };
+}
 
 // Agents whose MCP permission path Nixi has VERIFIED, not assumed. Read from
 // claude-agent-acp 0.81.2: ACP `mcpServers` are mapped into the Claude Code
@@ -68,11 +95,9 @@ export const OPENCODE_PERMISSIONS = {
 export const MCP_CAPABLE_AGENTS = ["claude"];
 
 // askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
-// everything" means every agent.
-export function opencodePermissions(askBeforeReading) {
-  if (!askBeforeReading) return OPENCODE_PERMISSIONS;
-  return { permission: { ...OPENCODE_PERMISSIONS.permission,
-    read: "ask", grep: "ask", glob: "ask", list: "ask" } };
+// everything" means every agent. The secret denies stay.
+export function opencodePermissions(askBeforeReading, home = os.homedir()) {
+  return opencodeRules(askBeforeReading ? "ask" : "allow", home);
 }
 
 // Claude asks before every Read/Grep/Glob outside its cwd (~/.config/nixi), so
@@ -101,6 +126,9 @@ export const SECRET_PATHS = [
   // these a canary ~/foo.age was read with no card. OpenCode has its own list.
   "//**/.env", "//**/.env.*", "//**/*.age",
 ];
+
+// The default rules (home as this process sees it).
+export const OPENCODE_PERMISSIONS = opencodeRules("allow", os.homedir());
 
 // Writes that will later run with nobody present (#52).
 //
