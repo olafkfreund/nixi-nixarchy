@@ -400,6 +400,35 @@ The names to use:
   - agy's `hooks.json` `Stop` runs `--from agy`.
 - The companion README documents the three snippets.
 
+**S14. Skins for a snowflake** (fork `app/static/index.html`, `app/server.py`)
+*Chosen by the user in conversation (2026-10-23), after Codex and agy reviewed it.*
+- Drop cat, bunny, bear, devil, antenna, party and headphones from `drawSkin()`, `SKINS` and the
+  gallery. A stored skin that no longer exists falls back to `none`.
+- Keep and move: the halo above the top lambda tip (cy≈-134), the crown on the plate's top edge
+  (scaled 0.85), the sprout from the top notch, the bow on the upper-right hex corner. All of them
+  stay inside `#body` (r ≤ 130) so the click area is unchanged.
+
+**S15. Lambda-tip cues** (fork)
+*Chosen by the user in conversation (2026-10-23).*
+- One cue at a time on a lambda tip, priority: attention (S11) > calendar > system > weather look.
+  Icon only while idle; text appears in the caption only on click or at the calendar's T-10m.
+  Hidden in notch mode except for a single notch pulse.
+- Server: a small `Ambient` thread with a TTL cache. It never runs inside `state_info()`.
+  Subprocesses get `timeout=3` and stdin DEVNULL, and the thread pauses while the companion is
+  hidden or asleep. Changes go out on the bus as `t="ambient"`.
+- **System health** (local, on by default): `systemctl --user --failed --no-legend` every 15 min
+  gives an amber tip mark (click: unit names). A new `/nix/var/nix/profiles/system` generation
+  gives one blue glint across the lambdas, once per generation.
+- **Next calendar item** (opt-in, off by default): `gog --readonly --json calendar events` for the
+  calendars in `~/.config/omarchy/calendars.json` that are `enabled`, fetched every 15 min and
+  on show. At T-10m: a calendar glyph and one caption with the time and title, never spoken.
+- **Weather look** (opt-in, off by default): `omarchy weather status`, read every 30 min. Below
+  0 °C, frost on the tips; above 28 °C, a slight thaw. No text.
+- Settings on the Look tab: "System health", "Next calendar item (uses gog)" and "Weather look
+  (uses omarchy weather)". The network-backed ones say so in their labels.
+- Verify: with a failing user unit, the amber mark shows and a click lists the unit. A fake event
+  10 min ahead shows the glyph and caption. Forcing a cold temperature shows frost.
+
 ## Tests
 
 | Command | Expected |
