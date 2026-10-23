@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 94
 author: olafkfreund
 ---
@@ -88,3 +88,7 @@ cannot be offered to nixi users as it is:
    user unit that starts it with the session.
 4. **Accessories:** cat/bear/devil ears overlap the snowflake's upper arms. Accept that
    at first (proposed), re-anchor them, or hide those skins.
+
+Resolved at approval (2026-10-23): the approver accepted the proposed answer to
+each question: 1 acceptable, 2 same settings as the card, 3 hotkey/menu only,
+4 accept the overlap at first.
