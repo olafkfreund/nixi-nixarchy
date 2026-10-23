@@ -95,6 +95,18 @@ nothing else is needed.
 
 Restore the agent setting, the trust level and the canaries afterwards.
 
+**R6 result (2026-10-23, live through the companion, this branch's bridge):**
+- Codex, a session starting at Guide: **refused** ("Guide can't keep secrets from Codex — use
+  Claude for Guide, or switch to Mechanic"). Codex Mechanic → Guide: **refused** (ack false,
+  trust stays Mechanic).
+- **Bug found (R3b):** with Codex and a saved Guide, the bridge exits, so the trust switch that
+  would get out of it (the card's, or the companion's `/mechanic`) can't reach any bridge. Fix:
+  stay alive without a session and accept only `trust`/`close`; switching to Mechanic is saved and
+  then asks for a new conversation.
+- opencode at Guide: **its turn hangs** (no reply, no events). The companion stayed busy until the
+  turn was stopped. That matches #96's "empty reply". Its secret behaviour is still unmeasured
+  because it never answers; it needs a follow-up issue (opencode turns hang under nixi at Guide).
+
 **R7. Review (lead):** Codex `review --base fix/96-guide-shell-secret-reads`, agy in plan mode,
 and a fresh Opus reviewer. Fix confirmed findings and record them here.
 

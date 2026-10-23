@@ -125,13 +125,24 @@ test("Codex starts at Mechanic in read-only", async () => {
   assert.equal(mechanic.agent.find((e) => e.method === "setSessionMode")?.modeId, "read-only");
 });
 
-// #97: Codex's sandbox reads secrets at any level, so Guide refuses it.
-test("Codex at Guide: fatal, and no session is started", async () => {
+// #97: Codex's sandbox reads secrets at any level, so Guide refuses it, but the
+// bridge stays up so the switch to Mechanic can reach it.
+test("Codex at Guide: reason shown, no session, prompt refused, switch restarts at Mechanic", async () => {
   const log = join(mkdtempSync(join(tmpdir(), "nixi-codex-")), "agent.log");
-  await assert.rejects(runBridge({ env: { NIXI_AGENT: "codex", FAKE_AGENT_LOG: log } }),
-    /Guide can't keep secrets from Codex/);
-  const calls = existsSync(log) ? readFileSync(log, "utf8") : "";
-  assert.ok(!calls.includes("newSession"), "a Codex session started at Guide");
+  const run = await runBridge({
+    env: { NIXI_AGENT: "codex", FAKE_AGENT_LOG: log },
+    messages: [{ type: "prompt", text: "hi" }, { type: "trust", trust: "mechanic" },
+      async ({ events }) => { while (!events.some((e) => e.type === "fatal")) await new Promise((r) => setTimeout(r, 20)); }],
+  });
+  const reason = /Guide can't keep secrets from Codex/;
+  assert.match(run.events.find((e) => e.type === "notice")?.text, reason);
+  assert.match(run.events.find((e) => e.type === "error")?.message, reason);
+  const ack = run.events.find((e) => e.type === "ack" && e.of === "trust");
+  assert.equal(ack.ok, true);
+  assert.equal(ack.trust, "mechanic");
+  assert.equal(run.settingsAfter.trust, "mechanic");
+  assert.match(run.events.find((e) => e.type === "fatal")?.message, /Trust set to Mechanic/);
+  assert.ok(!(existsSync(log) ? readFileSync(log, "utf8") : "").includes("newSession"), "a Codex session started at Guide");
 });
 
 test("Codex: Mechanic to Guide is refused and trust stays mechanic", async () => {

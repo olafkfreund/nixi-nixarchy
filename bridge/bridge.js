@@ -353,12 +353,20 @@ const client = {
 // the permission profile that would fence secrets, so Guide can't be kept.
 const CODEX_GUIDE_REFUSAL = "Guide can't keep secrets from Codex — use Claude for Guide, or switch to Mechanic";
 
+let codexRefused = false;
+
 async function start() {
   await loadSettings();
   if (agentName === "codex" && trust === "guide") {
-    emit({ type: "fatal", message: CODEX_GUIDE_REFUSAL });
-    await shutdown(); // reaps the already-spawned codex-acp; no session was made
-    process.exit(0);
+    // No session. Stay up (ready) so the card's switch to Mechanic can reach us;
+    // the stdin loop below answers only trust, close and prompt in this state.
+    codexRefused = true;
+    shuttingDown = true; // the child's exit is expected, not a fatal
+    child.kill("SIGTERM"); // module-load spawn is kept; reaped here
+    await Promise.race([childExited, delay(500)]);
+    emit({ type: "notice", text: CODEX_GUIDE_REFUSAL });
+    emit({ type: "ready", steeringSupported: false, permissionMode, trust });
+    return;
   }
   const stream = ndJsonStream(
     Writable.toWeb(child.stdin),
@@ -617,6 +625,18 @@ input.on("line", (line) => {
     message = JSON.parse(line);
   } catch {
     emit({ type: "error", message: "Invalid UI command" });
+    return;
+  }
+  if (codexRefused) {
+    if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "trust") {
+      if (resolveTrust(message.trust) === "guide") return ack("trust", true, { trust: "guide" });
+      mergeSettings({ trust: "mechanic" }).then(() => {
+        ack("trust", true, { trust: "mechanic" });
+        emit({ type: "fatal", message: "Trust set to Mechanic — start a new conversation to use Codex" });
+        process.exit(0);
+      }).catch((error) => ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }));
+    } else if (message.type === "close") process.exit(0);
     return;
   }
   if (message.type === "prompt") {
