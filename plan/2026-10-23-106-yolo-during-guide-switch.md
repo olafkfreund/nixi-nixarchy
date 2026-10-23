@@ -58,6 +58,12 @@ commits each step, and does P4 (reviews).
   - `currentPolicy()` also feeds `mcpServers` at session start. The flag is never set then, so
     there is no change.
 
+**P1 result:** as planned (the `coder` agent). Two deviations:
+- The flag is cleared by a `.finally` chained after the existing `.catch`, not a `finally` inside the
+  block. It runs right after the ack, with no input between them.
+- (lead) It is a **count** (`leavingMechanic++` / `--`), not a boolean. With two switches to Guide in
+  flight, the first to settle would otherwise reopen the window while the second still waits.
+
 **P2. Tests** (`bridge/trust-policy.test.js`, near the #40 tests ~250;
 `bridge/testing/run-bridge.js` ~102)
 - Harness: function steps get `write` (write one NDJSON message to the bridge's stdin without
