@@ -126,10 +126,25 @@ memory; closing the owning conversation clears them. The app-owned durable
 state includes permission, display, motion, search, optional file open/edit
 commands, and the selected harness, model, and reasoning effort in `nixi.json`.
 Existing conversations retain their ACP session when these defaults change;
-new conversations receive a frozen copy. That file has two writers —
-`bridge.js` for the mode, `Ask.qml` for
-the scale — so each must merge into the existing contents rather than replace
-them.
+new conversations receive a frozen copy. That file has two writers, and each owns its keys (#103):
+
+| Writer | Owns | Preserves |
+|---|---|---|
+| `bridge.js` | `trust`, `permissionMode` | every other key |
+| `Ask.qml` | `fontScale`, `searchDebounceMs`, `keyboardLineImpulse`, `keyboardDeceleration`, `fileOpenCommand`, `fileEditCommand`, `useHyprlandShortcutSubmap`, `repoSearchDepth`, `agent`, `model`, `reasoningEffort` | every other key (for example `askBeforeReading`) |
+
+Before it writes, the card re-reads the file and writes that fresh copy plus
+its own keys only; the re-read is never applied to the card's properties. The
+bridge reads, merges and writes a temp file (0600) that it renames over
+`nixi.json`, one write at a time per bridge, so the card never sees a
+half-written file. While a card change waits out its 200 ms save delay, a
+reload (a bridge write, or the echo of the card's own write) is not applied to
+the card, so it cannot put the old value back. Neither writer replaces a file
+it cannot parse: the card skips its write, and the bridge fails the switch with
+an error, so a half-done hand edit never loses the other writer's keys. Two windows remain, both unfixed: a bridge write inside the
+card's single event-loop turn between its re-read and its write, and two
+bridges writing within milliseconds. Each writer merges a fresh read, so only
+that writer's own key can be lost.
 
 The font scale is owned by the `Ask.qml` manager, not by a conversation, so
 every overlay and pinned window shares one value and one writer persists it. Agent CLIs remain responsible for any data they

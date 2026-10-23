@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
@@ -95,19 +95,37 @@ async function loadSettings() {
   } catch {}
 }
 
-async function mergeSettings(patch) {
-  await mkdir(settingsDir, { recursive: true });
-  // The UI writes its own keys (font scale) to this file. Merge rather than
-  // replace so changing one setting cannot drop the others.
-  let settings = {};
-  try {
-    const parsed = JSON.parse(await readFile(settingsPath, "utf8"));
-    if (parsed && typeof parsed === "object") settings = parsed;
-  } catch {}
-  Object.assign(settings, patch);
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, {
-    mode: 0o600,
+// One write at a time per bridge, and rename() so the card never reads a
+// half-written file (#103).
+let settingsQueue = Promise.resolve();
+let settingsWrites = 0;
+function mergeSettings(patch) {
+  const run = settingsQueue.then(async () => {
+    await mkdir(settingsDir, { recursive: true });
+    // The UI writes its own keys (font scale) to this file. Merge a fresh read
+    // rather than replace so changing one setting cannot drop the others.
+    // Only a missing file starts empty. Anything unreadable fails the switch
+    // rather than replacing the card's keys with this one patch.
+    let settings = {};
+    try {
+      settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw new Error(`${settingsPath} is not valid JSON or not readable`);
+    }
+    if (!settings || typeof settings !== "object" || Array.isArray(settings))
+      throw new Error(`${settingsPath} does not hold a JSON object`);
+    Object.assign(settings, patch);
+    const tmp = `${settingsPath}.tmp-${process.pid}-${++settingsWrites}`;
+    try {
+      await writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+      await rename(tmp, settingsPath);
+    } catch (error) {
+      await rm(tmp, { force: true });
+      throw error;
+    }
   });
+  settingsQueue = run.catch(() => {});
+  return run;
 }
 
 async function savePermissionMode(mode) {
