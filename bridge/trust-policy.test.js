@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules } from "./trust-policy.js";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -287,7 +287,8 @@ test("every secret path is guarded for all three allowed read tools (#41)", () =
   for (const tool of allow)
     for (const path of SECRET_PATHS)
       assert.ok(ask.includes(`${tool}(${path})`), `${tool} may reach ${path} unprompted`);
-  assert.equal(ask.length, allow.length * SECRET_PATHS.length, "generated, not hand-listed");
+  assert.equal(ask.filter((r) => !r.startsWith("Bash")).length, allow.length * SECRET_PATHS.length,
+    "generated, not hand-listed");
 });
 
 test("secret globs are anchored absolutely as well (#95)", () => {
@@ -311,6 +312,27 @@ test("Guide and Mechanic still grant the same reads; only askBeforeReading withd
   assert.deepEqual(claudePermissions(true).allow, []);
   assert.deepEqual(claudePermissions(true).ask, claudePermissions(false).ask,
     "secrets stay guarded whether or not reads are allowed");
+});
+
+// #96 -- an ask rule on Bash beats Claude's auto-approval of read-only commands.
+test("rules follow the level a session starts at (#96)", () => {
+  const guide = claudePermissions(false, "guide");
+  assert.ok(guide.ask.includes("Bash"), "Guide has no shell");
+  const mech = claudePermissions(false, "mechanic", "/home/u");
+  assert.ok(!mech.ask.includes("Bash"), "Mechanic keeps non-secret shell commands quiet");
+  for (const rule of ["Bash(*~/.ssh*)", "Bash(*$HOME/.ssh*)", "Bash(*${HOME}/.ssh*)",
+    "Bash(*/home/u/.ssh*)", "Bash(*/run/agenix*)", "Bash(*.env*)", "Bash(*.age*)"])
+    assert.ok(mech.ask.includes(rule), `${rule} missing`);
+  assert.equal(new Set(mech.ask).size, mech.ask.length, "no duplicates");
+  assert.deepEqual(claudePermissions(false, "bogus"), guide, "unknown trust is Guide");
+  for (const p of [guide, mech]) {
+    assert.ok(p.ask.includes("Read(~/.ssh/**)"));
+    assert.deepEqual(p.deny, claudePermissions(false).deny);
+  }
+});
+
+test("the Mechanic shell list cannot silently shrink (#96)", () => {
+  assert.equal(secretBashRules("/home/u").length, 56);
 });
 
 // #53 -- the agent offers allow_always and both installed adapters send it
