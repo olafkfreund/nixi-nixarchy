@@ -401,6 +401,20 @@ The names to use:
   re-applies it. `nixi-companion theme-changed` calls it.
 - Verify: `omarchy theme set <other>` recolours the live snowflake without a restart.
 
+**S12b. Everything follows the theme** (fork `app/static/index.html`, `app/server.py`; coder "snow")
+*User request (2026-10-23): the notch and the panels must follow the theme too.*
+- `theme_colors()` also returns `dark_foreground`, `muted` and `selection`.
+- New CSS variables `--notch`, `--panel`, `--panel2`, `--text`, `--dim` and `--line`, which
+  default to today's colours and are set from the theme while following it:
+  - dark themes: `darker_background`, `background`, `lighter_background`, `foreground`,
+    `dark_foreground`/`muted`, `selection`;
+  - light themes get the matching light values.
+- The notch (`#barPill`) and its corner curves, the goo drop, and the melt colour (`toBlack()` →
+  `toNotch()`) use `--notch`. The panels, menus, inputs, chip, caption and terminal sheet use the
+  variables instead of hard-coded greys.
+- Verify: a render with the gruvbox theme in notch mode with a panel open, and again with "follow
+  desktop theme" off.
+
 **S13. Wire the hooks** (lead)
 *Approved by the user in conversation (2026-10-23).*
 - nixi HM module: with the companion enabled, install
