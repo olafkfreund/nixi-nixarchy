@@ -365,6 +365,13 @@ test("every secret path is guarded for all three allowed read tools (#41)", () =
     "generated, not hand-listed");
 });
 
+test("herdr commands always ask, whatever the user allows (#95)", () => {
+  for (const trust of ["guide", "mechanic"]) for (const askBeforeReading of [true, false]) {
+    const { ask } = claudePermissions(askBeforeReading, trust);
+    assert.ok(ask.includes("Bash(*herdr*)") && ask.includes("Bash(*HERDR_SOCKET*)"), `${trust} ${askBeforeReading}`);
+  }
+});
+
 test("secret globs are anchored absolutely as well (#95)", () => {
   const { ask } = claudePermissions(false);
   for (const rule of ["Read(//**/*.age)", "Grep(//**/.env)", "Glob(//**/.env.*)"])

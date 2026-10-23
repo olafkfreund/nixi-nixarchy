@@ -70,6 +70,29 @@ The durable mode is `permission` or `yolo`, stored in
   Ask mode and the visible request.
 - Tool input, query parameters, credentials, and permission payloads are not
   written to the settings file.
+- A herdr write (#95) is any command containing `herdr [--session S] agent
+  prompt|send-keys` or `herdr … pane send-text|send-keys`, matched anywhere in
+  the command so wrappers and subshells do not hide it. Guide cancels it.
+  Mechanic always shows the card, even in YOLO and even for a card queued before
+  a switch to YOLO, with `allow_always` removed; the `permission` event carries
+  `confirm: "click"` so a front end can refuse a spoken yes (voice can't confirm sends; keyboard Enter or `y` on the card still answer).
+- Each answer to a herdr write appends one JSON line (`ts`, `pane`, `text`,
+  `cwd`, `decision`, `optionKind`) to `~/.local/share/nixi/sends.log`, created
+  0600 and append-only. It records the command, never terminal output.
+- The one exception to "the companion never writes": a front end such as the
+  voice companion may *read* herdr locally (`agent list`, `agent read`). It never
+  writes to a session; every send goes through the bridge and its card.
+- Detection is deliberately a fail-safe, not a parser: any Bash command that
+  mentions `herdr` or `HERDR_SOCKET` (also with quotes and backslashes removed)
+  counts, and Claude's own `Bash(*herdr*)` / `Bash(*HERDR_SOCKET*)` ask rules
+  beat a user's standing allow rules, so a herdr write always reaches the bridge.
+  Cancelled and denied sends are audited too, as `decision: "cancelled"` / `"deny"`.
+- Known limits: `$H agent prompt` with `H` set earlier has no "herdr" text and
+  is not caught. In YOLO, a non-herdr command injected through a session
+  summary still runs on its own. A send to a session whose own agent runs with
+  bypass permissions then acts under that agent's mode. `herdr agent list`
+  exposes no herdr session name, so the companion always uses the default
+  session (`--session` is not supported).
 
 ## Message and scrolling invariants
 
@@ -103,10 +126,25 @@ memory; closing the owning conversation clears them. The app-owned durable
 state includes permission, display, motion, search, optional file open/edit
 commands, and the selected harness, model, and reasoning effort in `nixi.json`.
 Existing conversations retain their ACP session when these defaults change;
-new conversations receive a frozen copy. That file has two writers —
-`bridge.js` for the mode, `Ask.qml` for
-the scale — so each must merge into the existing contents rather than replace
-them.
+new conversations receive a frozen copy. That file has two writers, and each owns its keys (#103):
+
+| Writer | Owns | Preserves |
+|---|---|---|
+| `bridge.js` | `trust`, `permissionMode` | every other key |
+| `Ask.qml` | `fontScale`, `searchDebounceMs`, `keyboardLineImpulse`, `keyboardDeceleration`, `fileOpenCommand`, `fileEditCommand`, `useHyprlandShortcutSubmap`, `repoSearchDepth`, `agent`, `model`, `reasoningEffort` | every other key (for example `askBeforeReading`) |
+
+Before it writes, the card re-reads the file and writes that fresh copy plus
+its own keys only; the re-read is never applied to the card's properties. The
+bridge reads, merges and writes a temp file (0600) that it renames over
+`nixi.json`, one write at a time per bridge, so the card never sees a
+half-written file. While a card change waits out its 200 ms save delay, a
+reload (a bridge write, or the echo of the card's own write) is not applied to
+the card, so it cannot put the old value back. Neither writer replaces a file
+it cannot parse: the card skips its write, and the bridge fails the switch with
+an error, so a half-done hand edit never loses the other writer's keys. Two windows remain, both unfixed: a bridge write inside the
+card's single event-loop turn between its re-read and its write, and two
+bridges writing within milliseconds. Each writer merges a fresh read, so only
+that writer's own key can be lost.
 
 The font scale is owned by the `Ask.qml` manager, not by a conversation, so
 every overlay and pinned window shares one value and one writer persists it. Agent CLIs remain responsible for any data they
@@ -116,6 +154,15 @@ Bridge stdout is reserved for machine-readable UI events. Agent stderr is
 converted to diagnostic events but is not rendered or persisted by the UI.
 Avoid logging raw ACP request bodies because they may contain sensitive tool
 arguments.
+
+The bridge's stdin commands and stdout events have a second consumer: the
+optional snowflake companion (`services.nixi.companion`, the
+`olafkfreund/nixoarchy-snowflake` fork), whose `app/server.py` runs the same
+`bridge/nixi-node bridge/bridge.js` per conversation and reads `text`, `tool`,
+`permission`, `status`, `notice`, `done`, `error` and `fatal`. Renaming one of
+those, or changing a field it reads, needs the fork updated in step. It only
+reads `nixi.json` and changes trust through the bridge's `trust` command, so
+the file keeps its two writers.
 
 ## Nixi: grounding, trust, tour and learned facts
 

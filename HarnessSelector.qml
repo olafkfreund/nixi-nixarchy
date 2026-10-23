@@ -3,6 +3,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 
 PanelWindow {
   id: root
@@ -21,9 +22,9 @@ PanelWindow {
     width: chipLabel.implicitWidth + padding
     height: Style.space(36)
     radius: Style.cornerRadius
-    color: selected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
-    border.color: selected ? Color.accent : Color.menu.border
-    Text { id: chipLabel; anchors.centerIn: parent; text: parent.label; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: parent.textSize }
+    color: selected ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.18) : "transparent"
+    border.color: selected ? Commons.Color.accent : Commons.Color.menu.border
+    Text { id: chipLabel; anchors.centerIn: parent; text: parent.label; color: Commons.Color.menu.text; font.family: Style.font.family; font.pixelSize: parent.textSize }
     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: parent.clicked() }
   }
   visible: false
@@ -104,8 +105,8 @@ PanelWindow {
     // small panel the agent/model/effort column ran off both ends (#38).
     height: Math.min(content.implicitHeight + Style.space(52), parent.height - Style.gapsOut * 2)
     anchors.centerIn: parent
-    color: Color.menu.background
-    border.color: Color.menu.border
+    color: Commons.Color.menu.background
+    border.color: Commons.Color.menu.border
     border.width: Math.max(1, Style.space(2))
     radius: Style.cornerRadius
 
@@ -117,11 +118,11 @@ PanelWindow {
       anchors.margins: Style.space(26)
       spacing: Style.space(14)
 
-      Text { text: "Agent"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.title * root.fontScale; font.bold: true }
+      Text { text: "Agent"; color: Commons.Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.title * root.fontScale; font.bold: true }
       Text {
         width: parent.width
         text: "Applies to new conversations and survives shell restarts."
-        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.58)
+        color: Qt.rgba(Commons.Color.menu.text.r, Commons.Color.menu.text.g, Commons.Color.menu.text.b, 0.58)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption * root.fontScale
         wrapMode: Text.Wrap
@@ -140,7 +141,7 @@ PanelWindow {
         }
       }
 
-      Text { text: "Model"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
+      Text { text: "Model"; color: Commons.Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
       ComboBox {
         id: modelSelect
         enabled: root.picksModel
@@ -156,7 +157,7 @@ PanelWindow {
         onActivated: root.draftModel = currentValue
       }
 
-      Text { text: "Thinking"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
+      Text { text: "Thinking"; color: Commons.Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
       Row {
         spacing: Style.space(7)
         enabled: root.picksModel
@@ -174,7 +175,7 @@ PanelWindow {
         }
       }
 
-      Text { text: "Return to save"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption * root.fontScale }
+      Text { text: "Return to save"; color: Commons.Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption * root.fontScale }
     }
   }
 }
