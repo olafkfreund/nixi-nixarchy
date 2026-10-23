@@ -23,7 +23,8 @@ function executable(path, body) {
 // options.files: { "relative/path": "text" } created under HOME before start
 // options.messages: stdin messages sent in order, each after the previous turn.
 //   An "undo" waits for its notice. A function is called as fn({ home, events })
-//   between messages, to change or read files while the bridge is running.
+//   between messages, to change or read files while the bridge is running. It also
+//   gets `until(predicate, label)` and `write(message)`, which sends without waiting.
 export async function runBridge(options = {}) {
   const home = mkdtempSync(join(tmpdir(), "nixi-bridge-"));
   const bin = join(home, "bin");
@@ -143,6 +144,7 @@ exit 0
     };
   } finally {
     child.kill("SIGTERM");
-    rmSync(home, { recursive: true, force: true });
+    // The bridge can still be writing under HOME while it exits: retry ENOTEMPTY.
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }

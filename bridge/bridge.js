@@ -88,6 +88,11 @@ const askBeforeReading = (() => {
 let permissionMode = "permission";
 // Guide unless nixi.json says otherwise; unknown values are Guide too.
 let trust = "guide";
+// Switches to Guide received and not yet settled: `trust` only moves once the
+// agent confirms, but nothing may be approved in that window (#106). A count,
+// so a second /guide still covers the window when the first settles.
+let leavingMechanic = 0;
+const effectiveTrust = () => (leavingMechanic > 0 ? "guide" : trust);
 
 async function loadSettings() {
   try {
@@ -132,14 +137,19 @@ function mergeSettings(patch) {
 
 async function savePermissionMode(mode) {
   const nextMode = mode === "yolo" ? "yolo" : "permission";
-  if (nextMode === "yolo" && trust !== "mechanic")
+  if (nextMode === "yolo" && effectiveTrust() !== "mechanic")
     throw new Error("YOLO is only available in Mechanic");
   await mergeSettings({ permissionMode: nextMode });
+  // A switch to Guide that arrived during the write: take the YOLO back (#106).
+  if (nextMode === "yolo" && effectiveTrust() !== "mechanic") {
+    await mergeSettings({ permissionMode: "permission" });
+    throw new Error("YOLO is only available in Mechanic");
+  }
   permissionMode = nextMode;
 }
 
 function currentPolicy() {
-  return trustPolicy(agentName, trust, permissionMode, aiMirrorCommand);
+  return trustPolicy(agentName, effectiveTrust(), permissionMode, aiMirrorCommand);
 }
 
 function emit(event) {
@@ -306,7 +316,7 @@ async function guarded(toolCall, outcome, options) {
   // Only an allow* answer is a yes; a reject must not copy anything.
   const picked = options.find((o) => o.id === outcome.outcome.optionId);
   if (!String(picked?.kind || "").startsWith("allow")) return outcome;
-  if (trust !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
+  if (effectiveTrust() !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
   for (const text of await changes.backup(toolCall)) emit({ type: "notice", text });
   return outcome;
 }
@@ -514,7 +524,7 @@ async function finishLearned() {
   // changing and writing is, which is why Guide keeps unprompted reads; the
   // same distinction says it must not accumulate durable state that alters its
   // own future behaviour behind a promise that nothing changes (#51).
-  if (resolveTrust(trust) === "guide" || facts.length === 0) return;
+  if (effectiveTrust() === "guide" || facts.length === 0) return;
   try {
     await appendLearned(facts, learnedDir);
     // Kept, so say so. Hiding the write was deliberate -- a bare LEARNED: line
@@ -698,6 +708,7 @@ async function applyTrustMode(targetTrust = trust) {
 }
 
 function allowAllPendingPermissions() {
+  if (effectiveTrust() !== "mechanic") return;
   for (const [id, pending] of pendingPermissions.entries()) {
     if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
     pendingPermissions.delete(id);
@@ -768,7 +779,7 @@ input.on("line", (line) => {
   } else if (message.type === "undo") {
     // Undo changes the machine; Guide promises nothing does. Leaving Guide is typed.
     if (turnRunning) emit({ type: "notice", text: "Undo is refused while a turn is running." });
-    else if (trust === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
+    else if (effectiveTrust() === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
     else changes.undo().then((result) => emit({ type: "notice", text: result.message }));
   } else if (message.type === "permission") {
     answerPermission(message);
@@ -778,6 +789,12 @@ input.on("line", (line) => {
     // `trust` before the mode call, so a failure reported the level the session
     // had NOT moved to (#40). On failure nothing is written and `trust` still
     // holds the level actually in force, which is what the failed ack carries.
+    // A switch to Guide is stricter, so it bites on receipt, not on confirmation (#106).
+    const leaving = next === "guide";
+    if (leaving) {
+      leavingMechanic++;
+      cancelAllPendingPermissions();
+    }
     (async () => {
       if (agentName === "codex" && next === "guide") throw new Error(CODEX_GUIDE_REFUSAL);
       if (connection && sessionId) await applyTrustMode(next);
@@ -795,6 +812,8 @@ input.on("line", (line) => {
         emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
     })().catch((error) => {
       ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
+    }).finally(() => {
+      if (leaving) leavingMechanic--;
     });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
