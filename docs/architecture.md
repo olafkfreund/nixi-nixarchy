@@ -150,23 +150,26 @@ permission mode in `nixi.json`; anything else is Guide.
   `Read(...)` patterns alone left Grep and Glob able to reach the same paths
   unprompted (#41).
 
-  **Shell commands and secrets (#96).** Claude auto-approves read-only shell
-  commands (`head`, `cat /etc/hostname`), so they never reach ACP either, and
-  `head ~/x.age` ran at Guide with no request. Measured: an `ask` rule, bare
-  `Bash` or a wildcard `Bash(*...*)`, beats that auto-approval, so the command
-  becomes a request and Guide cancels it. Rules are fixed per session (passed at
-  `newSession`), so they follow the level the session **starts** at:
+  **Shell commands and secrets (#96).** At Guide, Claude (plan mode)
+  auto-approves read-only shell commands (`head`, `cat /etc/hostname`), so they
+  never reach ACP either, and `head ~/x.age` ran with no request. Measured: an
+  `ask` rule, bare `Bash` or a wildcard `Bash(*...*)`, beats that auto-approval,
+  so the command becomes a request and Guide cancels it. Rules are fixed per
+  session (passed at `newSession`), so they follow the level the session
+  **starts** at:
 
   | start level | extra `ask` rules | effect |
   |---|---|---|
   | Guide | bare `Bash` | no shell at all; the tutor answers from the manual, `KNOWLEDGE.md` and file tools |
-  | Mechanic | `Bash(*...*)` patterns from `SECRET_PATHS` (`secretBashRules`) | a command naming a secret path asks first; other read-only commands run quietly |
+  | Mechanic | `Bash(*X*)` per `SECRET_PATHS` entry (`secretBashRules`) | every shell command asks (default mode); a secret-path command asks even when the user has allow rules or answered "always allow" for that command |
 
-  The Mechanic set is best effort: it matches the plain spellings (`~/`,
-  `$HOME/`, `${HOME}/`, the absolute home, `/run/...`, `.env`, `.age`), not every
-  way a shell can name a path. Residual: after a Mechanic to Guide switch inside
-  one session, non-secret read-only commands run until the next conversation,
-  because the rules cannot change mid-session. Codex and opencode, same canary
+  The Mechanic set is best effort: `X` is the path without `~/`, so the `~/`,
+  `$HOME/`, absolute, `~user/` and `../../` spellings all match, but not a path
+  a shell builds at run time. Residual: after a Mechanic to Guide switch inside
+  one session, non-secret read-only commands, and anything already granted
+  "always allow" in that session, can run until the next conversation, because
+  the rules cannot change mid-session; secret-path commands are still cancelled.
+  Codex and opencode, same canary
   at Guide (measured 2026-10-23): Codex read it -- its read-only sandbox permits
   file reads and nixi has no per-path read rule for Codex (#97); opencode was
   inconclusive (empty reply).

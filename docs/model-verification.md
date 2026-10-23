@@ -65,8 +65,9 @@ distinct from the completed 41-case model sweep recorded above.
 
 ## Shell canary on adapter bumps (#96)
 
-Claude auto-approves read-only shell commands unless an `ask` rule matches. After
-any claude-agent-acp or Claude Code bump, re-run the canary: start at Guide and
-ask for `head ~/x.age` (a throwaway file) and `cat /etc/hostname`; both must be
-cancelled. Start at Mechanic: the first must show a card, `ls ~/.config/hypr`
-must not.
+At Guide, Claude auto-approves read-only shell commands unless an `ask` rule
+matches. After any claude-agent-acp or Claude Code bump, re-run the canary:
+start at Guide and ask for `head ~/x.age` (a throwaway file) and
+`cat /etc/hostname`; both must be cancelled. Start at Mechanic: both show a card;
+the check is that the secret one still shows a card after "always allow" was
+given for `head`.

@@ -23,8 +23,6 @@
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
 // from Mechanic; it can never be reached from Guide.
 
-import os from "node:os";
-
 export function resolveTrust(value) {
   return value === "mechanic" ? "mechanic" : "guide";
 }
@@ -150,16 +148,17 @@ const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 const EXEC_WRITES = WRITE_TOOLS.flatMap((tool) => EXEC_WRITE_PATHS.map((path) => `${tool}(${path})`));
 
-// Bash patterns from SECRET_PATHS, for sessions that start at Mechanic (#96). An
-// `ask` Bash(*...*) beats Claude's auto-approval of read-only shell commands, so
-// `head ~/x.age` becomes a card. Best effort: a shell can spell a path any way
-// (variables, globs, cd), so this catches the plain spellings, not every one.
-export function secretBashRules(home) {
+// Bash patterns from SECRET_PATHS, for sessions that start at Mechanic (#96).
+// Mechanic (Claude's default mode) already asks for shell commands; these matter
+// because an `ask` rule beats the user's own allow rules and an earlier "always
+// allow" (deny > ask > allow), so a secret-path command still shows a card.
+// One pattern per path, without `~/`, so `~/`, `$HOME/`, absolute, `~user/` and
+// `../../` spellings all match. Best effort: a shell can build a path any way.
+export function secretBashRules() {
   const rules = new Set();
   for (const path of SECRET_PATHS) {
     const p = path.replace(/\/\*\*$/, "");
-    if (p.startsWith("~/"))
-      for (const base of ["~", "$HOME", "${HOME}", home]) rules.add(base + p.slice(1));
+    if (p.startsWith("~/")) rules.add(p.slice(2));
     else if (p.includes("**/")) rules.add(p.split("/").pop().replace(/^\*|\.\*$/g, ""));
     else rules.add(p);
   }
@@ -170,10 +169,10 @@ export function secretBashRules(home) {
 // Guide a bare `Bash` ask makes every shell command a request, which Guide
 // cancels: otherwise `head ~/x.age` ran with no request at all. An unknown trust
 // is Guide.
-export function claudePermissions(askBeforeReading, trust = "guide", home = os.homedir()) {
+export function claudePermissions(askBeforeReading, trust = "guide") {
   return {
     allow: askBeforeReading ? [] : READ_TOOLS,
-    ask: [...SECRET_READS, ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules(home))],
+    ask: [...SECRET_READS, ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
     deny: EXEC_WRITES,
   };
 }

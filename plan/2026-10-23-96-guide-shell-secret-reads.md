@@ -118,6 +118,19 @@ Restore the user's trust level afterwards, and delete the canaries.
 - A fresh Opus reviewer with this plan and the diff.
 - Fix confirmed findings and record any change of plan here.
 
+**Q7 outcome (2026-10-23):** Codex found no actionable regressions. Opus found nothing blocking,
+but flagged that the docs contradicted Q6. agy found that the per-prefix patterns missed relative
+paths (`../../.ssh` from `~/.config/nixi`) and `~user/`. Changes:
+- Each `~/X` entry is now one prefix-free rule, `Bash(*X*)`, and the `home` parameter is gone.
+  That also removes the `$`/`{}` matcher and trailing-slash concerns.
+- Exact-list and non-trivial-pattern tests are added.
+- The docs now say what the patterns do: they beat the user's allow rules and an earlier "always
+  allow", because Mechanic already asks for every shell command. The residual also includes
+  earlier "always allow" grants.
+
+Not taken: bare `Bash` at both levels (agy). It would override the user's "always allow" (#53) for
+every shell command at Mechanic, and the user chose patterns for Mechanic. Kept as an option.
+
 ## Tests
 
 | Command | Expected |

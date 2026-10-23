@@ -326,10 +326,10 @@ test("Guide and Mechanic still grant the same reads; only askBeforeReading withd
 test("rules follow the level a session starts at (#96)", () => {
   const guide = claudePermissions(false, "guide");
   assert.ok(guide.ask.includes("Bash"), "Guide has no shell");
-  const mech = claudePermissions(false, "mechanic", "/home/u");
+  const mech = claudePermissions(false, "mechanic");
   assert.ok(!mech.ask.includes("Bash"), "Mechanic keeps non-secret shell commands quiet");
-  for (const rule of ["Bash(*~/.ssh*)", "Bash(*$HOME/.ssh*)", "Bash(*${HOME}/.ssh*)",
-    "Bash(*/home/u/.ssh*)", "Bash(*/run/agenix*)", "Bash(*.env*)", "Bash(*.age*)"])
+  for (const rule of ["Bash(*.ssh*)", "Bash(*.config/gh*)", "Bash(*.netrc*)",
+    "Bash(*.docker/config.json*)", "Bash(*/run/agenix*)", "Bash(*.env*)", "Bash(*.age*)"])
     assert.ok(mech.ask.includes(rule), `${rule} missing`);
   assert.equal(new Set(mech.ask).size, mech.ask.length, "no duplicates");
   assert.deepEqual(claudePermissions(false, "bogus"), guide, "unknown trust is Guide");
@@ -339,8 +339,21 @@ test("rules follow the level a session starts at (#96)", () => {
   }
 });
 
-test("the Mechanic shell list cannot silently shrink (#96)", () => {
-  assert.equal(secretBashRules("/home/u").length, 56);
+test("the Mechanic shell list is exactly this (#96)", () => {
+  assert.deepEqual(secretBashRules().sort(), [
+    "Bash(*.age*)", "Bash(*.aws*)", "Bash(*.azure*)", "Bash(*.claude/.credentials.json*)",
+    "Bash(*.config/gcloud*)", "Bash(*.config/gh*)", "Bash(*.config/op*)", "Bash(*.config/sops*)",
+    "Bash(*.docker/config.json*)", "Bash(*.env*)", "Bash(*.gnupg*)", "Bash(*.kube*)",
+    "Bash(*.local/share/keyrings*)", "Bash(*.netrc*)", "Bash(*.ssh*)",
+    "Bash(*/run/agenix*)", "Bash(*/run/secrets*)",
+  ].sort());
+});
+
+test("no generated shell pattern is trivial (#96)", () => {
+  for (const rule of secretBashRules()) {
+    const inner = rule.slice("Bash(*".length, -"*)".length);
+    assert.ok(inner.length >= 4 && /[a-z]/.test(inner), `${rule} would match nearly every command`);
+  }
 });
 
 // #53 -- the agent offers allow_always and both installed adapters send it
