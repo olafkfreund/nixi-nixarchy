@@ -36,22 +36,49 @@ const MODES = {
 // OpenCode's own defaults resolve every tool to "allow": a write runs without
 // any permission request, so Guide's cancel would have nothing to cancel, and
 // its plan mode still allows bash. Nixi's rules are appended after OpenCode's
-// built-in ones and win: everything asks except reading and searching, and the
-// agent may not leave plan mode itself. `*` also covers MCP and plugin tools
-// from the user's opencode.json. Verified on p620 (plan step 17b).
-export const OPENCODE_PERMISSIONS = {
-  permission: {
+// built-in ones and win: everything asks except reading, and the agent may not
+// leave plan mode itself. `*` also covers MCP and plugin tools from the user's
+// opencode.json. Verified on p620 (plan step 17b).
+//
+// #102: opencode 2.0.32 ends the whole turn on any refusal, and its own
+// external_directory check asks for every read outside the project, so Guide
+// could not read /etc/hostname. external_directory is allowed; `read` is
+// allowed except SECRET_PATHS, which are config denies (a deny is enforced by
+// opencode itself, no card). Measured: grep/glob apply no path denies, so
+// grep/glob/list ask for every path instead of silently reaching ~/.ssh.
+//
+// opencode matches a path relative to its project root when the file is inside
+// it (the cwd falls back to $HOME), as well as absolute ones, so the patterns
+// are anchor-free: `*.ssh/*` matches `.ssh/k` and `/home/u/.ssh/k`, and `*.ssh`
+// the directory itself, which its read tool lists. Over-matching is fine for a deny.
+export function opencodeSecretDenies() {
+  const denies = [];
+  for (const path of SECRET_PATHS) {
+    if (path.startsWith("//")) continue; // Claude's absolute spelling; these cover it already
+    const dir = path.endsWith("/**");
+    const base = dir ? path.slice(0, -3) : path;
+    const free = base.startsWith("~/") ? `*${base.slice(2)}` : base.startsWith("**/") ? `*${base.slice(3).replace(/^\*/, "")}` : base;
+    denies.push(...(dir ? [`${free}/*`, free] : [free]));
+  }
+  return denies;
+}
+
+function opencodeRules(readDefault) {
+  const read = { "*": readDefault };
+  for (const pattern of opencodeSecretDenies()) read[pattern] = "deny";
+  return { permission: {
     "*": "ask",
-    read: { "*": "allow", "*.env": "ask", "*.env.*": "ask" },
-    grep: "allow",
-    glob: "allow",
-    list: "allow",
+    external_directory: "allow",
+    read,
+    grep: "ask",
+    glob: "ask",
+    list: "ask",
     lsp: "allow",
     todowrite: "allow",
     question: "allow",
     plan_exit: "deny",
-  },
-};
+  } };
+}
 
 // Agents whose MCP permission path Nixi has VERIFIED, not assumed. Read from
 // claude-agent-acp 0.81.2: ACP `mcpServers` are mapped into the Claude Code
@@ -68,11 +95,9 @@ export const OPENCODE_PERMISSIONS = {
 export const MCP_CAPABLE_AGENTS = ["claude"];
 
 // askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
-// everything" means every agent.
+// everything" means every agent. The secret denies stay.
 export function opencodePermissions(askBeforeReading) {
-  if (!askBeforeReading) return OPENCODE_PERMISSIONS;
-  return { permission: { ...OPENCODE_PERMISSIONS.permission,
-    read: "ask", grep: "ask", glob: "ask", list: "ask" } };
+  return opencodeRules(askBeforeReading ? "ask" : "allow");
 }
 
 // Claude asks before every Read/Grep/Glob outside its cwd (~/.config/nixi), so
@@ -96,8 +121,15 @@ export const SECRET_PATHS = [
   "~/.config/sops/**", "~/.local/share/keyrings/**",
   "~/.claude/.credentials.json", "~/.netrc",
   "/run/agenix/**", "/run/secrets/**",
+  // The symlink targets of the two above on NixOS; Read/opencode match the literal path (#102).
+  "/run/agenix.d/**", "/run/secrets.d/**",
   "**/.env", "**/.env.*", "**/*.age",
+  // `**/x` is relative to the session directory; `//` is absolute (#95). Without
+  // these a canary ~/foo.age was read with no card. OpenCode has its own list.
+  "//**/.env", "//**/.env.*", "//**/*.age",
 ];
+
+export const OPENCODE_PERMISSIONS = opencodeRules("allow");
 
 // Writes that will later run with nobody present (#52).
 //
@@ -145,10 +177,35 @@ const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 const EXEC_WRITES = WRITE_TOOLS.flatMap((tool) => EXEC_WRITE_PATHS.map((path) => `${tool}(${path})`));
 
-export function claudePermissions(askBeforeReading) {
+// Bash patterns from SECRET_PATHS, for sessions that start at Mechanic (#96).
+// Mechanic (Claude's default mode) already asks for shell commands; these matter
+// because an `ask` rule beats the user's own allow rules and an earlier "always
+// allow" (deny > ask > allow), so a secret-path command still shows a card.
+// One pattern per path, without `~/`, so `~/`, `$HOME/`, absolute, `~user/` and
+// `../../` spellings all match. Best effort: a shell can build a path any way.
+export function secretBashRules() {
+  const rules = new Set();
+  for (const path of SECRET_PATHS) {
+    const p = path.replace(/\/\*\*$/, "");
+    if (p.startsWith("~/")) rules.add(p.slice(2));
+    else if (p.includes("**/")) rules.add(p.split("/").pop().replace(/^\*|\.\*$/g, ""));
+    else rules.add(p);
+  }
+  return [...rules].map((r) => `Bash(*${r}*)`);
+}
+
+// Rules are fixed per session, so they follow the level it STARTS at (#96). At
+// Guide a bare `Bash` ask makes every shell command a request, which Guide
+// cancels: otherwise `head ~/x.age` ran with no request at all. An unknown trust
+// is Guide.
+export function claudePermissions(askBeforeReading, trust = "guide") {
   return {
     allow: askBeforeReading ? [] : READ_TOOLS,
-    ask: SECRET_READS,
+    // ask beats the user's own allow rules (Bash(env:*), Bash(python3:*) ...), which
+    // would otherwise let Claude run a herdr write without ever asking the bridge, so
+    // the bridge's click-only card (#95) could not be skipped by a standing allow.
+    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)",
+      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
     deny: EXEC_WRITES,
   };
 }

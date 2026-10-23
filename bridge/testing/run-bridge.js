@@ -74,6 +74,8 @@ exit 0
   };
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
   const events = [];
+  let exited = false;
+  child.on("exit", () => { exited = true; });
   let permissionFailure = null;
   const waiters = [];
   createInterface({ input: child.stdout }).on("line", (line) => {
@@ -82,8 +84,15 @@ exit 0
     events.push(event);
     // options.onPermission answers a permission prompt the way the card would.
     if (event.type === "permission" && options.onPermission) {
-      try { child.stdin.write(JSON.stringify(options.onPermission(event)) + "\n"); }
-      catch (error) { permissionFailure = error; }
+      // May return a list; a number in it waits that many ms before the next message.
+      (async () => {
+        try {
+          for (const m of [].concat(options.onPermission(event))) {
+            if (typeof m === "number") await new Promise((r) => setTimeout(r, m));
+            else child.stdin.write(JSON.stringify(m) + "\n");
+          }
+        } catch (error) { permissionFailure = error; }
+      })();
     }
     for (const waiter of waiters.splice(0)) waiter();
   });
@@ -100,10 +109,7 @@ exit 0
     if (ready.type === "fatal") throw new Error(`bridge fatal: ${ready.message}`);
     let turns = 0;
     for (const message of options.messages || []) {
-      if (typeof message === "function") {
-        await message({ home, events, until, write: (m) => child.stdin.write(JSON.stringify(m) + "\n") });
-        continue;
-      }
+      if (typeof message === "function") { await message({ home, events, exited: () => exited, until, send: (m) => child.stdin.write(JSON.stringify(m) + "\n"), write: (m) => child.stdin.write(JSON.stringify(m) + "\n"), end: () => child.stdin.end() }); continue; }
       child.stdin.write(JSON.stringify(message) + "\n");
       if (message.type === "prompt") {
         const target = ++turns;

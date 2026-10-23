@@ -63,12 +63,7 @@ Item {
   property string selectedReasoningEffort: ""
   readonly property real keyboardPageImpulse: keyboardLineImpulse * (740 / 360)
   property bool settingsLoaded: false
-  // nixi.json as last read. The bridge writes keys of its own to the same file
-  // (trust, askBeforeReading), so the UI writes its keys on top of these
-  // rather than replacing the file with only the keys it knows.
-  property var settingsOnDisk: ({})
-  // Retained so writing the font scale cannot drop the mode the bridge owns.
-  property string persistedPermissionMode: "permission"
+  property bool flushPending: false
   property bool copyToastVisible: false
   // One manager owns the compositor submap. Conversations only affect the
   // derived desired state; they never dispatch Hyprland commands themselves.
@@ -158,8 +153,6 @@ Item {
     var data = {}
     try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
     if (!data || typeof data !== "object") data = {}
-    settingsOnDisk = data
-    persistedPermissionMode = data.permissionMode === "yolo" ? "yolo" : "permission"
     // Presence, then value. Number(undefined) is NaN, so testing the coerced
     // value alone made an absent key and a deliberate 1 indistinguishable --
     // and a 4K user who had chosen 1 would have had it silently overridden.
@@ -196,10 +189,10 @@ Item {
     return value.map(function(argument) { return String(argument || "") }).filter(Boolean)
   }
 
-  function flushSettings() {
-    if (!settingsLoaded) return
-    settingsFile.setText(JSON.stringify(Object.assign({}, settingsOnDisk, {
-      permissionMode: persistedPermissionMode,
+  // Keys the card owns. trust and permissionMode belong to the bridge and are
+  // never in here, so a card write cannot undo a bridge write (#103).
+  function cardOwnedSettings() {
+    return {
       fontScale: fontScale,
       searchDebounceMs: searchDebounceMs,
       keyboardLineImpulse: keyboardLineImpulse,
@@ -211,7 +204,26 @@ Item {
       agent: selectedAgent,
       model: selectedModel,
       reasoningEffort: selectedReasoningEffort
-    }), null, 2) + "\n")
+    }
+  }
+
+  // Re-read first: the copy loaded at start-up predates any bridge write.
+  function flushSettings() {
+    if (!settingsLoaded) return
+    flushPending = true
+    settingsFile.reload()
+  }
+
+  // The fresh text is never applied to the card's properties, so a disk
+  // value cannot overwrite a pending card change. The bridge's keys (trust,
+  // permissionMode) are carried over from it untouched.
+  function writeSettings(raw) {
+    flushPending = false
+    var data = {}
+    // A half-done hand edit (or a truncated file): writing would drop the bridge's keys, so leave it alone.
+    try { data = JSON.parse(raw) } catch (error) { return }
+    if (!data || typeof data !== "object" || Array.isArray(data)) return
+    settingsFile.setText(JSON.stringify(Object.assign({}, data, cardOwnedSettings()), null, 2) + "\n")
   }
 
   FileView {
@@ -220,10 +232,21 @@ Item {
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onLoaded: root.loadSettings(text())
+    // While a card change waits to be saved, a reload (a bridge write, or the
+    // echo of the card's own write) must not put the old values back; the
+    // flush re-reads the file anyway.
+    onLoaded: {
+      if (root.flushPending) root.writeSettings(text())
+      else if (!settingsSaveTimer.running) root.loadSettings(text())
+    }
     // First run: the file does not exist yet. Without this the scale would
     // never be marked loaded and would never be written.
-    onLoadFailed: root.loadSettings("")
+    // Only a missing file is written from scratch; any other failure keeps the file.
+    onLoadFailed: (error) => {
+      if (!root.flushPending) root.loadSettings("")
+      else if (error === FileViewError.FileNotFound) root.writeSettings("{}")
+      else root.flushPending = false
+    }
     onFileChanged: reload()
   }
 
@@ -391,9 +414,6 @@ Item {
       conversation.reasoningEffort = root.selectedReasoningEffort
     })
     conversation.copyConfirmed.connect(function() { root.showCopyToast() })
-    conversation.permissionModeConfirmed.connect(function(mode) {
-      root.persistedPermissionMode = mode === "yolo" ? "yolo" : "permission"
-    })
     conversation.closed.connect(function() { root.removeConversation(conversation) })
     conversation.pinnedChanged.connect(function() {
       if (conversation.pinned && root.activeOverlay === conversation)

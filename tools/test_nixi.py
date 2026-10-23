@@ -592,9 +592,19 @@ def test_settings_keep_bridge_keys():
     askBeforeReading, which only the bridge writes (#27 review)."""
     ask = open(os.path.join(ROOT, "Ask.qml")).read()
     flush = _block(ask, ask.index("function flushSettings"))
-    assert "Object.assign({}, settingsOnDisk" in flush, "flushSettings replaces nixi.json with UI keys only"
-    load = _block(ask, ask.index("function loadSettings"))
-    assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
+    assert "settingsFile.reload()" in flush and "setText" not in flush, \
+        "flushSettings writes the stale copy instead of re-reading first (#103)"
+    write = _block(ask, ask.index("function writeSettings"))
+    assert "Object.assign({}, data, cardOwnedSettings())" in write, "the write is not fresh disk + card keys"
+    assert "loadSettings" not in write, "the flush re-read applies disk values to the card (#103)"
+    owned = _block(ask, ask.index("function cardOwnedSettings"))
+    assert "permissionMode" not in owned and "trust" not in owned, "the card writes a bridge-owned key (#103)"
+    assert "if (root.flushPending) root.writeSettings(text())" in ask, "onLoaded ignores a pending flush"
+    assert "else if (!settingsSaveTimer.running) root.loadSettings(text())" in ask, \
+        "a reload during the save debounce puts old values back over a pending card change (#103)"
+    assert 'error === FileViewError.FileNotFound) root.writeSettings("{}")' in ask, "first run no longer writes"
+    assert "try { data = JSON.parse(raw) } catch (error) { return }" in write, \
+        "an unparsable or empty nixi.json is overwritten without the bridge's keys"
     print("  ok  a UI settings write keeps the bridge's own keys")
 
 
@@ -925,6 +935,17 @@ def test_card_grows_with_content():
         "contentWantsRoom survives close(), so a new conversation starts wide"
 
     print("  ok  the card grows with its content, with no layout feedback loop")
+
+
+def test_yolo_keeps_click_confirm_cards():
+    """#95: the bridge keeps a herdr write pending when YOLO is switched on, so the
+    card must keep it too. CI does not run QML, so this reads the source."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    assert "event.options, event.confirm)" in card, "the permission event's confirm is dropped"
+    yolo = card[card.index('if (permissionMode === "yolo")'):][:80]
+    assert "clearUnconfirmedPermissions()" in yolo, "switching to YOLO clears every card again"
+    assert 'r.confirm === "click"' in card, "the click-confirm cards are no longer kept"
+    print("  ok  YOLO keeps cards that need a click")
 
 
 def test_one_ack_shape():

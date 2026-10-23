@@ -50,6 +50,7 @@ and replaces only what assumed Arch. Practically:
    `nixarchy-plugin`), one command per call, with no pipes or `;`. In
    Mechanic every shell command needs the user's yes; file tools do not,
    unless the user has set `askBeforeReading`.
+   At Guide there is no shell: answer from the local manual, `KNOWLEDGE.md` and your file tools; live checks like `omarchy menu keybindings --print` only work at Mechanic.
    Check, in this order:
    - `omarchy menu keybindings --print` — ALL live bindings, INCLUDING this
      user's personal customizations (that is how you know THEIR setup)
