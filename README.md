@@ -193,6 +193,18 @@ environment.
 
 ---
 
+## Agent sessions by voice
+
+A voice front end such as the Snowflake companion can ask how a running herdr
+agent session is doing and can open it in a terminal. It only *reads* herdr
+(`agent list`, `agent read`). To add to a session, Nixi's agent runs
+`herdr agent prompt`, and that is a **herdr write**: Guide never runs it,
+Mechanic always shows a card (even in YOLO) that must be clicked, and each
+decision is logged to `~/.local/share/nixi/sends.log`. See
+[docs/architecture.md](docs/architecture.md).
+
+---
+
 ## Privacy
 
 - **No server, no port.** The card is part of the Omarchy shell and talks to

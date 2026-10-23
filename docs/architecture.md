@@ -70,6 +70,18 @@ The durable mode is `permission` or `yolo`, stored in
   Ask mode and the visible request.
 - Tool input, query parameters, credentials, and permission payloads are not
   written to the settings file.
+- A herdr write (#95) is any command containing `herdr [--session S] agent
+  prompt|send-keys` or `herdr … pane send-text|send-keys`, matched anywhere in
+  the command so wrappers and subshells do not hide it. Guide cancels it.
+  Mechanic always shows the card, even in YOLO and even for a card queued before
+  a switch to YOLO, with `allow_always` removed; the `permission` event carries
+  `confirm: "click"` so a front end can refuse a spoken yes.
+- Each answer to a herdr write appends one JSON line (`ts`, `pane`, `text`,
+  `cwd`, `decision`, `optionKind`) to `~/.local/share/nixi/sends.log`, created
+  0600 and append-only. It records the command, never terminal output.
+- The one exception to "the companion never writes": a front end such as the
+  voice companion may *read* herdr locally (`agent list`, `agent read`). It never
+  writes to a session; every send goes through the bridge and its card.
 
 ## Message and scrolling invariants
 
