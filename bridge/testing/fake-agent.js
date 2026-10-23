@@ -13,6 +13,7 @@ const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify
 // setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
 // one at session start. See setSessionMode below.
 let modeCalls = 0;
+let stopTurn = () => {};
 
 // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
 // claude-agent-acp and codex-acp both do. Behind a flag so the existing
@@ -72,7 +73,7 @@ new AgentSideConnection((conn) => ({
     return {};
   },
   async authenticate() { return {}; },
-  async cancel() {},
+  async cancel() { log({ method: "cancel" }); stopTurn(); },
   async prompt(params) {
     const text = (params.prompt || []).map((block) => block.text || "").join("");
     log({ method: "prompt", text });
@@ -90,6 +91,21 @@ new AgentSideConnection((conn) => ({
         await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call_update", toolCallId: "t4", status: "completed" } });
       }
       if (text.includes("THEN_FAIL")) throw new Error("fake agent failed after the edit");
+      return { stopReason: "end_turn" };
+    }
+    // #102 stall guard. STALL_SILENT: never answer. STALL_TOOL: a tool starts, then
+    // 1 s of silence, then the turn ends. NIXI_TURN_STALL_MS in the test is shorter than
+    // that 1 s, so only a tool-aware limit lets the turn finish quietly.
+    if (text.includes("STALL_SILENT")) await new Promise(() => {});
+    // STALL_TOOLDONE: a tool starts and finishes, then silence: the idle limit applies again.
+    if (text.includes("STALL_TOOLDONE")) {
+      for (const status of ["in_progress", "completed"])
+        await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: status === "completed" ? "tool_call_update" : "tool_call", toolCallId: "t6", title: "Quick tool", status } });
+      await new Promise(() => {});
+    }
+    if (text.includes("STALL_TOOL")) {
+      await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call", toolCallId: "t5", title: "Long tool", status: "in_progress" } });
+      await new Promise((resolve) => setTimeout(resolve, 600));
       return { stopReason: "end_turn" };
     }
     // A prompt asking for a change triggers a permission request, so tests can
@@ -111,6 +127,11 @@ new AgentSideConnection((conn) => ({
         options: permissionOptions(),
       });
       log({ method: "permissionOutcome", outcome: outcome.outcome });
+      // THEN_CANCEL: end the turn with no text, as opencode does on a refusal (#102).
+      // WITH_TEXT: some words first. WAIT_STOP: end only once the user's stop arrives.
+      if (text.includes("WITH_TEXT")) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Denied, trying the shell" } } });
+      if (text.includes("WAIT_STOP")) await new Promise((resolve) => { stopTurn = resolve; });
+      if (text.includes("THEN_CANCEL")) return { stopReason: "cancelled" };
     }
     // PLEASE_LEARN: an answer ending in a LEARNED line, split mid-marker.
     const chunks = text.includes("PLEASE_IMAGE") ? []

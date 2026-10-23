@@ -206,7 +206,7 @@ test("OpenCode always starts with Nixi's permission rules, whatever the environm
   const weak = JSON.stringify({ permission: { "*": "allow" } });
   const run = await runBridge({ env: { ...opencode, OPENCODE_CONFIG_CONTENT: weak } });
   const sent = JSON.parse(run.agent.find((e) => e.method === "newSession").opencodeConfig);
-  assert.deepEqual(sent, OPENCODE_PERMISSIONS);
+  assert.deepEqual(sent, opencodePermissions(false));
   assert.equal(sent.permission["*"], "ask", "anything not listed must ask");
   assert.equal(sent.permission.plan_exit, "deny");
   for (const tool of ["edit", "bash", "webfetch", "task", "write", "patch"])
@@ -277,12 +277,31 @@ test("Claude may read, grep and glob without asking; nothing else, and never sec
 });
 
 test("askBeforeReading makes OpenCode's reads ask too, and changes nothing else (#27)", () => {
-  assert.equal(opencodePermissions(false), OPENCODE_PERMISSIONS);
+  assert.deepEqual(opencodePermissions(false), OPENCODE_PERMISSIONS);
   const strict = opencodePermissions(true).permission;
-  for (const key of ["read", "grep", "glob", "list"]) assert.equal(strict[key], "ask", key);
+  assert.equal(strict.read["*"], "ask");
+  assert.deepEqual({ ...strict.read, "*": "allow" }, OPENCODE_PERMISSIONS.permission.read, "secret denies must stay");
   for (const [key, value] of Object.entries(OPENCODE_PERMISSIONS.permission))
-    if (!["read", "grep", "glob", "list"].includes(key)) assert.deepEqual(strict[key], value, key);
-  assert.equal(OPENCODE_PERMISSIONS.permission.grep, "allow", "the shared default was mutated");
+    if (key !== "read") assert.deepEqual(strict[key], value, key);
+});
+
+test("OpenCode: external reads allowed, secrets denied by config, search tools ask (#102)", () => {
+  const { permission } = opencodePermissions(false);
+  assert.equal(permission.external_directory, "allow");
+  assert.equal(permission["*"], "ask");
+  assert.equal(permission.plan_exit, "deny");
+  for (const tool of ["grep", "glob", "list"]) assert.equal(permission[tool], "ask", tool);
+  const { "*": base, ...denies } = permission.read;
+  assert.equal(base, "allow");
+  assert.ok(Object.values(denies).every((v) => v === "deny"));
+  assert.deepEqual(Object.keys(denies), [
+    "*.ssh/*", "*.ssh", "*.gnupg/*", "*.gnupg", "*.aws/*", "*.aws", "*.kube/*", "*.kube",
+    "*.config/gcloud/*", "*.config/gcloud", "*.azure/*", "*.azure", "*.docker/config.json",
+    "*.config/gh/*", "*.config/gh", "*.config/op/*", "*.config/op", "*.config/sops/*", "*.config/sops",
+    "*.local/share/keyrings/*", "*.local/share/keyrings", "*.claude/.credentials.json", "*.netrc",
+    "/run/agenix/*", "/run/agenix", "/run/secrets/*", "/run/secrets",
+    "/run/agenix.d/*", "/run/agenix.d", "/run/secrets.d/*", "/run/secrets.d",
+    "*.env", "*.env.*", "*.age"]);
 });
 
 const sentPermissions = (run) =>
@@ -379,7 +398,7 @@ test("secret globs are anchored absolutely as well (#95)", () => {
 });
 
 test("the secret path list cannot silently shrink (#41)", () => {
-  assert.ok(SECRET_PATHS.length >= 21, `only ${SECRET_PATHS.length} secret paths`);
+  assert.ok(SECRET_PATHS.length >= 23, `only ${SECRET_PATHS.length} secret paths`);
   for (const path of ["~/.ssh/**", "~/.gnupg/**", "/run/agenix/**", "**/.env", "**/*.age"])
     assert.ok(SECRET_PATHS.includes(path), `${path} is no longer guarded`);
   // Paths, not rules: a "Read(...)" here would not generate Grep/Glob cover.
@@ -418,7 +437,7 @@ test("the Mechanic shell list is exactly this (#96)", () => {
     "Bash(*.config/gcloud*)", "Bash(*.config/gh*)", "Bash(*.config/op*)", "Bash(*.config/sops*)",
     "Bash(*.docker/config.json*)", "Bash(*.env*)", "Bash(*.gnupg*)", "Bash(*.kube*)",
     "Bash(*.local/share/keyrings*)", "Bash(*.netrc*)", "Bash(*.ssh*)",
-    "Bash(*/run/agenix*)", "Bash(*/run/secrets*)",
+    "Bash(*/run/agenix*)", "Bash(*/run/agenix.d*)", "Bash(*/run/secrets*)", "Bash(*/run/secrets.d*)",
   ].sort());
 });
 
@@ -533,13 +552,15 @@ test("only Claude gets the settings restriction; the others get no meta at all (
 
 test("OpenCode cannot be handed a second config layer by its own cwd (#63)", async () => {
   const newSession = (run) => run.agent.find((e) => e.method === "newSession");
-  const opencodeRun = newSession(await runBridge({ env: opencode }));
+  const opencodeRunHome = await runBridge({ env: opencode });
+  const opencodeRun = newSession(opencodeRunHome);
   assert.equal(opencodeRun.disableProjectConfig, "1",
     `OPENCODE_DISABLE_PROJECT_CONFIG reached the adapter as ${JSON.stringify(opencodeRun.disableProjectConfig)}` +
     " -- the cwd's opencode.json and .opencode/agent/*.md still apply");
   // It rides with the rules, not instead of them, under both read settings.
   assert.deepEqual(JSON.parse(opencodeRun.opencodeConfig), opencodePermissions(false));
-  const strict = newSession(await runBridge({ env: opencode, settings: { askBeforeReading: true } }));
+  const strictRun = await runBridge({ env: opencode, settings: { askBeforeReading: true } });
+  const strict = newSession(strictRun);
   assert.equal(strict.disableProjectConfig, "1");
   assert.deepEqual(JSON.parse(strict.opencodeConfig), opencodePermissions(true));
   // And no other adapter is handed an OpenCode knob: Claude's cwd is closed by
@@ -666,4 +687,129 @@ test("a failed request acks with ok:false and keeps the level in force (#44)", a
   assert.equal(ack.ok, false);
   // The same guarantee #40 established: never report a level the session is not in.
   assert.equal(ack.trust, "mechanic");
+});
+
+// #102: opencode ends a turn on any refusal; the user must be told why it is empty.
+test("Guide: an empty cancelled turn after a refusal gets one notice; a normal turn gets none (#102)", async () => {
+  const { events } = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL" }, { type: "prompt", text: "hello" }] });
+  const notices = events.filter((e) => e.type === "notice" && e.text.includes("stopped instead of answering"));
+  assert.equal(notices.length, 1);
+  assert.ok(notices[0].text.includes("Write ~/probe"));
+  assert.ok(events.findIndex((e) => e === notices[0]) < events.findIndex((e) => e.type === "done"));
+});
+
+test("Guide: a cancelled turn that had some text still gets the notice (#102)", async () => {
+  const { events } = await runBridge({ messages: [{ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL WITH_TEXT" }] });
+  assert.ok(events.some((e) => e.type === "text"));
+  assert.equal(events.filter((e) => e.type === "notice" && e.text.includes("stopped instead of answering")).length, 1);
+});
+
+test("Guide: the stop button after a refusal does not get the Guide notice (#102)", async () => {
+  const { events } = await runBridge({ messages: [async ({ events, send }) => {
+    const waitFor = (predicate) => new Promise((resolve, reject) => {
+      const started = Date.now();
+      const poll = () => events.some(predicate) ? resolve() : Date.now() - started > 10000 ? reject(new Error("timed out")) : setTimeout(poll, 20);
+      poll();
+    });
+    send({ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL WAIT_STOP" });
+    await waitFor((e) => e.type === "status" && e.text.startsWith("Guide · not run"));
+    send({ type: "cancel" });
+    await waitFor((e) => e.type === "done");
+  }] });
+  assert.ok(events.some((e) => e.type === "done" && e.stopReason === "cancelled"));
+  assert.ok(!events.some((e) => e.type === "notice" && e.text.includes("stopped instead of answering")));
+});
+
+const stall = { NIXI_TURN_STALL_MS: "300" };
+
+test("stall guard: a silent turn is cancelled and reported (#102)", async () => {
+  const { events, agent } = await runBridge({ env: stall, messages: [{ type: "prompt", text: "STALL_SILENT" }, () => new Promise((r) => setTimeout(r, 300))] });
+  assert.ok(events.some((e) => e.type === "error" && e.message.includes("stopped responding")));
+  assert.ok(agent.some((e) => e.method === "cancel"));
+});
+
+const waitFor = (events, predicate, ms = 10000) => new Promise((resolve, reject) => {
+  const started = Date.now();
+  const poll = () => events.some(predicate) ? resolve() : Date.now() - started > ms ? reject(new Error("timed out")) : setTimeout(poll, 20);
+  poll();
+});
+
+test("stall guard: it ends the session (error, then fatal) and takes no further prompt (#102)", async () => {
+  const { events, agent } = await runBridge({ env: stall, messages: [async ({ events, send, exited }) => {
+    send({ type: "prompt", text: "STALL_SILENT" });
+    await waitFor(events, (e) => e.type === "fatal");
+    await waitFor(events, () => exited());
+  }] });
+  const kinds = events.map((e) => e.type).filter((t) => t === "error" || t === "fatal");
+  assert.deepEqual(kinds, ["error", "fatal"]);
+  assert.equal(agent.filter((e) => e.method === "prompt").length, 1);
+});
+
+test("stall guard: a tool that finished no longer earns the long limit (#102)", async () => {
+  const started = Date.now();
+  // idle limit 1 s, tool limit 6 s: an error well before 6 s means the idle limit applied.
+  const { events } = await runBridge({ env: { NIXI_TURN_STALL_MS: "1000" }, messages: [{ type: "prompt", text: "STALL_TOOLDONE" }] });
+  assert.ok(events.some((e) => e.type === "error"));
+  assert.ok(Date.now() - started < 4500, `took ${Date.now() - started} ms`);
+});
+
+test("stall guard: closing stdin clears the timer, so the bridge exits promptly (#102)", async () => {
+  let exitedAt = null;
+  await runBridge({ messages: [async ({ events, send, end, exited }) => {
+    send({ type: "prompt", text: "STALL_SILENT" });
+    await waitFor(events, (e) => e.type === "status" && e.text === "Thinking…");
+    const started = Date.now();
+    end();
+    await waitFor(events, () => exited(), 4000);
+    exitedAt = Date.now() - started;
+  }] });
+  assert.ok(exitedAt < 4000, `still running ${exitedAt} ms after stdin closed`);
+});
+
+test("stall guard: a duplicate prompt does not disarm it (#102)", async () => {
+  const { events } = await runBridge({ env: stall, messages: [async ({ events, send }) => {
+    send({ type: "prompt", text: "STALL_SILENT" });
+    await waitFor(events, (e) => e.type === "status");
+    send({ type: "prompt", text: "second" });
+    await waitFor(events, (e) => e.type === "fatal");
+  }] });
+  assert.ok(events.some((e) => e.type === "error" && e.message.includes("already handling")));
+  assert.ok(events.some((e) => e.type === "error" && e.message.includes("stopped responding")));
+});
+
+test("Mechanic: a cancelled turn gets no Guide notice (#102)", async () => {
+  const { events } = await runBridge({
+    settings: { trust: "mechanic" }, messages: [{ type: "prompt", text: "PLEASE_WRITE THEN_CANCEL" }],
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
+  });
+  assert.ok(events.some((e) => e.type === "done" && e.stopReason === "cancelled"));
+  assert.ok(!events.some((e) => e.type === "notice" && e.text.includes("stopped instead of answering")));
+});
+
+test("Stop while the prompt is still being grounded ends the turn without starting it (#102)", async () => {
+  const { events, agent } = await runBridge({ context: "x", messages: [async ({ events, send }) => {
+    send({ type: "prompt", text: "hello" });
+    send({ type: "cancel" });
+    await waitFor(events, (e) => e.type === "done");
+  }] });
+  assert.ok(events.some((e) => e.type === "done"));
+  assert.equal(agent.filter((e) => e.method === "prompt").length, 0);
+});
+
+test("stall guard: a running tool gets the longer limit (#102)", async () => {
+  const { events } = await runBridge({ env: stall, messages: [{ type: "prompt", text: "STALL_TOOL" }] });
+  assert.ok(!events.some((e) => e.type === "error"), JSON.stringify(events));
+  assert.ok(events.some((e) => e.type === "done"));
+});
+
+test("stall guard: a pending card pauses it (#102)", async () => {
+  const run = await runBridge({
+    env: stall, settings: { trust: "mechanic" }, messages: [{ type: "prompt", text: "PLEASE_RUN" }],
+    // Blocks the test process (not the bridge) for 3x the limit before answering the card.
+    onPermission: (event) => {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 900);
+      return { type: "permission", id: event.id, optionId: "allow" };
+    },
+  });
+  assert.ok(!run.events.some((e) => e.type === "error"), JSON.stringify(run.events));
 });
