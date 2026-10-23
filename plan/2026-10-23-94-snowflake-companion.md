@@ -158,6 +158,18 @@ Traps: the clone in the scratchpad is shallow; don't work in it.
   - Don't change `run_claude`, so non-Nix installs keep working.
   - Approval timeout 600s → reject.
 
+**S2b. Wake word "Hey Nixi"** (fork `app/server.py`, `app/quick.py`, `app/static/index.html`; coder "bridge")
+*Added during implementation at the user's request (2026-10-23); not in the approved spec.*
+- `WAKE_RE` (server.py:1371): the name group becomes Nixi plus likely Whisper mishearings
+  (`nixi|nixie|nixy|nixey|nixee|nicksy|nicksie`). `stt_hint` (146) and the wake transcription
+  hint (1520) say "Hey Nixi". `FOLLOW_NOTE` (1364) says "hey Nixi".
+- `quick.py:338` strips "hey nixi" prefixes. `index.html` shows “Hey Nixi” in its labels
+  (549, 550, 584).
+- Unchanged: the window class "Void" (Hyprland rules depend on it), app names, data and
+  config paths, launcher name.
+- Verify: `WAKE_RE` matches "Hey Nixi, open firefox" (captures "open firefox") and
+  "hey nixie what's up", and no longer matches "hey void".
+
 **S3. Nix package** (fork `flake.nix`, `nix/package.nix`, `bin/void`; Codex via handoff)
 - `flake.nix`:
   - Inputs: `nixpkgs` (nixos-unstable).
