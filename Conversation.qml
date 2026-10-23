@@ -1108,13 +1108,25 @@ Item {
     permissionSettle.stop()
   }
 
+  // Switching to YOLO clears the queued cards, except a herdr write (#95): the
+  // bridge keeps those pending and they still need their own click.
+  function clearUnconfirmedPermissions() {
+    var keep = permissionQueue.filter(function(r) { return r.confirm === "click" })
+    if (pendingPermission.confirm === "click") { permissionQueue = keep; return }
+    pendingPermission = noPermission
+    permissionQueue = keep
+    permissionSettled = false
+    permissionSettle.stop()
+    if (keep.length > 0) showNextPermission()
+  }
+
   // options is the agent's own list of choices and the card renders one button
   // per entry, so dropping it here left the card with no buttons at all (#58
   // rewired the card and its keys through it but never widened this).
-  function enqueuePermission(id, title, detail, omitted, options) {
+  function enqueuePermission(id, title, detail, omitted, options, confirm) {
     var request = { id: String(id || ""), title: String(title || "Allow tool?"),
                     detail: String(detail || ""), omitted: Number(omitted) || 0,
-                    options: options || [] }
+                    options: options || [], confirm: String(confirm || "") }
     permissionQueue = permissionQueue.concat([request])
     if (pendingPermission.id === "") showNextPermission()
   }
@@ -1187,7 +1199,7 @@ Item {
         } else if (of === "permission_mode") {
           permissionMode = event.mode === "yolo" ? "yolo" : "permission"
           if (event.ok) {
-            if (permissionMode === "yolo") clearPermissions()
+            if (permissionMode === "yolo") clearUnconfirmedPermissions()
             permissionModeConfirmed(permissionMode)
           } else {
             statusText = String(event.message || "Could not change permission mode")
@@ -1220,7 +1232,7 @@ Item {
         var toolStatus = String(event.status || "in_progress")
         statusText = toolStatus === "completed" ? "Thinking…" : toolTitle
       } else if (event.type === "permission") {
-        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options)
+        enqueuePermission(event.id, event.title, event.detail, event.omitted, event.options, event.confirm)
       } else if (event.type === "error") {
         clearPermissions()
         waiting = false
