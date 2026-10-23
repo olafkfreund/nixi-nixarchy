@@ -20,10 +20,16 @@ test("a trust switch keeps the card's keys, leaves no temp file, writes 0600 (#1
   assert.equal(mode, 0o600);
 });
 
-test("a trust switch then a permission-mode switch both persist (#103)", async () => {
+test("a permission-mode switch and a trust switch sent together both persist (#103)", async () => {
   const run = await runBridge({
-    settings: { fontScale: 1.4 },
-    messages: [{ type: "trust", trust: "mechanic" }, { type: "permission_mode", mode: "yolo" }],
+    // At Mechanic, so YOLO is allowed whichever message the bridge handles first.
+    settings: { fontScale: 1.4, trust: "mechanic" },
+    // Written together, without waiting for the first ack, so the two writes overlap.
+    messages: [async ({ write, until, events }) => {
+      write({ type: "permission_mode", mode: "yolo" });
+      write({ type: "trust", trust: "mechanic" });
+      await until(() => events.filter((e) => e.type === "ack").length >= 2, "both acks");
+    }],
   });
   assert.equal(run.settingsAfter.trust, "mechanic");
   assert.equal(run.settingsAfter.permissionMode, "yolo");

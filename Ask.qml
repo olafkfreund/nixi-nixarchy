@@ -64,7 +64,7 @@ Item {
   property bool settingsLoaded: false
   property bool flushPending: false
   // nixi.json as last read. The bridge writes keys of its own to the same file
-  // (trust, askBeforeReading), so the UI writes its keys on top of these
+  // (trust, permissionMode), so the UI writes its keys on top of these
   // rather than replacing the file with only the keys it knows.
   property var settingsOnDisk: ({})
   // Mirror of the bridge's ack. The bridge owns permissionMode; the card never writes it.
@@ -226,8 +226,9 @@ Item {
   function writeSettings(raw) {
     flushPending = false
     var data = {}
-    try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
-    if (!data || typeof data !== "object") data = {}
+    // A half-done hand edit: writing would drop the bridge's keys (trust), so leave the file alone.
+    try { data = JSON.parse(raw || "{}") } catch (error) { return }
+    if (!data || typeof data !== "object") return
     settingsOnDisk = data
     settingsFile.setText(JSON.stringify(Object.assign({}, data, cardOwnedSettings()), null, 2) + "\n")
   }
@@ -241,7 +242,12 @@ Item {
     onLoaded: root.flushPending ? root.writeSettings(text()) : root.loadSettings(text())
     // First run: the file does not exist yet. Without this the scale would
     // never be marked loaded and would never be written.
-    onLoadFailed: root.flushPending ? root.writeSettings("") : root.loadSettings("")
+    // Only a missing file is written from scratch; any other failure keeps the file.
+    onLoadFailed: (error) => {
+      if (!root.flushPending) root.loadSettings("")
+      else if (error === FileViewError.FileNotFound) root.writeSettings("")
+      else root.flushPending = false
+    }
     onFileChanged: reload()
   }
 

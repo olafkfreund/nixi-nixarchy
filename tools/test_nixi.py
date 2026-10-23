@@ -600,7 +600,8 @@ def test_settings_keep_bridge_keys():
     owned = _block(ask, ask.index("function cardOwnedSettings"))
     assert "permissionMode" not in owned and "trust" not in owned, "the card writes a bridge-owned key (#103)"
     assert "root.flushPending ? root.writeSettings(text())" in ask, "onLoaded ignores a pending flush"
-    assert 'root.flushPending ? root.writeSettings("")' in ask, "first run no longer writes"
+    assert 'error === FileViewError.FileNotFound) root.writeSettings("")' in ask, "first run no longer writes"
+    assert "catch (error) { return }" in write, "an unparsable nixi.json is overwritten without the bridge's keys"
     load = _block(ask, ask.index("function loadSettings"))
     assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
     print("  ok  a UI settings write keeps the bridge's own keys")
