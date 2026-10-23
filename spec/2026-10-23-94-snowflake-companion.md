@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 94
 intent: intent/2026-10-23-94-snowflake-companion.md
 ---
