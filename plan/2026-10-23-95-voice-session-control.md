@@ -178,6 +178,32 @@ new test in `bridge/trust-policy.test.js` or `bridge/herdr-bridge.test.js` using
 - A fresh Opus reviewer with this plan and both diffs.
 - The lead fixes confirmed findings and records changes of plan here.
 
+**P9 outcome (2026-10-23):** Opus, Codex and agy found real bypasses. Fixes (N = nixi, F = fork):
+- **N1:** any Bash command containing `herdr`/`HERDR_SOCKET` is a herdr write, also after stripping
+  quote characters. A pure regex couldn't cover quoting, flags, `pane run`, `agent start`,
+  `xargs`, here-docs, `python3 -c` and sockets.
+- **N2:** ask rules `Bash(*herdr*)` and `Bash(*HERDR_SOCKET*)` at both levels, because the user's
+  own allow rules (`Bash(env:*)`, `Bash(python3:*)`, …) let Claude run a herdr write without
+  ever asking the bridge.
+- **N3:** nixi's UI keeps pending herdr cards when YOLO is switched on (they used to be cleared
+  while the bridge waited).
+- **N4:** cancels are audited too, `text` is capped, and an existing `sends.log` is chmodded
+  0600.
+- **N5:** the docs say "voice can't confirm sends" (the keyboard also answers), and note the YOLO
+  injection caveat and the `$VAR` residual.
+- **F1:** sends are refused unless BRIDGED. The companion outside nixi mode could otherwise send
+  through its own Claude.
+- **F2:** exact-match resolution for sends; the `on X:` phrase is dropped.
+- **F3:** trailing punctuation in send text is kept.
+- **F4:** a loose status phrase with no agents falls through to a normal ask.
+- **F5:** marker strings are neutralised, control characters stripped, and title/cwd/status moved
+  inside the data block.
+- **F6:** pane ids start alphanumeric.
+- **F7:** redaction catches common short tokens and keeps SHAs and store paths.
+- **F8:** Enter and `y` don't answer send cards.
+- **F9:** the no-writes test catches list argv and has a narrower exemption.
+- `--session` stays a documented limitation: `agent list` gives no session name.
+
 ## Tests
 
 | Command | Expected |

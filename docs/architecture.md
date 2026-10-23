@@ -75,13 +75,24 @@ The durable mode is `permission` or `yolo`, stored in
   the command so wrappers and subshells do not hide it. Guide cancels it.
   Mechanic always shows the card, even in YOLO and even for a card queued before
   a switch to YOLO, with `allow_always` removed; the `permission` event carries
-  `confirm: "click"` so a front end can refuse a spoken yes.
+  `confirm: "click"` so a front end can refuse a spoken yes (voice can't confirm sends; keyboard Enter or `y` on the card still answer).
 - Each answer to a herdr write appends one JSON line (`ts`, `pane`, `text`,
   `cwd`, `decision`, `optionKind`) to `~/.local/share/nixi/sends.log`, created
   0600 and append-only. It records the command, never terminal output.
 - The one exception to "the companion never writes": a front end such as the
   voice companion may *read* herdr locally (`agent list`, `agent read`). It never
   writes to a session; every send goes through the bridge and its card.
+- Detection is deliberately a fail-safe, not a parser: any Bash command that
+  mentions `herdr` or `HERDR_SOCKET` (also with quotes and backslashes removed)
+  counts, and Claude's own `Bash(*herdr*)` / `Bash(*HERDR_SOCKET*)` ask rules
+  beat a user's standing allow rules, so a herdr write always reaches the bridge.
+  Cancelled and denied sends are audited too, as `decision: "cancelled"` / `"deny"`.
+- Known limits: `$H agent prompt` with `H` set earlier has no "herdr" text and
+  is not caught. In YOLO, a non-herdr command injected through a session
+  summary still runs on its own. A send to a session whose own agent runs with
+  bypass permissions then acts under that agent's mode. `herdr agent list`
+  exposes no herdr session name, so the companion always uses the default
+  session (`--session` is not supported).
 
 ## Message and scrolling invariants
 

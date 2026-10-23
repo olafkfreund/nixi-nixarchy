@@ -20,13 +20,21 @@ test("herdr writes are detected (#95)", () => {
     'echo $(herdr agent prompt 1-2 "hi")',
     'echo `herdr agent prompt 1-2 "hi"`',
     'echo herdr agent prompt 1-2 "hi"',
+    // the bypass list from the #95 review: any mention counts
+    '"herdr" agent prompt 1-2 hi', 'her""dr agent prompt 1-2 hi', 'h\\erdr agent prompt 1-2 hi',
+    "her\\\ndr agent prompt 1-2 hi",
+    "herdr --machine agent prompt 1-2 hi", "herdr --session=s agent prompt 1-2 hi",
+    "herdr pane run 1-2 ls", "herdr agent start claude", "echo 1-2 | xargs herdr agent prompt",
+    "cat <<EOF\nherdr agent prompt 1-2 hi\nEOF",
+    `python3 -c "import subprocess; subprocess.run(['herdr','agent','prompt','1-2','x'])"`,
+    "echo hi | socat - UNIX-CONNECT:$HERDR_SOCKET_PATH", "nc -U $HERDR_SOCKET_PATH",
   ]) assert.ok(isHerdrWrite(call(command)), command);
+  assert.ok(isHerdrWrite({ rawInput: { command: ["herdr", "agent", "prompt", "1-2", "x"] } }));
 });
 
-test("reads and other tools are not herdr writes; an echo of one is an accepted false positive (#95)", () => {
+test("commands that never mention herdr, and other tools, are not herdr writes (#95)", () => {
   for (const command of [
-    "herdr agent read 1-2 --source recent",
-    "herdr agent list",
+    "ls -la", "git status", "node --test", "echo hello",
   ]) assert.ok(!isHerdrWrite(call(command)), command);
   assert.ok(!isHerdrWrite({ rawInput: { file_path: "/x" } }));
   assert.ok(!isHerdrWrite(undefined));

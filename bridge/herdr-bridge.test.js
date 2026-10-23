@@ -50,3 +50,33 @@ test("a yes appends one 0600 audit line (#95)", async () => {
   assert.equal(entry.decision, "allow");
   assert.equal(mode, 0o600);
 });
+
+const auditLines = ({ home }) => {
+  try { return readFileSync(join(home, ".local", "share", "nixi", "sends.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l)); }
+  catch { return []; }
+};
+
+test("a no and a Guide cancel are audited too (#95)", async () => {
+  let denied, cancelled;
+  await runBridge({
+    env, settings: { trust: "mechanic" }, messages: [send, (ctx) => { denied = auditLines(ctx); }],
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
+  });
+  assert.equal(denied.length, 1);
+  assert.equal(denied[0].decision, "deny");
+  await runBridge({ env, messages: [send, (ctx) => { cancelled = auditLines(ctx); }] });
+  assert.equal(cancelled.length, 1);
+  assert.equal(cancelled[0].decision, "cancelled");
+});
+
+test("switching to YOLO leaves a pending herdr card unresolved (#95)", async () => {
+  const { agent } = await runBridge({
+    env, settings: { trust: "mechanic" }, messages: [send],
+    // yolo first, then (after the switch settled) a reject: an auto-allow would have won the race
+    onPermission: (event) => [{ type: "permission_mode", mode: "yolo" }, 600,
+      { type: "permission", id: event.id, optionId: "reject" }],
+  });
+  assert.deepEqual(agent.find((e) => e.method === "permissionOutcome").outcome,
+    { outcome: "selected", optionId: "reject" });
+});
+

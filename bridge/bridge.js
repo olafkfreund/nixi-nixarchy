@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
@@ -336,6 +336,7 @@ const client = {
     // Guide: nothing that asks for permission ever runs, and nothing is shown
     // to approve. This, not the session mode, is Guide's guarantee.
     if (policy.permission === "cancel") {
+      if (isHerdrWrite(params.toolCall)) auditSend(params.toolCall, null);
       emit({ type: "status", text: `Guide · not run: ${title}` });
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
@@ -493,16 +494,21 @@ async function steer(text) {
 
 // One JSON line per decision on a herdr write (#95). Append-only, 0600, and the
 // command only: never terminal output.
+let sendsLogChecked = false;
 function auditSend(toolCall, picked) {
   const detail = herdrWriteDetail(toolCall)
-    || { pane: "", text: String(toolCall?.rawInput?.command || "").slice(0, 500) };
+    || { pane: "", text: String(toolCall?.rawInput?.command || "") };
   try {
+    const path = join(learnedDir, "sends.log");
     mkdirSync(learnedDir, { recursive: true });
-    appendFileSync(join(learnedDir, "sends.log"), JSON.stringify({
-      ts: new Date().toISOString(), ...detail, cwd,
-      decision: String(picked?.kind || "").startsWith("allow") ? "allow" : "deny",
+    appendFileSync(path, JSON.stringify({
+      ts: new Date().toISOString(), ...detail, text: detail.text.slice(0, 500), cwd,
+      // No picked option = cancelled (Guide, shutdown, trust change, an unknown id).
+      decision: !picked ? "cancelled" : String(picked.kind).startsWith("allow") ? "allow" : "deny",
       optionKind: picked?.kind || "cancelled",
     }) + "\n", { mode: 0o600 });
+    // appendFile's mode only applies to a new file; tighten one that already existed.
+    if (!sendsLogChecked) { sendsLogChecked = true; try { chmodSync(path, 0o600); } catch {} }
   } catch (error) {
     emit({ type: "diagnostic", text: `Could not write the send audit: ${error.message}` });
   }
@@ -552,6 +558,7 @@ function choose(options, kind) {
 function cancelAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
     pendingPermissions.delete(id);
+    if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, null);
     pending.resolve({ outcome: { outcome: "cancelled" } });
   }
 }
