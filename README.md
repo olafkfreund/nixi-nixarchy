@@ -109,12 +109,12 @@ blocked.
 }
 ```
 
-Run `void` to show or hide it, or bind it to a key, for example in
+Run `nixi-companion` to show or hide it, or bind it to a key, for example in
 `~/.config/hypr/bindings.conf`:
 
 ```ini
-bind = SUPER ALT, H, exec, void
-bind = SUPER ALT, J, exec, void listen
+bind = SUPER ALT, H, exec, nixi-companion
+bind = SUPER ALT, J, exec, nixi-companion listen
 ```
 
 What this build leaves out: Void's own Claude runner and trust modes, its
@@ -122,7 +122,7 @@ self-updater, autostart, plugin toggle, conversation history, screenshots and
 live view, and its folders, projects and memory: like the card, it always works
 from Nixi's own directory, and Nixi keeps its own learned facts. Its little
 terminal shows each step's title but not its output.
-Voice models download to `~/.cache` the first time you talk to it.
+Voice models download to `~/.cache` the first time you talk to it. Its own settings live in `~/.config/nixi-companion`.
 
 Claude Code is Nixi's default agent: it is used whenever Omarchy has no default
 agent and you have not picked one with SUPER+,. Its adapter, `claude-agent-acp`,
