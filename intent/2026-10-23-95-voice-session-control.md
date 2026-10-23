@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 95
 author: olafkfreund
 ---
@@ -101,3 +101,7 @@ desktop control.
 3. **Sessions outside herdr** (a plain `claude --remote-control` session): in scope later, or out?
 4. **Confirmation wording:** is a click-only confirmation for sends acceptable at first, with
    spoken confirmation ("yes, send it") added once it proves reliable?
+
+Resolved at approval (2026-10-23): the approver accepted the proposed direction. Q1 is decided
+in the spec. Q2: status first. Q3: sessions outside herdr come later. Q4: click-only
+confirmation for sends at first.
