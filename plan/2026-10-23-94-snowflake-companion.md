@@ -324,7 +324,7 @@ S1b colours looked creepy.*
 | `node --test bridge/` (nixi) | all pass, unchanged count |
 | `python3 tools/test_nixi.py` (nixi) | all pass |
 | `nix flake check` (both) | passes |
-| HM eval, companion off vs `master` | same drvPath |
+| HM eval, companion off vs `master` | same `home.file`, user units, activation and package names (deviation, S7: the drvPath differs anyway, because nixi's package source is the whole repo, docs and plan included, and the HM manual lists the new options) |
 
 ## Rollback
 
