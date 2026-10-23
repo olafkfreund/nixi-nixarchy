@@ -374,8 +374,23 @@ const client = {
   },
 };
 
+// #97: Codex's read-only sandbox reads every file, and codex-acp 2.1.1 rejects
+// the permission profile that would fence secrets, so Guide can't be kept.
+const CODEX_GUIDE_REFUSAL = "Guide can't keep secrets from Codex — use Claude for Guide, or switch to Mechanic";
+
+let codexRefused = false;
+
 async function start() {
   await loadSettings();
+  if (agentName === "codex" && trust === "guide") {
+    // No session. Stay up (ready) so the card's switch to Mechanic can reach us;
+    // the stdin loop below answers only trust, close and prompt in this state.
+    codexRefused = true;
+    await killChild(); // the module-load spawn is kept; its exit is expected, not a fatal
+    emit({ type: "notice", text: CODEX_GUIDE_REFUSAL });
+    emit({ type: "ready", steeringSupported: false, permissionMode, trust });
+    return;
+  }
   const stream = ndJsonStream(
     Writable.toWeb(child.stdin),
     Readable.toWeb(child.stdout),
@@ -643,6 +658,11 @@ async function shutdown() {
     if (connection && sessionId)
       await Promise.race([connection.closeSession({ sessionId }), delay(350)]);
   } catch {}
+  await killChild();
+}
+
+// SIGTERM, wait, SIGKILL, wait: the child is gone when this returns.
+async function killChild() {
   if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   await Promise.race([childExited, delay(500)]);
   if (child.exitCode === null && child.signalCode === null) {
@@ -658,6 +678,22 @@ input.on("line", (line) => {
     message = JSON.parse(line);
   } catch {
     emit({ type: "error", message: "Invalid UI command" });
+    return;
+  }
+  if (codexRefused) {
+    if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "trust") {
+      if (resolveTrust(message.trust) === "guide") return ack("trust", true, { trust: "guide" });
+      mergeSettings({ trust: "mechanic" }).then(() => {
+        ack("trust", true, { trust: "mechanic" });
+        emit({ type: "fatal", message: "Trust set to Mechanic — start a new conversation to use Codex" });
+        process.exit(0);
+      }).catch((error) => ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }));
+    } else if (message.type === "close") process.exit(0);
+    else if (message.type === "steer") ack("steer", false, { message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "permission_mode")
+      ack("permission_mode", false, { mode: permissionMode, message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "undo") emit({ type: "notice", text: "Nothing to undo: no session." });
     return;
   }
   if (message.type === "prompt") {
@@ -685,6 +721,7 @@ input.on("line", (line) => {
     // had NOT moved to (#40). On failure nothing is written and `trust` still
     // holds the level actually in force, which is what the failed ack carries.
     (async () => {
+      if (agentName === "codex" && next === "guide") throw new Error(CODEX_GUIDE_REFUSAL);
       if (connection && sessionId) await applyTrustMode(next);
       await mergeSettings({ trust: next });
       trust = next;
@@ -717,7 +754,7 @@ input.on("line", (line) => {
 input.on("close", () => shutdown());
 
 child.on("exit", (code, signal) => {
-  if (!shuttingDown) {
+  if (!shuttingDown && !codexRefused) {
     emit({ type: "fatal", message: `ACP agent exited (${signal || code})` });
     process.exit(code || 0);
   }

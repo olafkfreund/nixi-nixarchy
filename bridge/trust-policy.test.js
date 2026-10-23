@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules } from "./trust-policy.js";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -117,11 +120,74 @@ test("YOLO cannot be switched on from Guide", async () => {
   assert.notEqual(settingsAfter?.permissionMode, "yolo");
 });
 
-test("Codex maps both levels to read-only", async () => {
-  const guide = await runBridge({ env: { NIXI_AGENT: "codex" } });
+test("Codex starts at Mechanic in read-only", async () => {
   const mechanic = await runBridge({ env: { NIXI_AGENT: "codex" }, settings: { trust: "mechanic" } });
-  assert.equal(guide.agent.find((e) => e.method === "setSessionMode")?.modeId, "read-only");
   assert.equal(mechanic.agent.find((e) => e.method === "setSessionMode")?.modeId, "read-only");
+});
+
+// #97: Codex's sandbox reads secrets at any level, so Guide refuses it, but the
+// bridge stays up so the switch to Mechanic can reach it.
+const reason = /Guide can't keep secrets from Codex/;
+const until = async (ok) => { for (let i = 0; i < 250 && !ok(); i++) await new Promise((r) => setTimeout(r, 20)); };
+
+test("Codex at Guide: reason shown, no session, child reaped, commands answered, switch restarts at Mechanic", async () => {
+  // A stand-in adapter that ignores SIGTERM and records its pid, to prove the child is reaped.
+  const pidFile = join(mkdtempSync(join(tmpdir(), "nixi-codex-")), "pid");
+  const stub = `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);`;
+  let alive = true;
+  const run = await runBridge({
+    env: { NIXI_AGENT: "codex", NIXI_ACP_COMMAND: JSON.stringify([process.execPath, "-e", stub]) },
+    messages: [
+      async () => { try { process.kill(Number(readFileSync(pidFile, "utf8")), 0); } catch { alive = false; } },
+      { type: "prompt", text: "hi" },
+      { type: "steer", text: "x" }, { type: "permission_mode", mode: "yolo" },
+      { type: "undo" }, { type: "trust", trust: "guide" }, { type: "trust", trust: "mechanic" },
+      async ({ events }) => until(() => events.some((e) => e.type === "fatal")),
+    ],
+  });
+  assert.equal(alive, false, "the codex-acp child outlived the refusal");
+  assert.match(run.events.find((e) => e.type === "notice")?.text, reason);
+  assert.match(run.events.find((e) => e.type === "error")?.message, reason);
+  const ack = (of, ok) => run.events.find((e) => e.type === "ack" && e.of === of && e.ok === ok);
+  assert.match(ack("steer", false)?.message, reason);
+  assert.match(ack("permission_mode", false)?.message, reason);
+  assert.ok(ack("trust", true), "trust acks");
+  assert.ok(run.events.some((e) => e.type === "notice" && /Nothing to undo/.test(e.text)));
+  assert.equal(run.settingsAfter.trust, "mechanic");
+  assert.match(run.events.find((e) => e.type === "fatal")?.message, /Trust set to Mechanic/);
+  assert.ok(!run.agent.some((e) => e.method === "newSession"), "a Codex session started at Guide");
+});
+
+test("Codex: an unknown trust setting is Guide, so refused", async () => {
+  for (const options of [
+    { settings: { trust: "MECHANIC" } },
+    { settings: { trust: 123 } }, // runBridge reads nixi.json back, so it cannot be made invalid JSON
+  ]) {
+    const run = await runBridge({ env: { NIXI_AGENT: "codex" }, ...options });
+    assert.match(run.events.find((e) => e.type === "notice")?.text, reason);
+    assert.ok(!run.agent.some((e) => e.method === "newSession"));
+  }
+});
+
+test("Codex refused: close ends the bridge", async () => {
+  let ended = false;
+  await runBridge({
+    env: { NIXI_AGENT: "codex" },
+    messages: [{ type: "close" }, async ({ exited }) => { await until(exited); ended = exited(); }],
+  });
+  assert.ok(ended, "the bridge kept running after close");
+});
+
+test("Codex: Mechanic to Guide is refused and trust stays mechanic", async () => {
+  const run = await runBridge({
+    env: { NIXI_AGENT: "codex" }, settings: { trust: "mechanic" },
+    messages: [{ type: "trust", trust: "guide" }],
+  });
+  const ack = run.events.find((e) => e.type === "ack" && e.of === "trust");
+  assert.equal(ack.ok, false);
+  assert.match(ack.message, /Guide can't keep secrets from Codex/);
+  assert.equal(ack.trust, "mechanic");
+  assert.equal(run.settingsAfter.trust, "mechanic");
 });
 
 const opencode = { NIXI_AGENT: "opencode", FAKE_AGENT_MODES: "config" };
@@ -448,7 +514,7 @@ test("the agent cannot load settings from its own working directory (#63)", asyn
 
 test("only Claude gets the settings restriction; the others get no meta at all (#63)", async () => {
   for (const env of [{ NIXI_AGENT: "codex" }, { NIXI_AGENT: "opencode" }]) {
-    const run = await runBridge({ env });
+    const run = await runBridge({ env, settings: { trust: "mechanic" } });
     assert.equal(run.agent.find((e) => e.method === "newSession").meta, null,
       `${env.NIXI_AGENT} received Claude meta`);
   }
@@ -479,7 +545,7 @@ test("OpenCode cannot be handed a second config layer by its own cwd (#63)", asy
   // And no other adapter is handed an OpenCode knob: Claude's cwd is closed by
   // settingSources, and setting a stray env var for Codex would be cargo cult.
   for (const env of [{}, { NIXI_AGENT: "codex" }])
-    assert.equal(newSession(await runBridge({ env })).disableProjectConfig, null,
+    assert.equal(newSession(await runBridge({ env, settings: { trust: "mechanic" } })).disableProjectConfig, null,
       `${env.NIXI_AGENT || "claude"} was given OpenCode's flag`);
 });
 

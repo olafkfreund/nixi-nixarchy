@@ -73,6 +73,8 @@ exit 0
   };
   const child = spawn(process.execPath, [bridge], { env, stdio: ["pipe", "pipe", "pipe"] });
   const events = [];
+  let exited = false;
+  child.on("exit", () => { exited = true; });
   let permissionFailure = null;
   const waiters = [];
   createInterface({ input: child.stdout }).on("line", (line) => {
@@ -106,7 +108,7 @@ exit 0
     if (ready.type === "fatal") throw new Error(`bridge fatal: ${ready.message}`);
     let turns = 0;
     for (const message of options.messages || []) {
-      if (typeof message === "function") { await message({ home, events, until, write: (m) => child.stdin.write(JSON.stringify(m) + "\n") }); continue; }
+      if (typeof message === "function") { await message({ home, events, exited: () => exited, until, write: (m) => child.stdin.write(JSON.stringify(m) + "\n") }); continue; }
       child.stdin.write(JSON.stringify(message) + "\n");
       if (message.type === "prompt") {
         const target = ++turns;
