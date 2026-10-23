@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 106
 intent: intent/2026-10-23-106-yolo-during-guide-switch.md
 ---
