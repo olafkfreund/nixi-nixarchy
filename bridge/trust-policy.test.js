@@ -335,6 +335,23 @@ test("a switch to Guide that fails clears the window and keeps Mechanic (#106, #
   assert.equal(run.settingsAfter.permissionMode, "yolo");
 });
 
+test("undo is refused during a switch to Guide (#106)", async () => {
+  const run = await runBridge({
+    env: hang, settings: { trust: "mechanic" },
+    messages: [({ write: send }) => send({ type: "trust", trust: "guide" }), { type: "undo" }],
+  });
+  assert.ok(run.events.some((e) => e.type === "notice" && e.text.startsWith("Undo changes your machine")));
+});
+
+test("a turn that ends during a switch to Guide writes no LEARNED.md (#106, #51)", async () => {
+  const run = await runBridge({
+    env: hang, settings: { trust: "mechanic" },
+    messages: [({ write: send }) => send({ type: "trust", trust: "guide" }),
+      { type: "prompt", text: "PLEASE_LEARN something" }],
+  });
+  assert.equal(run.learnedAfter, null);
+});
+
 // #41 -- Claude matches permission rules per TOOL NAME. The secret list was
 // Read(...) patterns only, so Grep and Glob, the other two tools the allow
 // grants, reached every listed path with no prompt.

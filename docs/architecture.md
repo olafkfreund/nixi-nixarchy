@@ -67,8 +67,10 @@ The durable mode is `permission` or `yolo`, stored in
   option-selection rule.
 - A switch to a stricter trust level (Guide) takes effect when the bridge
   receives it: pending permissions are cancelled at once and YOLO is refused,
-  even if the agent's mode call then fails. A switch to a more permissive level
-  (Mechanic) takes effect only once the agent confirms it.
+  even if the agent's mode call then fails. Undo and `LEARNED.md` writes are
+  refused from that moment too, and the card drops its pending cards when it
+  sends the switch. A switch to a more permissive level (Mechanic) takes effect
+  only once the agent confirms it.
 - The UI does not commit or clear its permission queue until the bridge has
   persisted the requested mode and acknowledged it. A failed write retains
   Ask mode and the visible request.

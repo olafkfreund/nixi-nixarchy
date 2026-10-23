@@ -119,6 +119,11 @@ async function savePermissionMode(mode) {
   if (nextMode === "yolo" && effectiveTrust() !== "mechanic")
     throw new Error("YOLO is only available in Mechanic");
   await mergeSettings({ permissionMode: nextMode });
+  // A switch to Guide that arrived during the write: take the YOLO back (#106).
+  if (nextMode === "yolo" && effectiveTrust() !== "mechanic") {
+    await mergeSettings({ permissionMode: "permission" });
+    throw new Error("YOLO is only available in Mechanic");
+  }
   permissionMode = nextMode;
 }
 
@@ -254,7 +259,7 @@ async function guarded(toolCall, outcome, options) {
   // Only an allow* answer is a yes; a reject must not copy anything.
   const picked = options.find((o) => o.id === outcome.outcome.optionId);
   if (!String(picked?.kind || "").startsWith("allow")) return outcome;
-  if (trust !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
+  if (effectiveTrust() !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
   for (const text of await changes.backup(toolCall)) emit({ type: "notice", text });
   return outcome;
 }
@@ -434,7 +439,7 @@ async function finishLearned() {
   // changing and writing is, which is why Guide keeps unprompted reads; the
   // same distinction says it must not accumulate durable state that alters its
   // own future behaviour behind a promise that nothing changes (#51).
-  if (resolveTrust(trust) === "guide" || facts.length === 0) return;
+  if (effectiveTrust() === "guide" || facts.length === 0) return;
   try {
     await appendLearned(facts, learnedDir);
     // Kept, so say so. Hiding the write was deliberate -- a bare LEARNED: line
@@ -630,7 +635,7 @@ input.on("line", (line) => {
   } else if (message.type === "undo") {
     // Undo changes the machine; Guide promises nothing does. Leaving Guide is typed.
     if (turnRunning) emit({ type: "notice", text: "Undo is refused while a turn is running." });
-    else if (trust === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
+    else if (effectiveTrust() === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
     else changes.undo().then((result) => emit({ type: "notice", text: result.message }));
   } else if (message.type === "permission") {
     answerPermission(message);

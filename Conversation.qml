@@ -1026,6 +1026,9 @@ Item {
       return
     }
     beginAck("trust")
+    // The bridge cancels pending cards as soon as it receives a switch to Guide,
+    // even if the switch then fails (#106), so their buttons would do nothing.
+    if (level !== "mechanic") clearPermissions()
     statusText = level === "mechanic" ? "Switching to Mechanic…" : "Switching to Guide…"
     agent.write(JSON.stringify({ type: "trust", trust: level }) + "\n")
   }

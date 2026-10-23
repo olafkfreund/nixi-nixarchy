@@ -107,6 +107,25 @@ pending cards at once, even if the switch then fails.
 **P4. Review (lead):** Codex `review --base master`, agy, and a fresh Opus reviewer given the plan
 and the diff. Fix confirmed findings and record them here.
 
+**P4 result (2026-10-23):** Codex (gpt-6-sol) found no regressions. agy (model not reported) and a fresh
+Opus reviewer agreed that nothing is approved in the window, and found paths the plan had missed.
+Each was checked against the code, and the fixes are by the lead:
+- **Fixed:** undo (`trust === "guide"`) and the `LEARNED.md` write (`resolveTrust(trust)`, #51)
+  still read `trust`, so both ran during the window. They now read `effectiveTrust()`. Two new
+  tests fail on the old code.
+- **Fixed:** `guarded()` (whether an edit is backed up) reads `effectiveTrust()` too. No allow
+  reaches it in the window today; this removes the trap.
+- **Fixed:** a YOLO switch whose write was in flight when `/guide` arrived was saved and acked. It
+  now re-checks after the write, writes `permission` back, and fails the ack. No test: the timing
+  can't be forced through the process.
+- **Fixed (UI, `Conversation.qml` `setTrust`):** the card kept cards the bridge had cancelled, and
+  Allow then showed "Working…" for nothing. It now clears its queue when it sends a switch to
+  Guide. There is a source check in `tools/test_nixi.py`.
+- **Not changed:** the order of two overlapping trust switches (out of scope; the card blocks a
+  second switch while one is pending), and test 4 passing without the fix (already noted).
+- **Follow-up:** the companion's approval card (fork, `server.py` `Approvals.ask_bridge`) can
+  likewise outlive a `/guide`. Its answer is dropped by the bridge, so nothing runs.
+
 ## Tests
 
 | Command | Expected |

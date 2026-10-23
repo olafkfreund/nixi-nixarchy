@@ -1016,6 +1016,17 @@ def test_no_huginn_marker():
 
     print("  ok  no unread HUGINN marker on the agent's process tree")
 
+def test_guide_switch_clears_cards():
+    """The bridge cancels pending cards when it receives a switch to Guide, so
+    the card must drop them too, or Allow shows "Working…" for nothing (#106)."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    trust = _block(card, card.index("function setTrust"))
+    assert 'if (level !== "mechanic") clearPermissions()' in trust, \
+        "setTrust keeps cards the bridge cancelled on a switch to Guide"
+    assert trust.index("clearPermissions()") < trust.index("agent.write"), "cards cleared after the switch is sent"
+    print("  ok  a switch to Guide clears the card's permission queue")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
