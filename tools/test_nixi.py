@@ -592,7 +592,15 @@ def test_settings_keep_bridge_keys():
     askBeforeReading, which only the bridge writes (#27 review)."""
     ask = open(os.path.join(ROOT, "Ask.qml")).read()
     flush = _block(ask, ask.index("function flushSettings"))
-    assert "Object.assign({}, settingsOnDisk" in flush, "flushSettings replaces nixi.json with UI keys only"
+    assert "settingsFile.reload()" in flush and "setText" not in flush, \
+        "flushSettings writes the stale copy instead of re-reading first (#103)"
+    write = _block(ask, ask.index("function writeSettings"))
+    assert "Object.assign({}, data, cardOwnedSettings())" in write, "the write is not fresh disk + card keys"
+    assert "loadSettings" not in write, "the flush re-read applies disk values to the card (#103)"
+    owned = _block(ask, ask.index("function cardOwnedSettings"))
+    assert "permissionMode" not in owned and "trust" not in owned, "the card writes a bridge-owned key (#103)"
+    assert "root.flushPending ? root.writeSettings(text())" in ask, "onLoaded ignores a pending flush"
+    assert 'root.flushPending ? root.writeSettings("")' in ask, "first run no longer writes"
     load = _block(ask, ask.index("function loadSettings"))
     assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
     print("  ok  a UI settings write keeps the bridge's own keys")

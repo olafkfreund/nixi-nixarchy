@@ -62,11 +62,12 @@ Item {
   property string selectedReasoningEffort: ""
   readonly property real keyboardPageImpulse: keyboardLineImpulse * (740 / 360)
   property bool settingsLoaded: false
+  property bool flushPending: false
   // nixi.json as last read. The bridge writes keys of its own to the same file
   // (trust, askBeforeReading), so the UI writes its keys on top of these
   // rather than replacing the file with only the keys it knows.
   property var settingsOnDisk: ({})
-  // Retained so writing the font scale cannot drop the mode the bridge owns.
+  // Mirror of the bridge's ack. The bridge owns permissionMode; the card never writes it.
   property string persistedPermissionMode: "permission"
   property bool copyToastVisible: false
   // One manager owns the compositor submap. Conversations only affect the
@@ -195,10 +196,10 @@ Item {
     return value.map(function(argument) { return String(argument || "") }).filter(Boolean)
   }
 
-  function flushSettings() {
-    if (!settingsLoaded) return
-    settingsFile.setText(JSON.stringify(Object.assign({}, settingsOnDisk, {
-      permissionMode: persistedPermissionMode,
+  // Keys the card owns. trust and permissionMode belong to the bridge and are
+  // never in here, so a card write cannot undo a bridge write (#103).
+  function cardOwnedSettings() {
+    return {
       fontScale: fontScale,
       searchDebounceMs: searchDebounceMs,
       keyboardLineImpulse: keyboardLineImpulse,
@@ -210,7 +211,25 @@ Item {
       agent: selectedAgent,
       model: selectedModel,
       reasoningEffort: selectedReasoningEffort
-    }), null, 2) + "\n")
+    }
+  }
+
+  // Re-read first: the copy loaded at start-up predates any bridge write.
+  function flushSettings() {
+    if (!settingsLoaded) return
+    flushPending = true
+    settingsFile.reload()
+  }
+
+  // The fresh text goes to settingsOnDisk only, never onto the card's
+  // properties, so a disk value cannot overwrite a pending card change.
+  function writeSettings(raw) {
+    flushPending = false
+    var data = {}
+    try { data = JSON.parse(raw || "{}") } catch (error) { data = {} }
+    if (!data || typeof data !== "object") data = {}
+    settingsOnDisk = data
+    settingsFile.setText(JSON.stringify(Object.assign({}, data, cardOwnedSettings()), null, 2) + "\n")
   }
 
   FileView {
@@ -219,10 +238,10 @@ Item {
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onLoaded: root.loadSettings(text())
+    onLoaded: root.flushPending ? root.writeSettings(text()) : root.loadSettings(text())
     // First run: the file does not exist yet. Without this the scale would
     // never be marked loaded and would never be written.
-    onLoadFailed: root.loadSettings("")
+    onLoadFailed: root.flushPending ? root.writeSettings("") : root.loadSettings("")
     onFileChanged: reload()
   }
 
