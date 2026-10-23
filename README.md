@@ -83,6 +83,46 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 | `services.nixi.omarchyHooks.enable` | `false` | First-boot welcome + refresh after `omarchy update` |
 | `services.nixi.menuEntry.enable` | `false` | Adds "Help" to the Omarchy menu (SUPER+SPACE) |
 | `services.nixi.menuEntry.extraEntries` | `{}` | Your own menu entries, merged alongside Nixi's |
+| `services.nixi.companion.enable` | `false` | The snowflake desktop companion (below) |
+| `services.nixi.companion.package` | `null` | Its package, from the `nixoarchy-snowflake` flake |
+
+#### The snowflake companion (optional)
+
+A small snowflake that lives on your desktop, listens ("hey Nixi") and talks
+back. It is a fork of [Void](https://github.com/PLAYER99-void/void) and asks
+the agent **only through Nixi's bridge**, so it follows the card's trust level:
+Guide changes nothing, Mechanic asks first and can be undone, secrets stay
+blocked.
+
+```nix
+{
+  inputs.nixoarchy-snowflake.url = "github:olafkfreund/nixoarchy-snowflake";
+}
+```
+
+```nix
+{
+  services.nixi.companion = {
+    enable = true;
+    package = inputs.nixoarchy-snowflake.packages.${pkgs.system}.default;
+  };
+}
+```
+
+Run `nixi-companion` to show or hide it, or bind it to a key, for example in
+`~/.config/hypr/bindings.conf`:
+
+```ini
+bind = SUPER ALT, H, exec, nixi-companion
+bind = SUPER ALT, J, exec, nixi-companion listen
+```
+
+What this build leaves out: Void's own Claude runner and trust modes, its
+self-updater, autostart, plugin toggle, conversation history, screenshots and
+live view, and its folders, projects and memory: like the card, it always works
+from Nixi's own directory, and Nixi keeps its own learned facts. Its little
+terminal shows each step's title but not its output.
+Voice models download to `~/.cache` the first time you talk to it. Its own settings live in `~/.config/nixi-companion`.
 
 Claude Code is Nixi's default agent: it is used whenever Omarchy has no default
 agent and you have not picked one with SUPER+,. Its adapter, `claude-agent-acp`,

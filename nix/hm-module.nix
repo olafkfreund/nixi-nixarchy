@@ -24,6 +24,9 @@ let
     aiMirror = cfg.aiMirror.package;
   });
   share = "${nixiPkg}/share/nixi";
+  companionPkg = cfg.companion.package.override {
+    nixiBridge = [ "${plugins}/${pluginId}/bridge/nixi-node" "${plugins}/${pluginId}/bridge/bridge.js" ];
+  };
   plugins = "${nixiPkg}/share/omarchy/plugins";
 
   # Units run with a bare PATH; give them the user profile and the system
@@ -104,6 +107,28 @@ in
         (today, Claude). ai-mirror then asks for control on your desktop
         itself, and `SUPER+SHIFT+ESCAPE` revokes it.
       '';
+    };
+
+    companion = {
+      enable = lib.mkEnableOption
+        "the snowflake desktop companion (a Void fork), driven through Nixi's bridge";
+
+      package = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = null;
+        example = lib.literalExpression "inputs.nixoarchy-snowflake.packages.\${pkgs.system}.default";
+        description = ''
+          The companion package, from the `olafkfreund/nixoarchy-snowflake`
+          flake. It is not in nixpkgs, so it comes from your own config, the
+          same way {option}`services.nixi.aiMirror.package` does.
+
+          Nixi rebuilds it with its bridge pinned in: everything the snowflake
+          asks goes through the same bridge, trust level and permission rules
+          as the card, and the environment cannot point it elsewhere (#77).
+          Void's own Claude runner, trust modes, self-updater and history are
+          off in this build.
+        '';
+      };
     };
 
     autoEnable = lib.mkOption {
@@ -253,6 +278,23 @@ in
             aliases = [ "how" "nixi" "ayuda" ];
           };
         });
+    })
+
+    (lib.mkIf cfg.companion.enable {
+      assertions = [{
+        assertion = cfg.companion.package != null;
+        message = "services.nixi.companion.package must be set: the companion is not in nixpkgs (see its option description).";
+      }];
+      # nixi-node, not a bare node: it carries the pinned adapters and grounding command (#76).
+      home.packages = lib.optional (cfg.companion.package != null) companionPkg;
+      # Omarchy runs theme-set.d hooks on every `omarchy theme set`: the snowflake recolours live.
+      xdg.configFile."omarchy/hooks/theme-set.d/nixi-companion" = lib.mkIf (cfg.companion.package != null) {
+        executable = true;
+        text = ''
+          #!/bin/sh
+          exec ${companionPkg}/bin/nixi-companion theme-changed
+        '';
+      };
     })
 
     (lib.mkIf cfg.skill.enable {
