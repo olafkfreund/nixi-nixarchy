@@ -167,7 +167,9 @@ permission mode in `nixi.json`; anything else is Guide.
   way a shell can name a path. Residual: after a Mechanic to Guide switch inside
   one session, non-secret read-only commands run until the next conversation,
   because the rules cannot change mid-session. Codex and opencode, same canary
-  at Guide: measured: pending Q6.
+  at Guide (measured 2026-10-23): Codex read it -- its read-only sandbox permits
+  file reads and nixi has no per-path read rule for Codex (#97); opencode was
+  inconclusive (empty reply).
 - Mechanic: requests are queued in the card as upstream does. YOLO applies only
   here; a saved YOLO is ignored at Guide, and switching to Guide cancels queued
   requests.
