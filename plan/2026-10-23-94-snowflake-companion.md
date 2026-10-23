@@ -327,6 +327,39 @@ scope: add Void's `runtime.json` and config files to `SECRET_PATHS` / `EXEC_WRIT
 - Reading `~/.ssh/id_ed25519` is blocked.
 - `pgrep -af claude` shows only `claude-agent-acp` under `bridge.js`.
 
+**S10. One name: Nixi** (fork; coder "bridge" for code, coder "snow" for docs)
+*Added at the user's request (2026-10-23): no "Void" left in the source.*
+
+The names to use:
+
+| What | From | To |
+|---|---|---|
+| Anything a user sees or hears (UI, voice, notifications, logs) | Void | Nixi |
+| Command | `void`, `bin/void` | `nixi-companion`, `bin/nixi-companion` (`nixi` is the card's) |
+| Config, data and cache folders | `~/.config/void`, `~/.local/share/void`, `~/.cache/void` | `…/nixi-companion` (`~/.config/nixi` is nixi's) |
+| Environment variables | `VOID_*` | `NIXI_COMPANION_*` |
+| Socket | `void-$UID.sock` | `nixi-companion-$UID.sock` |
+| Window class and app id | `Void` | `Nixi` |
+| Layer-shell namespace | `void` | `nixi-companion` |
+| Page↔window JS hooks | `voidShown`, `voidDock`, … | `nixiShown`, `nixiDock`, … |
+| Preview helper | `miniVoid` | `miniNixi` |
+| Package, desktop file, icon | `void`, `void.desktop`, `void.png` | `nixi-companion` |
+| Update and issue URLs | `PLAYER99-void/void` | `olafkfreund/nixoarchy-snowflake` |
+
+- Delete the upstream-only platform files: `installer/`, `packaging/`, `install.ps1`, `get.sh`,
+  `app/window_win.py`, `app/winsys.py`, `app/launch_win.py`, `meson.build`, `configure`,
+  `.github/ci/*.ps1`, `.github/ci/pkgcheck.py`, and the installer/windows/get workflows.
+  Remove the Windows branches in the code that imported them. `install.sh` stays for non-Nix
+  Linux.
+- Keep: the MIT copyright line in `LICENSE`, and one credit line in the README ("a fork of
+  Void by PLAYER99").
+- No migration code for old `~/.config/void` data.
+- nixi side: the README's commands and binds become `nixi-companion` (lead).
+- Verify:
+  - `git grep -i void` only hits `LICENSE` and the README credit line.
+  - `py_compile`, `bash -n`, `nix build .#nixi-companion` and the bridge test (S5) pass.
+  - The live window's Hyprland layer namespace is `nixi-companion`.
+
 ## Tests
 
 | Command | Expected |
