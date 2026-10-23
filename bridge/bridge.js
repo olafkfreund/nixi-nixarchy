@@ -103,11 +103,16 @@ function mergeSettings(patch) {
     await mkdir(settingsDir, { recursive: true });
     // The UI writes its own keys (font scale) to this file. Merge a fresh read
     // rather than replace so changing one setting cannot drop the others.
+    // Only a missing file starts empty. Anything unreadable fails the switch
+    // rather than replacing the card's keys with this one patch.
     let settings = {};
     try {
-      const parsed = JSON.parse(await readFile(settingsPath, "utf8"));
-      if (parsed && typeof parsed === "object") settings = parsed;
-    } catch {}
+      settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw new Error(`${settingsPath} is not valid JSON or not readable`);
+    }
+    if (!settings || typeof settings !== "object" || Array.isArray(settings))
+      throw new Error(`${settingsPath} does not hold a JSON object`);
     Object.assign(settings, patch);
     const tmp = `${settingsPath}.tmp-${process.pid}-${++settingsWrites}`;
     try {

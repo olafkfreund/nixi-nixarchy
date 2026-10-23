@@ -114,7 +114,11 @@ Before it writes, the card re-reads the file and writes that fresh copy plus
 its own keys only; the re-read is never applied to the card's properties. The
 bridge reads, merges and writes a temp file (0600) that it renames over
 `nixi.json`, one write at a time per bridge, so the card never sees a
-half-written file. Two windows remain, both unfixed: a bridge write inside the
+half-written file. While a card change waits out its 200 ms save delay, a
+reload (a bridge write, or the echo of the card's own write) is not applied to
+the card, so it cannot put the old value back. Neither writer replaces a file
+it cannot parse: the card skips its write, and the bridge fails the switch with
+an error, so a half-done hand edit never loses the other writer's keys. Two windows remain, both unfixed: a bridge write inside the
 card's single event-loop turn between its re-read and its write, and two
 bridges writing within milliseconds. Each writer merges a fresh read, so only
 that writer's own key can be lost.

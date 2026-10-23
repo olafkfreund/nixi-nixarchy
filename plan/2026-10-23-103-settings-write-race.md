@@ -76,8 +76,41 @@ merge" paragraph with the precise rule.
   card can't be swapped without a rebuild of the user's system, verify the bridge half live and
   the card half by its source tests, and say so.
 
+**T4 result (2026-10-23):**
+- **The bridge half, live:** this branch's bridge, with a throwaway `HOME` whose `nixi.json` held
+  `{fontScale: 1.4, permissionMode: "yolo", askBeforeReading: true, agent: "claude", trust:
+  "guide"}` at mode 0644. A trust switch and a permission-mode switch, sent back to back, both
+  persisted, and every card key was kept. No `nixi.json.tmp-*` was left, and the mode became 0600.
+- **The card half wasn't run live.** The card runs from the installed plugin, and swapping it means
+  a system rebuild. It is covered by the `tools/test_nixi.py` source checks only.
+
 **T5. Review (lead):** Codex `review --base master`, agy, and a fresh Opus reviewer. Fix confirmed
 findings and record them here.
+
+**T5 result (2026-10-23):** Codex (gpt-6-sol) found no regressions. The fresh Opus reviewer and agy
+(model not reported) found the following; each was checked against the code, or against Quickshell
+0.3.2 with a probe shell:
+- **Refuted:** "`reload()` on an unchanged file may not fire `loaded`". The probe showed it does,
+  and two `reload()`s give one `loaded`. 20 of 20 flush re-reads at the card's cadence were
+  answered. `setText` plus `reload()` in the same turn does lose the `loaded`, but the card never
+  does that.
+- **Fixed:** a reload during the 200 ms save debounce (a bridge write, or the echo of the card's own
+  write, which the probe confirmed) ran `loadSettings` and put the old values back over the pending
+  change. `onLoaded` now skips `loadSettings` while `settingsSaveTimer` runs; the flush re-reads anyway.
+- **Fixed:** after a failed read the card writes only when the file is missing (`FileNotFound`),
+  and never over a file that won't parse or is empty (a truncating editor). Either would drop
+  the bridge's keys.
+- **Fixed (predates #103):** the bridge's `mergeSettings` replaced an unparsable file with `{}` plus
+  its patch. It now fails the switch with an error (`ack ok: false`) and leaves the file. New test.
+- **Test:** the together-sent test now writes both messages without waiting for an ack (the harness
+  passes `write`/`until` to function steps). It also passes on master, because a trust switch waits
+  for the agent's mode call before it writes. Serialisation is covered by review, not by a failing
+  test.
+- **Deviation:** `settingsOnDisk` and `persistedPermissionMode` were write-only after T2 and are
+  deleted (the plan had kept `persistedPermissionMode` as a mirror; nothing reads it).
+- **Follow-up, out of scope:** a `permission_mode: yolo` that arrives while a switch to Guide waits
+  on the agent passes the YOLO check (trust is still Mechanic). This is a trust-ordering issue,
+  not a settings write.
 
 ## Tests
 
