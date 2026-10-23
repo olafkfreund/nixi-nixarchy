@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 106
 author: olafkfreund
 ---
@@ -62,3 +62,8 @@ Found by agy in the #103 review (PR #105). It predates #94–#105.
 2. **Hand-answered cards during the window:** may the user still click "allow" on a card that was
    pending before the Guide switch, until the switch completes? Recommended: no. Treat the window
    as Guide, and refuse the answer as if the card had already been cancelled.
+
+Resolved at approval (2026-10-23): the approver accepted the recommended answers. Q1: a flag set
+as soon as a switch to Guide is received, checked by every YOLO path. Q2: a card that was pending
+before the switch can't be allowed during the window; an answer is refused as if the card had
+already been cancelled.
