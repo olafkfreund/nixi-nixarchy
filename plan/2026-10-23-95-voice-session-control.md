@@ -85,6 +85,11 @@ is a nixi trust-model issue. It is to be raised with the user as its own issue, 
 - Traps: no shell parsing beyond splitting. A quoted `;` inside the prompt text can only add a
   false positive, never hide a write, and false positives fail safe (an extra card).
 
+**P2 hardening (deviation, 2026-10-23):** matching only at the start of a segment missed wrappers
+(`env`, `sudo`, `timeout`, `nohup`, `bash -c "…"`, `$(…)`, backticks). The match is now
+`herdr … agent prompt|send-keys / pane send-text|send-keys` anywhere in a segment.
+`echo herdr agent prompt` becomes an accepted false positive (an extra card).
+
 **P3. Bridge enforcement and audit** (nixi `bridge/bridge.js` `requestPermission` ~322-348,
 new test in `bridge/trust-policy.test.js` or `bridge/herdr-bridge.test.js` using
 `testing/run-bridge.js`)

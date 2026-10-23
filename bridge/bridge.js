@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
@@ -15,6 +15,7 @@ import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
 import {
@@ -327,7 +328,9 @@ const client = {
       id: option.optionId,
       label: option.name,
       kind: option.kind,
-    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"));
+    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
+      // A standing yes to typing into another session would turn one click into all (#95).
+      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"));
     noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
@@ -336,13 +339,16 @@ const client = {
       emit({ type: "status", text: `Guide · not run: ${title}` });
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
-    if (policy.permission === "yolo") {
+    // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
+    const herdrWrite = isHerdrWrite(params.toolCall);
+    if (policy.permission === "yolo" && !herdrWrite) {
       const outcome = choose(options, "allow_once");
       if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
       return guarded(params.toolCall, outcome, options);
     }
     const { detail, omitted } = permissionDetail(params.toolCall);
-    emit({ type: "permission", id: requestId, title, options, detail, omitted });
+    emit({ type: "permission", id: requestId, title, options, detail, omitted,
+      ...(herdrWrite ? { confirm: "click" } : {}) });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
     });
@@ -485,12 +491,30 @@ async function steer(text) {
   ack("steer", true, { outcome });
 }
 
+// One JSON line per decision on a herdr write (#95). Append-only, 0600, and the
+// command only: never terminal output.
+function auditSend(toolCall, picked) {
+  const detail = herdrWriteDetail(toolCall)
+    || { pane: "", text: String(toolCall?.rawInput?.command || "").slice(0, 500) };
+  try {
+    mkdirSync(learnedDir, { recursive: true });
+    appendFileSync(join(learnedDir, "sends.log"), JSON.stringify({
+      ts: new Date().toISOString(), ...detail, cwd,
+      decision: String(picked?.kind || "").startsWith("allow") ? "allow" : "deny",
+      optionKind: picked?.kind || "cancelled",
+    }) + "\n", { mode: 0o600 });
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Could not write the send audit: ${error.message}` });
+  }
+}
+
 function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
   pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, picked);
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
 
@@ -578,6 +602,7 @@ async function applyTrustMode(targetTrust = trust) {
 
 function allowAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
+    if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
     pendingPermissions.delete(id);
     pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
   }
