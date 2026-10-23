@@ -306,6 +306,19 @@ S1b colours looked creepy.*
 - The lead fixes confirmed findings, and records any change of plan here in the same
   commit.
 
+**S8 outcome.** The Opus reviewer found no bypass of nixi's trust rules. Fixed in the fork
+(`fix(bridge): close the review findings`):
+- `claude_bin()` returns `None` when bridged, so auto-compact can't run `claude` directly.
+- Folders, projects and memory are off in nixi mode (deviation from S2: the bridge ignores the
+  Popen cwd and runs its agent from nixi's directory, so Void's folder switching could only
+  mislead).
+- `/mechanic` and `/guide` reach the server.
+- `nixi.json` is read from `~/.config/omarchy`, the same file the bridge uses.
+- The settings filter uses the real keys.
+
+The README now says "Hey Nixi". Follow-up for nixi, outside this plan because `bridge/` is out of
+scope: add Void's `runtime.json` and config files to `SECRET_PATHS` / `EXEC_WRITE_PATHS`.
+
 **S9. Runtime check** (user's desktop; lead with ai-mirror, if granted)
 - Enable the companion in the user's config and rebuild (the user runs `nixarchy-apply`).
 - Moods, melt to an edge and back, clicks on arm tips and in the gaps, skin gallery.
