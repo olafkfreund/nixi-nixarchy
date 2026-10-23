@@ -135,6 +135,15 @@ Codex's and agy's, change the design. The plan is updated here:
   grounding prevents the prompt; the notice title is capped at 80 chars; `NIXI_TURN_STALL_MS` is in
   the environment diagnostic; stale README/docs lines are fixed.
 
+**S7 live re-check (2026-10-23, after the fixes):** opencode through this branch's bridge with
+`NIXI_CWD=$HOME` (project root = `$HOME`, the case the anchored denies missed), at Mechanic:
+- a read-tool read of `.ssh/<canary>` by relative path was denied;
+- a read-tool listing of `.ssh` was denied.
+
+Both fell back to the shell, which showed a card (answered no), and the canary text never came
+back. `/run/agenix.d` wasn't run live: a canary can't be placed there, and a failed deny would read
+a real secret. Unit tests cover the pattern.
+
 **S7. Review (lead):** Codex `review --base fix/97-codex-guide-secret-reads`, agy, and a fresh
 Opus reviewer. Fix confirmed findings and record them here.
 
