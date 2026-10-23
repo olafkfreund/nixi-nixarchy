@@ -479,6 +479,21 @@ coder "snow")
 - Verify: on the three-monitor desktop (DP-1, DP-3, HDMI-A-1), `monitor next` cycles them; with
   "follow" on, focusing another monitor brings Nixi there.
 
+**Implementation notes, S11b–S17** (where the code differs from the steps above):
+- S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
+  reaches r≈140, inside the viewBox.
+- S15: `gog` and `omarchy weather` get `timeout=10` (network), `systemctl` gets 3.
+- S16: no `window.py` change was needed; the window already widens to about 540 while the sheet
+  is out. The sheet now faces the user by default (`code_face` "you"), because the old default
+  showed it mirrored.
+- S17: Hyprland and GDK monitors are matched by (x, y).
+- A missing `)` in quick.py's wake-word regex (S2b) broke every instant command. It was fixed
+  in the S15/S17 commit.
+- Process lesson: commit a coder's worktree only after the coder reports done. Committing
+  mid-edit caught half of S12b and broke the page (fixed in `fix(theme): finish S12b`).
+- Live checks (2026-10-23): no JS errors on load; `monitor next` cycles DP-1 → HDMI-A-1 → DP-3;
+  the Gruvbox theme applies.
+
 ## Tests
 
 | Command | Expected |
