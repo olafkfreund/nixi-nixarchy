@@ -361,9 +361,7 @@ async function start() {
     // No session. Stay up (ready) so the card's switch to Mechanic can reach us;
     // the stdin loop below answers only trust, close and prompt in this state.
     codexRefused = true;
-    shuttingDown = true; // the child's exit is expected, not a fatal
-    child.kill("SIGTERM"); // module-load spawn is kept; reaped here
-    await Promise.race([childExited, delay(500)]);
+    await killChild(); // the module-load spawn is kept; its exit is expected, not a fatal
     emit({ type: "notice", text: CODEX_GUIDE_REFUSAL });
     emit({ type: "ready", steeringSupported: false, permissionMode, trust });
     return;
@@ -610,6 +608,11 @@ async function shutdown() {
     if (connection && sessionId)
       await Promise.race([connection.closeSession({ sessionId }), delay(350)]);
   } catch {}
+  await killChild();
+}
+
+// SIGTERM, wait, SIGKILL, wait: the child is gone when this returns.
+async function killChild() {
   if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   await Promise.race([childExited, delay(500)]);
   if (child.exitCode === null && child.signalCode === null) {
@@ -637,6 +640,10 @@ input.on("line", (line) => {
         process.exit(0);
       }).catch((error) => ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }));
     } else if (message.type === "close") process.exit(0);
+    else if (message.type === "steer") ack("steer", false, { message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "permission_mode")
+      ack("permission_mode", false, { mode: permissionMode, message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "undo") emit({ type: "notice", text: "Nothing to undo: no session." });
     return;
   }
   if (message.type === "prompt") {
@@ -697,7 +704,7 @@ input.on("line", (line) => {
 input.on("close", () => shutdown());
 
 child.on("exit", (code, signal) => {
-  if (!shuttingDown) {
+  if (!shuttingDown && !codexRefused) {
     emit({ type: "fatal", message: `ACP agent exited (${signal || code})` });
     process.exit(code || 0);
   }

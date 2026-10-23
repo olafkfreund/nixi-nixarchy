@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules } from "./trust-policy.js";
-import { mkdtempSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
@@ -127,22 +127,55 @@ test("Codex starts at Mechanic in read-only", async () => {
 
 // #97: Codex's sandbox reads secrets at any level, so Guide refuses it, but the
 // bridge stays up so the switch to Mechanic can reach it.
-test("Codex at Guide: reason shown, no session, prompt refused, switch restarts at Mechanic", async () => {
-  const log = join(mkdtempSync(join(tmpdir(), "nixi-codex-")), "agent.log");
+const reason = /Guide can't keep secrets from Codex/;
+const until = async (ok) => { for (let i = 0; i < 250 && !ok(); i++) await new Promise((r) => setTimeout(r, 20)); };
+
+test("Codex at Guide: reason shown, no session, child reaped, commands answered, switch restarts at Mechanic", async () => {
+  // A stand-in adapter that ignores SIGTERM and records its pid, to prove the child is reaped.
+  const pidFile = join(mkdtempSync(join(tmpdir(), "nixi-codex-")), "pid");
+  const stub = `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);`;
+  let alive = true;
   const run = await runBridge({
-    env: { NIXI_AGENT: "codex", FAKE_AGENT_LOG: log },
-    messages: [{ type: "prompt", text: "hi" }, { type: "trust", trust: "mechanic" },
-      async ({ events }) => { while (!events.some((e) => e.type === "fatal")) await new Promise((r) => setTimeout(r, 20)); }],
+    env: { NIXI_AGENT: "codex", NIXI_ACP_COMMAND: JSON.stringify([process.execPath, "-e", stub]) },
+    messages: [
+      async () => { try { process.kill(Number(readFileSync(pidFile, "utf8")), 0); } catch { alive = false; } },
+      { type: "prompt", text: "hi" },
+      { type: "steer", text: "x" }, { type: "permission_mode", mode: "yolo" },
+      { type: "undo" }, { type: "trust", trust: "guide" }, { type: "trust", trust: "mechanic" },
+      async ({ events }) => until(() => events.some((e) => e.type === "fatal")),
+    ],
   });
-  const reason = /Guide can't keep secrets from Codex/;
+  assert.equal(alive, false, "the codex-acp child outlived the refusal");
   assert.match(run.events.find((e) => e.type === "notice")?.text, reason);
   assert.match(run.events.find((e) => e.type === "error")?.message, reason);
-  const ack = run.events.find((e) => e.type === "ack" && e.of === "trust");
-  assert.equal(ack.ok, true);
-  assert.equal(ack.trust, "mechanic");
+  const ack = (of, ok) => run.events.find((e) => e.type === "ack" && e.of === of && e.ok === ok);
+  assert.match(ack("steer", false)?.message, reason);
+  assert.match(ack("permission_mode", false)?.message, reason);
+  assert.ok(ack("trust", true), "trust acks");
+  assert.ok(run.events.some((e) => e.type === "notice" && /Nothing to undo/.test(e.text)));
   assert.equal(run.settingsAfter.trust, "mechanic");
   assert.match(run.events.find((e) => e.type === "fatal")?.message, /Trust set to Mechanic/);
-  assert.ok(!(existsSync(log) ? readFileSync(log, "utf8") : "").includes("newSession"), "a Codex session started at Guide");
+  assert.ok(!run.agent.some((e) => e.method === "newSession"), "a Codex session started at Guide");
+});
+
+test("Codex: an unknown trust setting is Guide, so refused", async () => {
+  for (const options of [
+    { settings: { trust: "MECHANIC" } },
+    { settings: { trust: 123 } }, // runBridge reads nixi.json back, so it cannot be made invalid JSON
+  ]) {
+    const run = await runBridge({ env: { NIXI_AGENT: "codex" }, ...options });
+    assert.match(run.events.find((e) => e.type === "notice")?.text, reason);
+    assert.ok(!run.agent.some((e) => e.method === "newSession"));
+  }
+});
+
+test("Codex refused: close ends the bridge", async () => {
+  let ended = false;
+  await runBridge({
+    env: { NIXI_AGENT: "codex" },
+    messages: [{ type: "close" }, async ({ exited }) => { await until(exited); ended = exited(); }],
+  });
+  assert.ok(ended, "the bridge kept running after close");
 });
 
 test("Codex: Mechanic to Guide is refused and trust stays mechanic", async () => {

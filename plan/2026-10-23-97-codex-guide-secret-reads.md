@@ -110,6 +110,21 @@ Restore the agent setting, the trust level and the canaries afterwards.
 **R7. Review (lead):** Codex `review --base fix/96-guide-shell-secret-reads`, agy in plan mode,
 and a fresh Opus reviewer. Fix confirmed findings and record them here.
 
+**R7 outcome (2026-10-23):** the Opus reviewer found no path to a Codex session at Guide (start,
+switch, corrupt trust, Omarchy's default-agent file, pre-ready messages: all fail closed).
+Fixes:
+- The refused path reuses the bounded stop sequence (it escalates to a hard kill). All three
+  reviewers found that the adapter could outlive the bridge.
+- In the refused state, `permission_mode`/`undo`/`steer` are answered so the card doesn't hang
+  (agy).
+- The architecture paragraph matches the R6 behaviour.
+- A docs line on `NIXI_ACP_COMMAND` (pre-existing).
+- Tests for corrupt trust, `close`, `trust: guide` and child exit; the test log and spin loop are
+  cleaned up.
+
+Not changed: a prompt typed during startup is answered with the refusal and not kept (low; the
+notice explains).
+
 ## Tests
 
 | Command | Expected |

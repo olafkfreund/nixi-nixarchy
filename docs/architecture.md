@@ -173,9 +173,15 @@ permission mode in `nixi.json`; anything else is Guide.
 - **Codex (#97).** Measured with the same canary (a throwaway `~/.ssh` file):
   Codex reads it at Guide, because its `read-only` sandbox permits every file read
   and nixi has no per-path read rule for it. So **Codex can't be used at Guide**:
-  a session that would start there ends with a `fatal` ("Guide can't keep secrets
-  from Codex — use Claude for Guide, or switch to Mechanic"), no session is
-  created, and a Mechanic to Guide switch is refused (`ack` false). At **Mechanic,
+  a session that would start there gets no agent: the bridge shows a notice ("Guide
+  can't keep secrets from Codex — use Claude for Guide, or switch to Mechanic"),
+  sends `ready`, and kills the codex-acp child. Prompts get that reason as an
+  error, and only `trust` and `close` work (other commands are answered with the
+  reason). Switching to Mechanic is saved and followed by a `fatal` asking for a
+  new conversation. A Mechanic to Guide switch inside a live Codex session is
+  refused (`ack` false). `NIXI_ACP_COMMAND` (a user-set variable) can still run
+  another adapter under a different agent name; the check keys on the resolved
+  agent name (pre-existing, not a #97 regression). At **Mechanic,
   Codex can read secrets without asking** (its reads never reach a permission
   request); treat that as a warning, not a protection.
   Not available yet (path A): codex 0.163 permission profiles
