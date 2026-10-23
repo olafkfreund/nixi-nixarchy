@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 97
 author: olafkfreund
 ---
@@ -64,3 +64,7 @@ than the docs state. #95's session summaries and the companion make that matter 
    protection doesn't cover Codex?
 3. opencode was inconclusive in #96 (an empty reply). Measure it in this issue too, or leave it
    for its own issue?
+
+Resolved at approval (2026-10-23): the approver accepted the proposed answers. Q1: decided by
+measurement. Q2: if nothing works reliably, block Codex at Guide with an explanation and offer
+Claude. Q3: measure opencode here too.
