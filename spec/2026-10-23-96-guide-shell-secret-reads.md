@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 96
 intent: intent/2026-10-23-96-guide-shell-secret-reads.md
 ---
