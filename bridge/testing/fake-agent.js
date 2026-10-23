@@ -13,7 +13,6 @@ const log = (entry) => appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify
 // setSessionMode calls so far; FAKE_AGENT_HANG=mode uses it to spare the
 // one at session start. See setSessionMode below.
 let modeCalls = 0;
-let stalledOnce = 0;
 let stopTurn = () => {};
 
 // FAKE_AGENT_OPTIONS=always: also offer the persistent choices, the way
@@ -97,12 +96,16 @@ new AgentSideConnection((conn) => ({
     // #102 stall guard. STALL_SILENT: never answer. STALL_TOOL: a tool starts, then
     // 1 s of silence, then the turn ends. NIXI_TURN_STALL_MS in the test is shorter than
     // that 1 s, so only a tool-aware limit lets the turn finish quietly.
-    // STALL_ONCE: silent only the first time, so a second prompt can be answered.
-    if (text.includes("STALL_ONCE") && !stalledOnce++) await new Promise(() => {});
     if (text.includes("STALL_SILENT")) await new Promise(() => {});
+    // STALL_TOOLDONE: a tool starts and finishes, then silence: the idle limit applies again.
+    if (text.includes("STALL_TOOLDONE")) {
+      for (const status of ["in_progress", "completed"])
+        await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: status === "completed" ? "tool_call_update" : "tool_call", toolCallId: "t6", title: "Quick tool", status } });
+      await new Promise(() => {});
+    }
     if (text.includes("STALL_TOOL")) {
       await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call", toolCallId: "t5", title: "Long tool", status: "in_progress" } });
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 600));
       return { stopReason: "end_turn" };
     }
     // A prompt asking for a change triggers a permission request, so tests can

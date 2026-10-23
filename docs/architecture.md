@@ -174,9 +174,14 @@ permission mode in `nixi.json`; anything else is Guide.
   Guide a read outside the project, which opencode asks about
   (`external_directory`), left an empty reply. Nixi's rules now set
   `external_directory: "allow"` and `read: { "*": "allow" }` plus a `deny` for
-  every `SECRET_PATHS` entry (`opencodeSecretDenies`: `~/X/**` as `<home>/X/*` and
-  `~/X/*`, exact files in both spellings, `*.env`, `*.env.*`, `*.age`,
-  `/run/{agenix,secrets}/*`); opencode enforces a config deny itself. `glob`
+  every `SECRET_PATHS` entry (`opencodeSecretDenies`). The patterns are anchor-free because opencode
+  matches a path relative to its project root (the cwd, or `$HOME`) as well as an
+  absolute one: `~/X/**` becomes `*X/*` and `*X` (the directory itself, which its
+  read tool lists), exact files `*X`, plus `*.env`, `*.env.*`, `*.age` and the
+  `/run/…` paths with their directories. `/run/agenix.d` and `/run/secrets.d`
+  are in `SECRET_PATHS` too: on NixOS they are the symlink targets of
+  `/run/agenix` and `/run/secrets`, and Claude's Read and opencode match the literal
+  path. opencode enforces a config deny itself. `glob`
   applies no path denies (it listed `~/.ssh` file names), and `grep` and `list`
   could not be shown to, so `grep`, `glob` and `list` ask for every path: cancelled
   at Guide, a card at Mechanic. The shell still asks. `askBeforeReading` makes
@@ -184,10 +189,13 @@ permission mode in `nixi.json`; anything else is Guide.
 - **Cancelled turn after a refusal (#102, every agent).** If a turn ends `cancelled`
   after Guide refused a permission, text or not, and the user did not press stop,
   the bridge emits one notice naming the refused tool and suggesting Mechanic.
-- **Stalled-turn guard (#102, every agent).** A turn with no event for 120 s (15 min
-  while a tool is in progress) is cancelled and ends with an `error`, which unlocks
-  the UI. Any event resets it and a pending card pauses it. `NIXI_TURN_STALL_MS` is
-  for tests only: it can shorten the limits, never lengthen them.
+- **Stalled-turn guard (#102, every agent).** No update of any kind for 5 min (15 min
+  while a tool is in progress; the 5 min is unmeasured) ends the session: the bridge
+  cancels, emits `error` then `fatal`, and exits. The card shows its restart button
+  and the companion starts a fresh bridge on the next prompt. Any update resets it
+  and a pending card pauses it; a refused tool no longer counts as running.
+  `NIXI_TURN_STALL_MS` is for tests only: it can shorten the limits, never lengthen
+  them, and the bridge says so in a diagnostic when it is set.
 - **Codex (#97).** Measured with the same canary (a throwaway `~/.ssh` file):
   Codex reads it at Guide, because its `read-only` sandbox permits every file read
   and nixi has no per-path read rule for it. So **Codex can't be used at Guide**:

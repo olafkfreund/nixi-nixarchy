@@ -23,8 +23,6 @@
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
 // from Mechanic; it can never be reached from Guide.
 
-import os from "node:os";
-
 export function resolveTrust(value) {
   return value === "mechanic" ? "mechanic" : "guide";
 }
@@ -49,23 +47,25 @@ const MODES = {
 // opencode itself, no card). Measured: grep/glob apply no path denies, so
 // grep/glob/list ask for every path instead of silently reaching ~/.ssh.
 //
-// Home is a parameter because opencode matches the literal path, in either
-// spelling (`~` and the absolute one), and the bridge cannot assume it.
-export function opencodeSecretDenies(home) {
+// opencode matches a path relative to its project root when the file is inside
+// it (the cwd falls back to $HOME), as well as absolute ones, so the patterns
+// are anchor-free: `*.ssh/*` matches `.ssh/k` and `/home/u/.ssh/k`, and `*.ssh`
+// the directory itself, which its read tool lists. Over-matching is fine for a deny.
+export function opencodeSecretDenies() {
   const denies = [];
   for (const path of SECRET_PATHS) {
     if (path.startsWith("//")) continue; // Claude's absolute spelling; these cover it already
-    const glob = path.replace(/\/\*\*$/, "/*");
-    if (path.startsWith("~/")) denies.push(`${home}/${glob.slice(2)}`, glob);
-    else if (path.startsWith("**/")) denies.push(glob.slice(3).startsWith("*") ? glob.slice(3) : `*${glob.slice(3)}`);
-    else denies.push(glob);
+    const dir = path.endsWith("/**");
+    const base = dir ? path.slice(0, -3) : path;
+    const free = base.startsWith("~/") ? `*${base.slice(2)}` : base.startsWith("**/") ? `*${base.slice(3).replace(/^\*/, "")}` : base;
+    denies.push(...(dir ? [`${free}/*`, free] : [free]));
   }
   return denies;
 }
 
-function opencodeRules(readDefault, home) {
+function opencodeRules(readDefault) {
   const read = { "*": readDefault };
-  for (const pattern of opencodeSecretDenies(home)) read[pattern] = "deny";
+  for (const pattern of opencodeSecretDenies()) read[pattern] = "deny";
   return { permission: {
     "*": "ask",
     external_directory: "allow",
@@ -96,8 +96,8 @@ export const MCP_CAPABLE_AGENTS = ["claude"];
 
 // askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
 // everything" means every agent. The secret denies stay.
-export function opencodePermissions(askBeforeReading, home = os.homedir()) {
-  return opencodeRules(askBeforeReading ? "ask" : "allow", home);
+export function opencodePermissions(askBeforeReading) {
+  return opencodeRules(askBeforeReading ? "ask" : "allow");
 }
 
 // Claude asks before every Read/Grep/Glob outside its cwd (~/.config/nixi), so
@@ -121,14 +121,15 @@ export const SECRET_PATHS = [
   "~/.config/sops/**", "~/.local/share/keyrings/**",
   "~/.claude/.credentials.json", "~/.netrc",
   "/run/agenix/**", "/run/secrets/**",
+  // The symlink targets of the two above on NixOS; Read/opencode match the literal path (#102).
+  "/run/agenix.d/**", "/run/secrets.d/**",
   "**/.env", "**/.env.*", "**/*.age",
   // `**/x` is relative to the session directory; `//` is absolute (#95). Without
   // these a canary ~/foo.age was read with no card. OpenCode has its own list.
   "//**/.env", "//**/.env.*", "//**/*.age",
 ];
 
-// The default rules (home as this process sees it).
-export const OPENCODE_PERMISSIONS = opencodeRules("allow", os.homedir());
+export const OPENCODE_PERMISSIONS = opencodeRules("allow");
 
 // Writes that will later run with nobody present (#52).
 //

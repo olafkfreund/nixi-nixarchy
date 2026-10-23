@@ -69,6 +69,8 @@ function noticeUnaccountedEnvironment() {
   for (const name of ["NIXI_CWD", "NIXI_DIR", "NIXI_DATA"])
     if (process.env[name])
       emit({ type: "diagnostic", text: `${name} is set in the environment; Nixi does not set it. It changes where the agent runs or what it is told.` });
+  if (process.env.NIXI_TURN_STALL_MS)
+    emit({ type: "diagnostic", text: "NIXI_TURN_STALL_MS is set in the environment; Nixi does not set it. It shortens how long a silent turn is allowed." });
 }
 
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
@@ -127,36 +129,33 @@ function emit(event) {
 }
 
 // #102: opencode's process once died mid-turn with no `done`, locking the UI.
-// A turn with no event for IDLE (no tool running) or TOOL (one running) is
-// cancelled and reported. A pending card pauses it. NIXI_TURN_STALL_MS is for
-// tests only: it can shorten the limits, never lengthen them, so it cannot
-// switch the guard off.
+// No update of any kind for IDLE (no tool running) or TOOL (one running) ends
+// the SESSION: error, then fatal, then exit. The card shows its restart
+// button and the companion starts a fresh bridge. A pending card pauses it.
+// IDLE is 5 minutes and unmeasured: long enough that a slow model is not cut
+// off, short enough to unlock a dead agent. NIXI_TURN_STALL_MS is for tests
+// only: it can shorten the limits, never lengthen them, so it cannot switch
+// the guard off.
 const stallOverride = Number(process.env.NIXI_TURN_STALL_MS);
-const stallScale = stallOverride > 0 && stallOverride < 120000 ? stallOverride / 120000 : 1;
-const STALL_IDLE_MS = 120000 * stallScale;
+const stallScale = stallOverride > 0 && stallOverride < 300000 ? stallOverride / 300000 : 1;
+const STALL_IDLE_MS = 300000 * stallScale;
 const STALL_TOOL_MS = 15 * 60000 * stallScale;
 const toolsInProgress = new Set();
 let stallTimer = null;
 let stalled = false;
-let turnId = 0;
-let abandoned = false;
 
 function armStall() {
   clearTimeout(stallTimer);
   stallTimer = null;
-  if (!turnRunning || stalled || pendingPermissions.size > 0) return;
-  stallTimer = setTimeout(() => {
+  if (!turnRunning || stalled || shuttingDown || pendingPermissions.size > 0) return;
+  stallTimer = setTimeout(async () => {
     stalled = true;
-    refusedThisTurn = ""; // the error says it; no second notice from the cancelled done
+    refusedThisTurn = ""; // the error says it; no second notice from a cancelled done
     connection?.cancel({ sessionId }).catch(() => {});
-    // End the turn here: a wedged agent may never return from prompt(), and the
-    // next prompt must still start. Whatever the old prompt() does later is
-    // dropped (turnId), and its stray updates are ignored until the next prompt.
-    turnId++;
-    turnRunning = false;
-    abandoned = true;
-    changes.endTurn().then((texts) => { for (const text of texts) emit({ type: "notice", text }); }).catch(() => {});
     emit({ type: "error", message: "The agent stopped responding, so this turn was ended." });
+    try { for (const text of await changes.endTurn()) emit({ type: "notice", text }); } catch {}
+    emit({ type: "fatal", message: "The agent stopped responding — start a new conversation." });
+    shutdown().finally(() => process.exit(1));
   }, toolsInProgress.size ? STALL_TOOL_MS : STALL_IDLE_MS);
 }
 
@@ -330,7 +329,7 @@ function noticeMcpSource(params) {
 
 const client = {
   sessionUpdate(params) {
-    if (abandoned && !turnRunning) return Promise.resolve(); // late output of a turn the guard ended (#102)
+    armStall(); // any update is progress, shown or not (#102)
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
@@ -363,6 +362,7 @@ const client = {
   },
 
   requestPermission(params) {
+    armStall();
     const requestId = `permission-${++permissionSequence}`;
     const title = params.toolCall?.title || params.toolCall?.name || "Use a tool";
     const options = (params.options || []).map((option) => ({
@@ -376,6 +376,7 @@ const client = {
     // to approve. This, not the session mode, is Guide's guarantee.
     if (policy.permission === "cancel") {
       refusedThisTurn = title;
+      toolsInProgress.delete(params.toolCall?.toolCallId); // refused: it will not run
       emit({ type: "status", text: `Guide · not run: ${title}` });
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
@@ -504,8 +505,6 @@ async function prompt(text) {
   if (!connection || !sessionId) throw new Error("ACP session is not ready");
   if (turnRunning) throw new Error("The agent is already handling a prompt");
   turnRunning = true;
-  const turn = ++turnId;
-  abandoned = false;
   refusedThisTurn = "";
   userStopped = false;
   stalled = false;
@@ -513,7 +512,8 @@ async function prompt(text) {
   emit({ type: "status", text: "Thinking…" });
   try {
     const grounding = await groundPrompt(text);
-    if (turn !== turnId) return; // the stall guard ended this turn (#102)
+    // Stop pressed while grounding: connection.cancel had nothing to cancel yet.
+    if (userStopped) { emit({ type: "done", stopReason: "cancelled" }); return; }
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     learned = createLearnedFilter();
     charts = createChartFilter(mediaDir);
@@ -521,14 +521,13 @@ async function prompt(text) {
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
     });
-    if (turn !== turnId) return;
+    if (stalled) return; // the guard has ended the session
     await finishLearned();
     for (const text of await changes.endTurn()) emit({ type: "notice", text });
     if (response.stopReason === "cancelled" && refusedThisTurn && !userStopped)
-      emit({ type: "notice", text: `The agent stopped instead of answering — at Guide it can't do what it tried (${refusedThisTurn}). Try Mechanic, or ask differently.` });
+      emit({ type: "notice", text: `The agent stopped instead of answering — at Guide it can't do what it tried (${refusedThisTurn.slice(0, 80)}). Try Mechanic, or ask differently.` });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
-    if (turn !== turnId) return; // superseded: the guard already cleaned up, and a newer turn may be running
     turnRunning = false;
     armStall(); // clears the timer
     // A failed or cancelled turn skips the endTurn above; without this its change
@@ -562,6 +561,7 @@ function answerPermission(message) {
   pendingPermissions.delete(message.id);
   pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  if (!String(picked?.kind || "").startsWith("allow")) toolsInProgress.delete(pending.toolCall?.toolCallId);
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
 
@@ -599,6 +599,7 @@ function choose(options, kind) {
 function cancelAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
     pendingPermissions.delete(id);
+    toolsInProgress.delete(pending.toolCall?.toolCallId);
     pending.resolve({ outcome: { outcome: "cancelled" } });
   }
 }
@@ -657,6 +658,7 @@ function allowAllPendingPermissions() {
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  clearTimeout(stallTimer);
   cancelAllPendingPermissions();
   // Bound graceful ACP close before signalling the child. Remain alive long
   // enough to reap it; a detached kill timer cannot help after bridge exit.
@@ -704,7 +706,7 @@ input.on("line", (line) => {
   }
   if (message.type === "prompt") {
     prompt(String(message.text || "")).catch((error) => {
-      turnRunning = false;
+      if (stalled) return; // the guard already reported; the closed connection is its doing
       const fatal = needsNewSession(error);
       emit({ type: fatal ? "fatal" : "error", message: explainHarnessError(error, agentName) });
       if (fatal) shutdown().finally(() => process.exit(1));

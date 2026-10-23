@@ -114,6 +114,27 @@ Restore the trust and agent settings and delete the canaries.
   notice condition drops "no text". It still fires once per turn, only after a Guide refusal, and
   never on a user stop.
 
+**S7 outcome (2026-10-23):** the Opus reviewer read opencode 2.0.32's source. Its findings, with
+Codex's and agy's, change the design. The plan is updated here:
+- **Relative-path resources (critical):** opencode matches a path relative to its session dir or
+  project root when the file is inside it. With cwd=$HOME (no `~/.config/nixi`), or a dotfile git
+  repo, `.ssh/…` matched no deny. The denies become anchor-free (`*.ssh/*`, `*.ssh`,
+  `*.config/gh/*`, `*.netrc`, …).
+- **Symlinked secret dirs:** `/run/agenix` → `/run/agenix.d/N`, and the same for `/run/secrets`.
+  `"/run/agenix.d/**"` and `"/run/secrets.d/**"` are added to `SECRET_PATHS`, so Claude's Read rules
+  and the opencode denies both get them.
+- **Secret directories** are denied as well (opencode's read tool lists directories).
+- **Guard design change (deviation from S4):** the bridge-side "abandon the turn" logic leaked late
+  text and late permission requests (auto-approved in YOLO) into the next turn. The guard now
+  **ends the session** (an error, then a fatal; the UI restarts), and the abandon logic is
+  removed.
+- **The guard resets on any session update or permission request.** The idle limit is raised to
+  **5 min** (unmeasured; to revisit with data). The tool limit stays at 15 min. Refused tools leave
+  the in-progress set.
+- **Smaller fixes:** shutdown clears the timer; a duplicate prompt doesn't disarm it; Stop during
+  grounding prevents the prompt; the notice title is capped at 80 chars; `NIXI_TURN_STALL_MS` is in
+  the environment diagnostic; stale README/docs lines are fixed.
+
 **S7. Review (lead):** Codex `review --base fix/97-codex-guide-secret-reads`, agy, and a fresh
 Opus reviewer. Fix confirmed findings and record them here.
 
