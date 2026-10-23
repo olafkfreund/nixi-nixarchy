@@ -277,6 +277,64 @@ test("a successful switch still persists and reports the new trust (#40)", async
   assert.deepEqual(modes, ["plan", "default"], "startup mode then the switch to Mechanic");
 });
 
+// #106 -- a switch to Guide awaits the agent's mode call before `trust` moves.
+// In that window nothing may be approved: held cards are cancelled on receipt,
+// YOLO is refused and new requests get Guide's policy. FAKE_AGENT_HANG=mode
+// holds the switch open.
+
+const hang = { FAKE_AGENT_HANG: "mode" };
+const acks = (run, of) => run.events.filter((e) => e.type === "ack" && e.of === of);
+const outcomes = (run) => run.agent.filter((e) => e.method === "permissionOutcome").map((e) => e.outcome.outcome ?? e.outcome);
+// Prompt, wait for the card, then start the held switch to Guide.
+const cardThenGuide = async ({ until, write: send }) => {
+  send(write);
+  await until((e) => e.type === "permission", "permission card");
+  send({ type: "trust", trust: "guide" });
+};
+
+test("YOLO during a switch to Guide is refused and the held card is cancelled (#106)", async () => {
+  const run = await runBridge({
+    env: hang, settings: { trust: "mechanic" },
+    messages: [cardThenGuide, { type: "permission_mode", mode: "yolo" },
+      ({ until }) => until((e) => e.type === "done", "turn end")],
+  });
+  assert.equal(acks(run, "permission_mode")[0].ok, false);
+  assert.deepEqual(outcomes(run), ["cancelled"]);
+  assert.notEqual(run.settingsAfter.permissionMode, "yolo");
+});
+
+test("a request in the window gets Guide's policy even when YOLO was already on (#106)", async () => {
+  const run = await runBridge({
+    env: hang, settings: { trust: "mechanic", permissionMode: "yolo" },
+    messages: [({ write: send }) => send({ type: "trust", trust: "guide" }), write],
+  });
+  assert.deepEqual(outcomes(run), ["cancelled"]);
+  assert.ok(run.events.some((e) => e.type === "status" && e.text.startsWith("Guide · not run")));
+});
+
+test("an allow sent for a card cancelled by the switch does nothing (#106)", async () => {
+  const run = await runBridge({
+    env: hang, settings: { trust: "mechanic" },
+    messages: [cardThenGuide,
+      ({ events, write: send }) => send({ type: "permission", id: events.find((e) => e.type === "permission").id, optionId: "allow" }),
+      ({ until }) => until((e) => e.type === "done", "turn end")],
+  });
+  assert.deepEqual(outcomes(run), ["cancelled"]);
+});
+
+test("a switch to Guide that fails clears the window and keeps Mechanic (#106, #40)", async () => {
+  const run = await runBridge({
+    env: { ...hang, NIXI_MODE_TIMEOUT_MS: "300" }, settings: { trust: "mechanic" },
+    messages: [{ type: "trust", trust: "guide" }, { type: "permission_mode", mode: "yolo" }],
+  });
+  const [trustAck] = acks(run, "trust");
+  assert.equal(trustAck.ok, false);
+  assert.equal(trustAck.trust, "mechanic");
+  assert.equal(run.settingsAfter.trust, "mechanic");
+  assert.equal(acks(run, "permission_mode")[0].ok, true, "the flag outlived the switch");
+  assert.equal(run.settingsAfter.permissionMode, "yolo");
+});
+
 // #41 -- Claude matches permission rules per TOOL NAME. The secret list was
 // Read(...) patterns only, so Grep and Glob, the other two tools the allow
 // grants, reached every listed path with no prompt.

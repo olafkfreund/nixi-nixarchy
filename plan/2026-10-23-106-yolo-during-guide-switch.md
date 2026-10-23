@@ -93,6 +93,13 @@ commits each step, and does P4 (reviews).
     the report).
 - Verify: `node --test bridge/`.
 
+**P2 result:** 4 new tests (the `coder` agent). Tests 1–3 fail with P1 reverted. Test 4 passes either
+way, because it guards that the flag is cleared and that #40 holds. Deviations:
+- Test 3 asserts only the agent's `cancelled` outcome, since the fake agent writes no file.
+- Test 1 waits for the turn's `done` so the agent log has the outcome.
+- **No test for the count:** `FAKE_AGENT_HANG=mode` holds every mode call, so the fake agent can't
+  settle just one of two overlapping switches.
+
 **P3. Docs** (`docs/architecture.md`, "Permission invariants" ~55): becoming stricter takes effect
 when it is received, and becoming more permissive when it is confirmed. A switch to Guide cancels
 pending cards at once, even if the switch then fails.
