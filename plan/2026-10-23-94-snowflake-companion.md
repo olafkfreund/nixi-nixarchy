@@ -464,6 +464,21 @@ coder "snow")
   back afterwards, so it isn't squeezed into 340×460.
 - Verify: a screenshot of the sheet during a turn is readable at 100% zoom.
 
+**S17. Move Nixi between screens** (fork `app/window.py`, `bin/nixi-companion`, `app/quick.py`,
+`app/server.py`, `app/static/index.html`; coder "bridge", after S15)
+*User request (2026-10-23).*
+- A window-socket command `monitor:<next|prev|focused|NAME>` uses the existing `_place(…, mon=…)`.
+  `focused` comes from `hyprctl monitors -j`, where `focused` is true. The last position is
+  remembered per monitor.
+- `nixi-companion monitor next|prev|focused|<name>` for key binds.
+- Voice instant commands in `quick.py` (no agent): "move to the other/next/left/right screen",
+  "come here" (= focused).
+- Setting "Follow my focused screen" (off by default): `window.py` listens to Hyprland's
+  socket2 `focusedmon` event and moves to that monitor, debounced, never mid-drag.
+- Workspaces need nothing: layer surfaces show on every workspace.
+- Verify: on the three-monitor desktop (DP-1, DP-3, HDMI-A-1), `monitor next` cycles them; with
+  "follow" on, focusing another monitor brings Nixi there.
+
 ## Tests
 
 | Command | Expected |
