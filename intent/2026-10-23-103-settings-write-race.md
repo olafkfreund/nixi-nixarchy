@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 103
 author: olafkfreund
 ---
@@ -60,3 +60,7 @@ conversation that writes `trust`, which makes it more likely.
 2. **How strict the card's write must be:** re-read just before writing and merge its own keys
    (simple), or stop writing the shared file and keep display keys in a separate card-only file?
    (Recommended: re-read and merge, plus atomic writes. A second file adds a migration.)
+
+Resolved at approval (2026-10-23): the approver accepted the proposed answers. Q1:
+`permissionMode` is bridge-only. Q2: the card re-reads just before writing, merges only its own
+keys, and all writes are atomic.
