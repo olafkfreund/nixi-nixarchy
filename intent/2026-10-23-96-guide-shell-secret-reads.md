@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 96
 author: olafkfreund
 ---
@@ -73,3 +73,7 @@ other sessions' output to the agent) gets a weaker guarantee than the product st
 3. **Mechanic:** ask rules for shell commands that mention secret paths (pattern-based, best
    effort), or ask for *every* shell command at Mechanic? The second removes the gap but adds
    cards.
+
+Resolved at approval (2026-10-23): the approver accepted the proposed answers. Q1: shell off at
+Guide, if feasible by measurement. Q2: decided by measurement. Q3: ask rules for shell commands
+that mention secret paths.
