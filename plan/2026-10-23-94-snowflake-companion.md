@@ -464,6 +464,28 @@ coder "snow")
   back afterwards, so it isn't squeezed into 340×460.
 - Verify: a screenshot of the sheet during a turn is readable at 100% zoom.
 
+**S16b. The approval card and terminal sheet fit their content** (fork `app/static/index.html`,
+`app/window.py`; coder "snow")
+*User feedback with a screenshot (2026-10-23): still too small.*
+- Approval card: the command and title wrap, there is no inner scrollbar below ~60% of the
+  monitor height, and the width grows up to ~640px.
+- Terminal sheet: 8–24 rows by output size, widening to ~720px before wrapping.
+- The overlay grows in width and height while either one is shown (the snowflake stays anchored)
+  and shrinks back afterwards, within the monitor.
+
+**S9 results (2026-10-23, run through the companion's API):**
+- Pass: Guide and Mechanic switching, and Guide refusing a write.
+- **Fail, nixi bug outside this plan:** a canary `~/nixi-s9-canary.age` was readable at Guide.
+  `SECRET_PATHS` `**/.env`, `**/.env.*` and `**/*.age` are relative to the agent's directory
+  (`~/.config/nixi`) in Claude's rule syntax, so they protect nothing outside it. This needs a
+  nixi issue (fix: absolute `//` patterns plus a test).
+- Unclear: a Mechanic write happened. A Bash approval card was shown (user's screenshot), but
+  the script's event watcher used a wrong route, so the answer path is unconfirmed.
+- Unverified: one transient `claude -p` process that was not traced to the companion
+  (`claude_bin()` returns None in bridge mode).
+- Still to do: the wake word with real speech, nixi undo from the companion (the companion has no
+  `/undo` passthrough yet).
+
 **S17. Move Nixi between screens** (fork `app/window.py`, `bin/nixi-companion`, `app/quick.py`,
 `app/server.py`, `app/static/index.html`; coder "bridge", after S15)
 *User request (2026-10-23).*
