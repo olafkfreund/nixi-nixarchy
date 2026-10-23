@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 102
 intent: intent/2026-10-23-102-opencode-guide-cancelled-reads.md
 ---
