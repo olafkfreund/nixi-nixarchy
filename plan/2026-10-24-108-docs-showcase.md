@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 108
 spec: spec/2026-10-24-108-docs-showcase.md
 ---
