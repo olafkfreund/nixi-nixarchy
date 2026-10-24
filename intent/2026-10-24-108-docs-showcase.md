@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 108
 author: olafkfreund
 ---
@@ -62,3 +62,6 @@ no media of the companion.
    - a still of Guide refusing a secret read.
 2. **Should this wait for the companion to run on p620, or ship the text now and the media in a
    second PR?** Recommendation: wait, so text and media land together.
+
+
+Answered by the user at approval (2026-10-24): the recommendations above, unchanged.
