@@ -48,6 +48,9 @@ spec: spec/2026-10-24-108-docs-showcase.md
 - nixarchy#1432 is merged.
 - The user has rebuilt p620, `which nixi-companion` resolves, and SUPER+ALT+H works.
 - Note the starting state: `omarchy-theme-current`, `omarchy-theme-bg-current`, and whether DND is on.
+- Run nixarchy's `screencast-prep` (`tests/demo/screencast/`, in the nixarchy repo). It hides
+  third-party bar widgets and refuses, naming them, while windows or notifications are open.
+  The user closes those.
 - Ask the user to close private windows. Then `control mode=agent` through ai-mirror and wait
   for `owner=agent`.
 
@@ -82,7 +85,8 @@ spec: spec/2026-10-24-108-docs-showcase.md
   - Never use `/run/agenix*`.
 
 **R4. Restore and review (lead)**
-- Restore theme, wallpaper and DND, then `control mode=off`.
+- Run `screencast-restore` (or `screencast-recover` after a take that died). Restore theme,
+  wallpaper and DND, then `control mode=off`.
 - Look at every frame (`frames/*.png`) and both stills for private data. Re-shoot if anything
   shows.
 - Copy the three files into `docs/media/`.
