@@ -14,7 +14,7 @@ spec: spec/2026-10-24-108-docs-showcase.md
 
   | File | Shows |
   |---|---|
-  | `companion.gif` | SUPER+ALT+H summons the snowflake; a question ("how do I install firefox?") is answered, with the caption bubble showing the speech; it melts to the edge |
+  | `companion.gif` | SUPER+ALT+S summons the snowflake; a question ("how do I install firefox?") is answered, with the caption bubble showing the speech; it melts to the edge |
   | `companion-approval.png` | In Mechanic, the companion's approval card for a scratch-file change |
   | `guide-secret-refused.png` | At Guide, the card refusing to read a canary file in `~/.ssh` |
 
@@ -42,11 +42,14 @@ spec: spec/2026-10-24-108-docs-showcase.md
 - **Shared with nixarchy#1434:** `companion.gif` is recorded once and used by both repos. This plan
   does the recording; nixarchy#1434 copies the file.
 
+Change after approval (2026-10-24, nixarchy#1432 review): the companion keys are SUPER+ALT+S and
+SUPER+ALT+SHIFT+S, because SUPER+ALT+H is Herdr in nixarchy's seeded bindings. Step T2b fixes nixi's README example.
+
 ## Steps
 
 **R0. Preconditions (lead)**
 - nixarchy#1432 is merged.
-- The user has rebuilt p620, `which nixi-companion` resolves, and SUPER+ALT+H works.
+- The user has rebuilt p620, `which nixi-companion` resolves, and SUPER+ALT+S works.
 - Note the starting state: `omarchy-theme-current`, `omarchy-theme-bg-current`, and whether DND is on.
 - Run nixarchy's `screencast-prep` (`tests/demo/screencast/`, in the nixarchy repo). It hides
   third-party bar widgets and refuses, naming them, while windows or notifications are open.
@@ -59,7 +62,7 @@ spec: spec/2026-10-24-108-docs-showcase.md
 - Run
   `wl-screenrec -g "<x>,<y> 2304x1440" -f $scratch/companion.mp4`, with the region centred
   on the focused monitor (from `hyprctl monitors -j`).
-- Drive: SUPER+ALT+H → the question (typed if the companion has an entry, otherwise the user says
+- Drive: SUPER+ALT+S → the question (typed if the companion has an entry, otherwise the user says
   it) → wait for the answer → drag it to an edge (melt) → summon it back. Then stop the
   recording.
 - Encode: `ffmpeg -i companion.mp4 -vf fps=4 frames/%04d.png`, then nixarchy's
@@ -111,6 +114,10 @@ spec: spec/2026-10-24-108-docs-showcase.md
 - Trust: no change (it's current), or one image link.
 - Verify: `grep -n companion.gif README.md`. Anchor: GitHub slugs `#### The snowflake companion (optional)`
   to `#the-snowflake-companion-optional`.
+
+**T2b. The README key example** (`README.md:116-117`, found in the nixarchy#1432 review)
+- `SUPER ALT, H` is Herdr in nixarchy's seeded bindings, so change the example to
+  `SUPER ALT, S` (show or hide) and `SUPER ALT SHIFT, S` (listen), matching nixarchy's manual.
 
 **T3. PR (lead)**
 - Commit (`docs: …`, matching nixi's history), push, and `gh pr create`, linking intent, spec and
