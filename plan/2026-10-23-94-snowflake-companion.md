@@ -628,6 +628,37 @@ next update builds (`nixi` master + fork main), without switching the system:
   not work: `kbd:grab` did not take focus from Chrome, and a right click passed through to the
   page. Desktop input from scripts was dropped after two failed tries.
 
+**S23. Nixi steps aside while nixi's card is open** (fork `app/window.py`, `app/server.py`,
+`app/static/index.html`; coder "bridge")
+*User request (2026-10-26): the card covers part or all of him. Approved by the user in
+conversation (2026-10-26).*
+- Why: nixi's card is a full-screen Overlay layer (`nixi`), centred, 38% of the way down, 540px
+  wide by default and up to ~1000px (scaled), at most 70% of the screen. Its veil dims everything,
+  and a click outside the card closes it. The companion is also an Overlay layer, and the card,
+  mapped later, sits above him.
+- Trigger: `_watch_focus` (the Hyprland socket2 reader) also handles `openlayer>>nixi` and
+  `closelayer>>nixi`, as an exact namespace match (not `nixi-companion`). It runs for every
+  opening: handoff, keybind, bar button. Without Hyprland, `open_in_nixi()` sends the window an
+  `aside:on` socket command after a successful summon. There is no automatic return then.
+- Step aside, only if the card's layer is on his monitor (`hyprctl -j layers`): remember his
+  position and glide to the nearer left/right edge of that monitor, vertically at the card's band
+  (38% down), clamped to the monitor. Use the existing glide and `_place`. Skipped while docked
+  (bar), in hover mode or mid-drag.
+- Stay on top: once in place, re-map the window (hide and show, the existing show path) so it
+  stacks above the card. He is then not dimmed, and clicking him doesn't close the card.
+- Too narrow: if the free side gap ((monitor width − worst-case card width) / 2, with worst case
+  `min(1000 × scale, 70%)`) is below his visible width, move to another monitor (`go_monitor`
+  next) when there is one, else go to hover mode. Undo on close.
+- Return: on `closelayer>>nixi`, glide back to the remembered spot, unless he was dragged or
+  moved while aside. Back from hover / another monitor likewise.
+- Setting "Step aside for Nixi's card" (`step_aside`, default on), in Settings next to "Follow my
+  focused screen".
+- Not doing: telling the card where he is (a nixi change), or the pinned card (a tiled window).
+- Verify: unit-test the pure parts (event-line parsing and exact namespace match, side choice,
+  gap and fallback choice, return-unless-moved) with Hyprland stubbed. Live: open the card with
+  the keybind and with "continue in nixi"; he glides aside, stays bright and clickable, and the
+  card stays open; he comes back when it closes.
+
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
 *User request (2026-10-26), after S19b.*
