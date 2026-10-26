@@ -608,6 +608,10 @@ the session model)
 - Verify: render with a theme and without one (screenshot); with him near the left and the right
   screen edge the bubble goes to the open side; long lines widen it, then wrap; `omarchy theme set`
   recolours it.
+- Implemented in olafkfreund/nixoarchy-snowflake#6 (`8919dc7`). Deviation: the gap from his face is
+  measured to the tips of his arms (`#body .nix`), not the plate, because the plate radius put the
+  bubble over his arms. Checked with headless renders (Gruvbox, Latte, no theme, near the right
+  edge, a long line). The live window, notch mode and live recolouring are still to be checked.
 
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
