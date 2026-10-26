@@ -613,6 +613,21 @@ the session model)
   bubble over his arms. Checked with headless renders (Gruvbox, Latte, no theme, near the right
   edge, a long line). The live window, notch mode and live recolouring are still to be checked.
 
+**Live checks, S19b–S22 (2026-10-26)**, run against `sg66z1sh…-nixi-companion`, the package p620's
+next update builds (`nixi` master + fork main), without switching the system:
+- S21 + S19b pass. The activation logic, run with an environment as bare as activation's (no
+  Wayland/Hyprland variables), restarted the old build (`j5nv…`) into `sg66…` inside a transient
+  user unit, and the overlay came up. A second run did nothing.
+- S20 passes. "Open Nixi and ask how do I change my wallpaper?" opened the card with that
+  question asked, and it started working. Bare "continue in nixi" with no earlier request
+  answered "What should I ask Nixi?". `/api/nixi-ask` with the tool token gives 403.
+- S22 colours: the live server's theme carries `red`/`green`/`yellow`, equal to kitty's
+  runtime colours.
+- Still to check by hand: the bubble in the real overlay window (the window growing for it),
+  notch mode, and recolouring on `omarchy theme set`. Typing into the overlay from a script did
+  not work: `kbd:grab` did not take focus from Chrome, and a right click passed through to the
+  page. Desktop input from scripts was dropped after two failed tries.
+
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
 *User request (2026-10-26), after S19b.*
