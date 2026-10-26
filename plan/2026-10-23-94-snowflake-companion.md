@@ -516,6 +516,18 @@ coder "bridge")
 - Verify: unit-test the answer classifier ("no, not always" → no; "okay" → none; "yes do it" →
   yes; "always" → none in bridge mode). A live turn gets a short spoken reply.
 
+**S19. The app icon is Nixi, not Void** (fork `app/static/icon.png`, `docs/GUIDE.md`; done by
+the session model)
+*User feedback with a screenshot (2026-10-26): the "Claude needs you" notification showed Void's
+old face.*
+- `app/static/icon.png` was never replaced when the face became the snowflake. It is used by
+  `notify-send -i` (`app/server.py`), the hicolor launcher icon (`nix/package.nix`) and the
+  favicon.
+- Re-rendered from `miniNixi(curLook())` in headless Chromium (512×512, transparent, viewBox
+  `-150 -150 300 300`). GUIDE.md "The app icon" has the command for the next face change.
+- Merged to the fork's `main` in olafkfreund/nixoarchy-snowflake#3 (`bfd3668`). The system
+  picks it up when its `nixi-companion` flake input is updated.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
