@@ -658,6 +658,25 @@ conversation (2026-10-26).*
   gap and fallback choice, return-unless-moved) with Hyprland stubbed. Live: open the card with
   the keybind and with "continue in nixi"; he glides aside, stays bright and clickable, and the
   card stays open; he comes back when it closes.
+- Implemented (coder "bridge", fixes by the session model after an Opus review), merged in
+  olafkfreund/nixoarchy-snowflake#7 (`89605ba`), together with an S22 fix. The S22 fix: the bubble
+  asks for room as soon as it opens, because a tool that writes no lines never asked and the
+  bubble was clamped onto him.
+- Deviations:
+  - The worst-case card is 70% of the screen. Its px width depends on scales the companion can't
+    see.
+  - The fit check counts his padded 340px strip and the 10px margin: 290px. 1920px screens go to
+    another monitor or hover mode.
+  - Re-mapping is GTK-level `win.hide()` / `show_all()`, 30ms apart, without the page callbacks.
+  - `aside:on` / `aside:off` are unix-socket commands; the setting goes to the window as
+    `aside:set-on` / `aside:set-off`.
+  - Review fixes: closing mid-glide still returns him; hover mode re-maps too; his spot includes
+    `top_shift`; a delayed save can't record the aside spot.
+  - Accepted: going to another monitor updates the saved monitor; a re-map while his password
+    card holds the keyboard.
+- Live on p620 (DP-3 2560×1440, the branch built as the next update would): the card opened, and
+  he moved (3801,196) → (4770,317), stacked above it (layer #2 over the card's #1). He was bright,
+  and the card stayed open. When it closed he came back to (3801,196).
 
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
