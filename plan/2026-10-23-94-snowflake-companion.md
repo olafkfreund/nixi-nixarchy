@@ -581,6 +581,34 @@ the session model)
     `prompt` carries that session's terminal output.
   - The triggers accept the wake word's spellings (nixie, nixy, …).
 
+**S22. The terminal sheet becomes a cartoon bubble beside him** (fork `app/static/index.html`,
+`app/server.py`; done by the session model)
+*User request with a mockup (2026-10-26), variant A chosen. Approved by the user in conversation
+(2026-10-26): "Go with A … the same colors as the desktop and terminal … dynamic size".*
+- Placement: beside him, on the side with more room in the window (`window.py` already moves
+  growth away from a screen edge), vertically centred on his face and clamped to the window. It is
+  no longer under his eyes and no longer circles. It keeps the springy follow and the small tilt
+  while it moves.
+- Always readable: the mirrored "faces him" mode and its Settings chips go. `code_face` is
+  ignored.
+- Look: a comic bubble with a rounded body (radius ~22), an ink outline in the theme's
+  foreground, a hard offset shadow in its darker background, a −1° tilt, and a tail on the side
+  facing him that points at his face. 15px mono text (was 13).
+- Colours: the Omarchy theme's `colors.toml`, the same file Omarchy builds the terminal themes
+  from (kitty includes `~/.config/omarchy/runtime/kitty.conf`, identical values). Background =
+  `background`, text = `foreground`, title and prompt = `accent`, added/removed and ok/bad =
+  `green`/`red`, keywords = `yellow`, output = `dark_foreground`/`muted`. `theme_colors()` reads
+  `red`, `green` and `yellow` as optional keys. Without a theme, today's built-in colours are kept.
+  It recolours live on `omarchy theme set`, like the panels.
+- Dynamic size: width follows the longest line (min 380, max 760, then wrap). Height follows the
+  lines (trimmed at the current max). The window is asked for enough extra width that the bubble
+  fits beside him on one side, not under him.
+- Not changed: notch (bar) mode, which keeps its own in-notch layout, and hover mode, where the
+  sheet stays hidden.
+- Verify: render with a theme and without one (screenshot); with him near the left and the right
+  screen edge the bubble goes to the open side; long lines widen it, then wrap; `omarchy theme set`
+  recolours it.
+
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
 *User request (2026-10-26), after S19b.*
