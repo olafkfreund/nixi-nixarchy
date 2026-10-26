@@ -569,6 +569,17 @@ the session model)
   "continue the music" don't match) and `open_in_nixi`'s argv, length cap and "last request"
   fallback with `nixi` stubbed. Live: say "continue in nixi" after a question; the card opens
   with that question asked, and the companion's turn stops.
+- Implemented (coder "bridge", then fixes by the session model after an Opus review), merged in
+  olafkfreund/nixoarchy-snowflake#5 (`0a81393`). Deviations:
+  - `nixi --ask` runs directly, not through `setsid` / `uwsm-app`. With `start_new_session`,
+    `setsid` forks and returns 0, so "card off" was never seen. A summon is only a message, so
+    it needs no scope.
+  - `stop_proc()` runs after the card confirms (exit 0, or still running after 3s), not before.
+    Card off keeps the companion's turn.
+  - The last request is kept in memory (`ST.last_you`), because nixi mode writes no history. It
+    comes from a new `you` field the page sends next to `prompt`, because a session summary's
+    `prompt` carries that session's terminal output.
+  - The triggers accept the wake word's spellings (nixie, nixy, …).
 
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
