@@ -592,9 +592,19 @@ def test_settings_keep_bridge_keys():
     askBeforeReading, which only the bridge writes (#27 review)."""
     ask = open(os.path.join(ROOT, "Ask.qml")).read()
     flush = _block(ask, ask.index("function flushSettings"))
-    assert "Object.assign({}, settingsOnDisk" in flush, "flushSettings replaces nixi.json with UI keys only"
-    load = _block(ask, ask.index("function loadSettings"))
-    assert "settingsOnDisk = data" in load, "loadSettings does not remember the file it read"
+    assert "settingsFile.reload()" in flush and "setText" not in flush, \
+        "flushSettings writes the stale copy instead of re-reading first (#103)"
+    write = _block(ask, ask.index("function writeSettings"))
+    assert "Object.assign({}, data, cardOwnedSettings())" in write, "the write is not fresh disk + card keys"
+    assert "loadSettings" not in write, "the flush re-read applies disk values to the card (#103)"
+    owned = _block(ask, ask.index("function cardOwnedSettings"))
+    assert "permissionMode" not in owned and "trust" not in owned, "the card writes a bridge-owned key (#103)"
+    assert "if (root.flushPending) root.writeSettings(text())" in ask, "onLoaded ignores a pending flush"
+    assert "else if (!settingsSaveTimer.running) root.loadSettings(text())" in ask, \
+        "a reload during the save debounce puts old values back over a pending card change (#103)"
+    assert 'error === FileViewError.FileNotFound) root.writeSettings("{}")' in ask, "first run no longer writes"
+    assert "try { data = JSON.parse(raw) } catch (error) { return }" in write, \
+        "an unparsable or empty nixi.json is overwritten without the bridge's keys"
     print("  ok  a UI settings write keeps the bridge's own keys")
 
 
@@ -927,6 +937,17 @@ def test_card_grows_with_content():
     print("  ok  the card grows with its content, with no layout feedback loop")
 
 
+def test_yolo_keeps_click_confirm_cards():
+    """#95: the bridge keeps a herdr write pending when YOLO is switched on, so the
+    card must keep it too. CI does not run QML, so this reads the source."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    assert "event.options, event.confirm)" in card, "the permission event's confirm is dropped"
+    yolo = card[card.index('if (permissionMode === "yolo")'):][:80]
+    assert "clearUnconfirmedPermissions()" in yolo, "switching to YOLO clears every card again"
+    assert 'r.confirm === "click"' in card, "the click-confirm cards are no longer kept"
+    print("  ok  YOLO keeps cards that need a click")
+
+
 def test_one_ack_shape():
     """#44: the card keeps ONE piece of in-flight state, so a reset cannot
     clear one request kind and miss another -- which is exactly how #40
@@ -1015,6 +1036,17 @@ def test_no_huginn_marker():
             "%s reinstates HUGINN_INTERNAL -- a marker with no reader (#79)" % name
 
     print("  ok  no unread HUGINN marker on the agent's process tree")
+
+def test_guide_switch_clears_cards():
+    """The bridge cancels pending cards when it receives a switch to Guide, so
+    the card must drop them too, or Allow shows "Working…" for nothing (#106)."""
+    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    trust = _block(card, card.index("function setTrust"))
+    assert 'if (level !== "mechanic") clearPermissions()' in trust, \
+        "setTrust keeps cards the bridge cancelled on a switch to Guide"
+    assert trust.index("clearPermissions()") < trust.index("agent.write"), "cards cleared after the switch is sent"
+    print("  ok  a switch to Guide clears the card's permission queue")
+
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):

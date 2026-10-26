@@ -6,8 +6,8 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
@@ -15,6 +15,7 @@ import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
 import {
@@ -69,6 +70,8 @@ function noticeUnaccountedEnvironment() {
   for (const name of ["NIXI_CWD", "NIXI_DIR", "NIXI_DATA"])
     if (process.env[name])
       emit({ type: "diagnostic", text: `${name} is set in the environment; Nixi does not set it. It changes where the agent runs or what it is told.` });
+  if (process.env.NIXI_TURN_STALL_MS)
+    emit({ type: "diagnostic", text: "NIXI_TURN_STALL_MS is set in the environment; Nixi does not set it. It shortens how long a silent turn is allowed." });
 }
 
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
@@ -85,6 +88,11 @@ const askBeforeReading = (() => {
 let permissionMode = "permission";
 // Guide unless nixi.json says otherwise; unknown values are Guide too.
 let trust = "guide";
+// Switches to Guide received and not yet settled: `trust` only moves once the
+// agent confirms, but nothing may be approved in that window (#106). A count,
+// so a second /guide still covers the window when the first settles.
+let leavingMechanic = 0;
+const effectiveTrust = () => (leavingMechanic > 0 ? "guide" : trust);
 
 async function loadSettings() {
   try {
@@ -94,35 +102,90 @@ async function loadSettings() {
   } catch {}
 }
 
-async function mergeSettings(patch) {
-  await mkdir(settingsDir, { recursive: true });
-  // The UI writes its own keys (font scale) to this file. Merge rather than
-  // replace so changing one setting cannot drop the others.
-  let settings = {};
-  try {
-    const parsed = JSON.parse(await readFile(settingsPath, "utf8"));
-    if (parsed && typeof parsed === "object") settings = parsed;
-  } catch {}
-  Object.assign(settings, patch);
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, {
-    mode: 0o600,
+// One write at a time per bridge, and rename() so the card never reads a
+// half-written file (#103).
+let settingsQueue = Promise.resolve();
+let settingsWrites = 0;
+function mergeSettings(patch) {
+  const run = settingsQueue.then(async () => {
+    await mkdir(settingsDir, { recursive: true });
+    // The UI writes its own keys (font scale) to this file. Merge a fresh read
+    // rather than replace so changing one setting cannot drop the others.
+    // Only a missing file starts empty. Anything unreadable fails the switch
+    // rather than replacing the card's keys with this one patch.
+    let settings = {};
+    try {
+      settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw new Error(`${settingsPath} is not valid JSON or not readable`);
+    }
+    if (!settings || typeof settings !== "object" || Array.isArray(settings))
+      throw new Error(`${settingsPath} does not hold a JSON object`);
+    Object.assign(settings, patch);
+    const tmp = `${settingsPath}.tmp-${process.pid}-${++settingsWrites}`;
+    try {
+      await writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+      await rename(tmp, settingsPath);
+    } catch (error) {
+      await rm(tmp, { force: true });
+      throw error;
+    }
   });
+  settingsQueue = run.catch(() => {});
+  return run;
 }
 
 async function savePermissionMode(mode) {
   const nextMode = mode === "yolo" ? "yolo" : "permission";
-  if (nextMode === "yolo" && trust !== "mechanic")
+  if (nextMode === "yolo" && effectiveTrust() !== "mechanic")
     throw new Error("YOLO is only available in Mechanic");
   await mergeSettings({ permissionMode: nextMode });
+  // A switch to Guide that arrived during the write: take the YOLO back (#106).
+  if (nextMode === "yolo" && effectiveTrust() !== "mechanic") {
+    await mergeSettings({ permissionMode: "permission" });
+    throw new Error("YOLO is only available in Mechanic");
+  }
   permissionMode = nextMode;
 }
 
 function currentPolicy() {
-  return trustPolicy(agentName, trust, permissionMode, aiMirrorCommand);
+  return trustPolicy(agentName, effectiveTrust(), permissionMode, aiMirrorCommand);
 }
 
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}\n`);
+  armStall(); // any event is progress (#102)
+}
+
+// #102: opencode's process once died mid-turn with no `done`, locking the UI.
+// No update of any kind for IDLE (no tool running) or TOOL (one running) ends
+// the SESSION: error, then fatal, then exit. The card shows its restart
+// button and the companion starts a fresh bridge. A pending card pauses it.
+// IDLE is 5 minutes and unmeasured: long enough that a slow model is not cut
+// off, short enough to unlock a dead agent. NIXI_TURN_STALL_MS is for tests
+// only: it can shorten the limits, never lengthen them, so it cannot switch
+// the guard off.
+const stallOverride = Number(process.env.NIXI_TURN_STALL_MS);
+const stallScale = stallOverride > 0 && stallOverride < 300000 ? stallOverride / 300000 : 1;
+const STALL_IDLE_MS = 300000 * stallScale;
+const STALL_TOOL_MS = 15 * 60000 * stallScale;
+const toolsInProgress = new Set();
+let stallTimer = null;
+let stalled = false;
+
+function armStall() {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+  if (!turnRunning || stalled || shuttingDown || pendingPermissions.size > 0) return;
+  stallTimer = setTimeout(async () => {
+    stalled = true;
+    refusedThisTurn = ""; // the error says it; no second notice from a cancelled done
+    connection?.cancel({ sessionId }).catch(() => {});
+    emit({ type: "error", message: "The agent stopped responding, so this turn was ended." });
+    try { for (const text of await changes.endTurn()) emit({ type: "notice", text }); } catch {}
+    emit({ type: "fatal", message: "The agent stopped responding — start a new conversation." });
+    shutdown().finally(() => process.exit(1));
+  }, toolsInProgress.size ? STALL_TOOL_MS : STALL_IDLE_MS);
 }
 
 function messageText(content) {
@@ -230,6 +293,10 @@ let permissionSequence = 0;
 let sessionId = null;
 let connection = null;
 let turnRunning = false;
+// #102: opencode ends a turn on any refusal, leaving nothing on screen. Track
+// what Guide refused, to explain a turn that ends cancelled after it.
+let refusedThisTurn = "";
+let userStopped = false; // the stop button, not a refusal, ended the turn
 
 // #90: Mechanic backs up a file before the agent is allowed to write it. The
 // agent writes after we answer, so the answer waits for the copy. Shell edits
@@ -249,7 +316,7 @@ async function guarded(toolCall, outcome, options) {
   // Only an allow* answer is a yes; a reject must not copy anything.
   const picked = options.find((o) => o.id === outcome.outcome.optionId);
   if (!String(picked?.kind || "").startsWith("allow")) return outcome;
-  if (trust !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
+  if (effectiveTrust() !== "mechanic" || !EDIT_KINDS.has(toolCall?.kind)) return outcome;
   for (const text of await changes.backup(toolCall)) emit({ type: "notice", text });
   return outcome;
 }
@@ -291,6 +358,7 @@ function noticeMcpSource(params) {
 
 const client = {
   sessionUpdate(params) {
+    armStall(); // any update is progress, shown or not (#102)
     const update = params.update || {};
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
@@ -301,6 +369,8 @@ const client = {
       }
       case "tool_call":
       case "tool_call_update":
+        if (update.status === "completed" || update.status === "failed") toolsInProgress.delete(update.toolCallId);
+        else toolsInProgress.add(update.toolCallId);
         if (update.status === "completed") {
           changes.completed(update.toolCallId).catch((error) =>
             emit({ type: "diagnostic", text: `Could not record the finished edit: ${error.message}` }));
@@ -321,36 +391,61 @@ const client = {
   },
 
   requestPermission(params) {
+    armStall();
     const requestId = `permission-${++permissionSequence}`;
     const title = params.toolCall?.title || params.toolCall?.name || "Use a tool";
     const options = (params.options || []).map((option) => ({
       id: option.optionId,
       label: option.name,
       kind: option.kind,
-    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"));
+    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
+      // A standing yes to typing into another session would turn one click into all (#95).
+      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"));
     noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
     // to approve. This, not the session mode, is Guide's guarantee.
     if (policy.permission === "cancel") {
+      refusedThisTurn = title;
+      toolsInProgress.delete(params.toolCall?.toolCallId); // refused: it will not run
+      if (isHerdrWrite(params.toolCall)) auditSend(params.toolCall, null);
       emit({ type: "status", text: `Guide · not run: ${title}` });
       return Promise.resolve({ outcome: { outcome: "cancelled" } });
     }
-    if (policy.permission === "yolo") {
+    // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
+    const herdrWrite = isHerdrWrite(params.toolCall);
+    if (policy.permission === "yolo" && !herdrWrite) {
       const outcome = choose(options, "allow_once");
       if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
       return guarded(params.toolCall, outcome, options);
     }
     const { detail, omitted } = permissionDetail(params.toolCall);
-    emit({ type: "permission", id: requestId, title, options, detail, omitted });
+    emit({ type: "permission", id: requestId, title, options, detail, omitted,
+      ...(herdrWrite ? { confirm: "click" } : {}) });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
+      armStall();
     });
   },
 };
 
+// #97: Codex's read-only sandbox reads every file, and codex-acp 2.1.1 rejects
+// the permission profile that would fence secrets, so Guide can't be kept.
+const CODEX_GUIDE_REFUSAL = "Guide can't keep secrets from Codex — use Claude for Guide, or switch to Mechanic";
+
+let codexRefused = false;
+
 async function start() {
   await loadSettings();
+  if (agentName === "codex" && trust === "guide") {
+    // No session. Stay up (ready) so the card's switch to Mechanic can reach us;
+    // the stdin loop below answers only trust, close and prompt in this state.
+    codexRefused = true;
+    await killChild(); // the module-load spawn is kept; its exit is expected, not a fatal
+    emit({ type: "notice", text: CODEX_GUIDE_REFUSAL });
+    emit({ type: "ready", steeringSupported: false, permissionMode, trust });
+    return;
+  }
   const stream = ndJsonStream(
     Writable.toWeb(child.stdin),
     Readable.toWeb(child.stdout),
@@ -384,7 +479,7 @@ async function start() {
         settingSources: ["user"],
         settings: {
           ...(model ? { model, availableModels: [model] } : {}),
-          permissions: claudePermissions(askBeforeReading),
+          permissions: claudePermissions(askBeforeReading, trust),
         },
       } } },
     } : {}),
@@ -429,7 +524,7 @@ async function finishLearned() {
   // changing and writing is, which is why Guide keeps unprompted reads; the
   // same distinction says it must not accumulate durable state that alters its
   // own future behaviour behind a promise that nothing changes (#51).
-  if (resolveTrust(trust) === "guide" || facts.length === 0) return;
+  if (effectiveTrust() === "guide" || facts.length === 0) return;
   try {
     await appendLearned(facts, learnedDir);
     // Kept, so say so. Hiding the write was deliberate -- a bare LEARNED: line
@@ -445,9 +540,15 @@ async function prompt(text) {
   if (!connection || !sessionId) throw new Error("ACP session is not ready");
   if (turnRunning) throw new Error("The agent is already handling a prompt");
   turnRunning = true;
+  refusedThisTurn = "";
+  userStopped = false;
+  stalled = false;
+  toolsInProgress.clear();
   emit({ type: "status", text: "Thinking…" });
   try {
     const grounding = await groundPrompt(text);
+    // Stop pressed while grounding: connection.cancel had nothing to cancel yet.
+    if (userStopped) { emit({ type: "done", stopReason: "cancelled" }); return; }
     if (grounding.error) emit({ type: "diagnostic", text: `nixi-context unavailable: ${grounding.error}` });
     learned = createLearnedFilter();
     charts = createChartFilter(mediaDir);
@@ -455,11 +556,15 @@ async function prompt(text) {
       sessionId,
       prompt: [{ type: "text", text: grounding.prompt }],
     });
+    if (stalled) return; // the guard has ended the session
     await finishLearned();
     for (const text of await changes.endTurn()) emit({ type: "notice", text });
+    if (response.stopReason === "cancelled" && refusedThisTurn && !userStopped)
+      emit({ type: "notice", text: `The agent stopped instead of answering — at Guide it can't do what it tried (${refusedThisTurn.slice(0, 80)}). Try Mechanic, or ask differently.` });
     emit({ type: "done", stopReason: response.stopReason || "end_turn" });
   } finally {
     turnRunning = false;
+    armStall(); // clears the timer
     // A failed or cancelled turn skips the endTurn above; without this its change
     // set stays open and the next turn's edits join it. A no-op after success.
     for (const text of await changes.endTurn()) emit({ type: "notice", text });
@@ -485,12 +590,36 @@ async function steer(text) {
   ack("steer", true, { outcome });
 }
 
+// One JSON line per decision on a herdr write (#95). Append-only, 0600, and the
+// command only: never terminal output.
+let sendsLogChecked = false;
+function auditSend(toolCall, picked) {
+  const detail = herdrWriteDetail(toolCall)
+    || { pane: "", text: String(toolCall?.rawInput?.command || "") };
+  try {
+    const path = join(learnedDir, "sends.log");
+    mkdirSync(learnedDir, { recursive: true });
+    appendFileSync(path, JSON.stringify({
+      ts: new Date().toISOString(), ...detail, text: detail.text.slice(0, 500), cwd,
+      // No picked option = cancelled (Guide, shutdown, trust change, an unknown id).
+      decision: !picked ? "cancelled" : String(picked.kind).startsWith("allow") ? "allow" : "deny",
+      optionKind: picked?.kind || "cancelled",
+    }) + "\n", { mode: 0o600 });
+    // appendFile's mode only applies to a new file; tighten one that already existed.
+    if (!sendsLogChecked) { sendsLogChecked = true; try { chmodSync(path, 0o600); } catch {} }
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Could not write the send audit: ${error.message}` });
+  }
+}
+
 function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
   pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  if (!String(picked?.kind || "").startsWith("allow")) toolsInProgress.delete(pending.toolCall?.toolCallId);
+  if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, picked);
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
 
@@ -528,6 +657,8 @@ function choose(options, kind) {
 function cancelAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
     pendingPermissions.delete(id);
+    toolsInProgress.delete(pending.toolCall?.toolCallId);
+    if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, null);
     pending.resolve({ outcome: { outcome: "cancelled" } });
   }
 }
@@ -577,7 +708,9 @@ async function applyTrustMode(targetTrust = trust) {
 }
 
 function allowAllPendingPermissions() {
+  if (effectiveTrust() !== "mechanic") return;
   for (const [id, pending] of pendingPermissions.entries()) {
+    if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
     pendingPermissions.delete(id);
     pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
   }
@@ -586,6 +719,7 @@ function allowAllPendingPermissions() {
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  clearTimeout(stallTimer);
   cancelAllPendingPermissions();
   // Bound graceful ACP close before signalling the child. Remain alive long
   // enough to reap it; a detached kill timer cannot help after bridge exit.
@@ -593,6 +727,11 @@ async function shutdown() {
     if (connection && sessionId)
       await Promise.race([connection.closeSession({ sessionId }), delay(350)]);
   } catch {}
+  await killChild();
+}
+
+// SIGTERM, wait, SIGKILL, wait: the child is gone when this returns.
+async function killChild() {
   if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   await Promise.race([childExited, delay(500)]);
   if (child.exitCode === null && child.signalCode === null) {
@@ -610,9 +749,25 @@ input.on("line", (line) => {
     emit({ type: "error", message: "Invalid UI command" });
     return;
   }
+  if (codexRefused) {
+    if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "trust") {
+      if (resolveTrust(message.trust) === "guide") return ack("trust", true, { trust: "guide" });
+      mergeSettings({ trust: "mechanic" }).then(() => {
+        ack("trust", true, { trust: "mechanic" });
+        emit({ type: "fatal", message: "Trust set to Mechanic — start a new conversation to use Codex" });
+        process.exit(0);
+      }).catch((error) => ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }));
+    } else if (message.type === "close") process.exit(0);
+    else if (message.type === "steer") ack("steer", false, { message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "permission_mode")
+      ack("permission_mode", false, { mode: permissionMode, message: CODEX_GUIDE_REFUSAL });
+    else if (message.type === "undo") emit({ type: "notice", text: "Nothing to undo: no session." });
+    return;
+  }
   if (message.type === "prompt") {
     prompt(String(message.text || "")).catch((error) => {
-      turnRunning = false;
+      if (stalled) return; // the guard already reported; the closed connection is its doing
       const fatal = needsNewSession(error);
       emit({ type: fatal ? "fatal" : "error", message: explainHarnessError(error, agentName) });
       if (fatal) shutdown().finally(() => process.exit(1));
@@ -624,7 +779,7 @@ input.on("line", (line) => {
   } else if (message.type === "undo") {
     // Undo changes the machine; Guide promises nothing does. Leaving Guide is typed.
     if (turnRunning) emit({ type: "notice", text: "Undo is refused while a turn is running." });
-    else if (trust === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
+    else if (effectiveTrust() === "guide") emit({ type: "notice", text: "Undo changes your machine: type /mechanic first." });
     else changes.undo().then((result) => emit({ type: "notice", text: result.message }));
   } else if (message.type === "permission") {
     answerPermission(message);
@@ -634,7 +789,14 @@ input.on("line", (line) => {
     // `trust` before the mode call, so a failure reported the level the session
     // had NOT moved to (#40). On failure nothing is written and `trust` still
     // holds the level actually in force, which is what the failed ack carries.
+    // A switch to Guide is stricter, so it bites on receipt, not on confirmation (#106).
+    const leaving = next === "guide";
+    if (leaving) {
+      leavingMechanic++;
+      cancelAllPendingPermissions();
+    }
     (async () => {
+      if (agentName === "codex" && next === "guide") throw new Error(CODEX_GUIDE_REFUSAL);
       if (connection && sessionId) await applyTrustMode(next);
       await mergeSettings({ trust: next });
       trust = next;
@@ -650,6 +812,8 @@ input.on("line", (line) => {
         emit({ type: "diagnostic", text: "Desktop control starts with a new session: this one began at Guide." });
     })().catch((error) => {
       ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
+    }).finally(() => {
+      if (leaving) leavingMechanic--;
     });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
@@ -659,6 +823,7 @@ input.on("line", (line) => {
       ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
     });
   } else if (message.type === "cancel" && connection && sessionId) {
+    userStopped = true;
     connection.cancel({ sessionId }).catch(() => {});
   } else if (message.type === "close") {
     shutdown().finally(() => process.exit(0));
@@ -667,7 +832,7 @@ input.on("line", (line) => {
 input.on("close", () => shutdown());
 
 child.on("exit", (code, signal) => {
-  if (!shuttingDown) {
+  if (!shuttingDown && !codexRefused) {
     emit({ type: "fatal", message: `ACP agent exited (${signal || code})` });
     process.exit(code || 0);
   }

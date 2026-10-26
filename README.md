@@ -207,16 +207,24 @@ Two levels, so that neither claims a boundary it cannot enforce.
 | agent | Guide | Mechanic |
 |---|---|---|
 | Claude | `plan` mode, requests cancelled (reads excepted) | `default` mode, asks |
-| Codex | `read-only`, requests cancelled (reads excepted) | `read-only`, asks before each edit |
-| OpenCode | `plan`, requests cancelled (reads excepted) | `build`, asks |
+| Codex | not available: Guide can't keep secrets from it, see below | `read-only`, asks before each edit |
+| OpenCode | `plan`, requests cancelled (`read` excepted, minus secrets, which are denied) | `build`, asks |
+
+**Codex and secrets.** Codex's sandbox reads every file, including `~/.ssh` and
+`.env`, and nixi can't fence it yet (measured, #97). So nixi refuses Codex at
+Guide: use Claude for Guide. At Mechanic Codex works, but it can read secrets
+**without asking**; don't use it where that matters.
 
 In **both** trust levels, reading and searching files does not ask, so the
 prompts you see in Mechanic are for something that changes. With Claude that
 means its Read, Grep and Glob tools. This is why Guide can answer questions
 about your own configuration: it reads, it just never writes. Secrets still
 ask, in both levels and for all three tools: `~/.ssh`, `~/.gnupg`, cloud and
-GitHub credentials, `/run/agenix`, `.env` and `*.age` files. Shell commands, even `grep` and `ls`,
-still ask. Nixi tells the agent to use its file tools for lookups, and it
+GitHub credentials, `/run/agenix` (and its `/run/agenix.d` target), `.env` and `*.age` files. (OpenCode's read tool is stricter: it denies them outright, and its `grep`, `glob` and `list` tools ask.) Shell commands, even `grep` and `ls`,
+still ask. In a conversation that starts at Guide, Claude has no shell at all, so
+it answers from the manual and its file tools. In one that starts at Mechanic, every
+shell command asks, and one naming a secret path asks even after an "always allow"
+(best effort, not every spelling). Nixi tells the agent to use its file tools for lookups, and it
 mostly does, but an occasional `grep` still arrives as a shell command. Adding
 one key binding typically takes two or three prompts: the live key list,
 perhaps one search, and the edit. To be asked before every read, set
@@ -224,9 +232,26 @@ perhaps one search, and the edit. To be asked before every read, set
 the next session, and to OpenCode as well.
 
 OpenCode's own defaults let tools run without asking, so Nixi always starts it
-with its own rules — everything asks except reading and searching, and it may
+with its own rules — everything asks except reading, and it may
 not leave plan mode — replacing any `OPENCODE_CONFIG_CONTENT` in the
-environment.
+environment. Its `read` tool works anywhere except the secret paths above, which
+OpenCode itself denies; its `grep`, `glob` and `list` tools ask. OpenCode ends a
+turn when anything is refused, so at Guide Nixi says what it tried and suggests
+Mechanic. For every agent, a turn that goes silent for 5 minutes (15 with a tool
+running) ends the session with an error, so the card offers a restart rather than
+staying stuck.
+
+---
+
+## Agent sessions by voice
+
+A voice front end such as the Snowflake companion can ask how a running herdr
+agent session is doing and can open it in a terminal. It only *reads* herdr
+(`agent list`, `agent read`). To add to a session, Nixi's agent runs
+`herdr agent prompt`, and that is a **herdr write**: Guide never runs it,
+Mechanic always shows a card (even in YOLO) that voice cannot confirm, and each
+decision is logged to `~/.local/share/nixi/sends.log`. See
+[docs/architecture.md](docs/architecture.md).
 
 ---
 
