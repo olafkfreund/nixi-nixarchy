@@ -528,6 +528,16 @@ old face.*
 - Merged to the fork's `main` in olafkfreund/nixoarchy-snowflake#3 (`bfd3668`). The system
   picks it up when its `nixi-companion` flake input is updated.
 
+**S19b. `restart` reaches a companion from an older build** (fork `bin/nixi-companion`; done by
+the session model)
+*Found while verifying S19 (2026-10-26): after the update the old companion kept running.*
+- A rebuild doesn't restart the companion (it is not a systemd unit). `stop`, `quitwin`,
+  `winalive` and `doctor` matched `$APP/…`, the new store path, so `restart` left the old build
+  running and the new window crashed against it ("overlay window keeps crashing").
+- They now match python running any `…/nixi-companion/app/{server,window}.py`, and `restart`
+  also closes the window. Merged in olafkfreund/nixoarchy-snowflake#4 (`93fc1de`).
+- Verified: the S19 icon in a real notification after the old build was stopped by hand.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
