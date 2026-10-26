@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 111
 spec: spec/2026-10-26-111-acp-auth-status.md
 ---
