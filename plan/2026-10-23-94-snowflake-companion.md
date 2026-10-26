@@ -570,6 +570,19 @@ the session model)
   fallback with `nixi` stubbed. Live: say "continue in nixi" after a question; the card opens
   with that question asked, and the companion's turn stops.
 
+**S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
+done by the session model)
+*User request (2026-10-26), after S19b.*
+- A home-manager activation step, `nixiCompanionRestart`, runs after `linkGeneration`, only with
+  `companion.enable`. If a companion server is running from a store path other than this
+  generation's package, it runs `nixi-companion restart` (S19b's) through
+  `systemd-run --user --collect`. That way it gets the user manager's `WAYLAND_DISPLAY` and
+  `HYPRLAND_INSTANCE_SIGNATURE`, which activation itself does not have.
+- No companion running, or already the same build → nothing happens. A failure never fails the
+  activation (`|| true`), and `$DRY_RUN_CMD` is honoured.
+- Verify: eval the module; after a rebuild with a changed companion, the running server's store
+  path is the new one. With the companion stopped, a rebuild starts nothing.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
