@@ -295,6 +295,17 @@ in
           exec ${companionPkg}/bin/nixi-companion theme-changed
         '';
       };
+      # A companion still running from an older build is restarted into this one (plan S21).
+      # Through the user manager: activation has no WAYLAND_DISPLAY / HYPRLAND_INSTANCE_SIGNATURE.
+      # Forking: the wrapper exits once server and window are up, and they must outlive it.
+      home.activation.nixiCompanionRestart = lib.mkIf (cfg.companion.package != null)
+        (lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+          if ${pkgs.procps}/bin/pgrep -af 'python[^ ]* [^ ]*nixi-companion/app/server\.py' \
+              | ${pkgs.gnugrep}/bin/grep -vqF "${companionPkg}/"; then
+            run ${pkgs.systemd}/bin/systemd-run --user --collect --no-block --quiet -p Type=forking \
+              ${companionPkg}/bin/nixi-companion restart || true
+          fi
+        '');
     })
 
     (lib.mkIf cfg.skill.enable {

@@ -516,6 +516,84 @@ coder "bridge")
 - Verify: unit-test the answer classifier ("no, not always" → no; "okay" → none; "yes do it" →
   yes; "always" → none in bridge mode). A live turn gets a short spoken reply.
 
+**S19. The app icon is Nixi, not Void** (fork `app/static/icon.png`, `docs/GUIDE.md`; done by
+the session model)
+*User feedback with a screenshot (2026-10-26): the "Claude needs you" notification showed Void's
+old face.*
+- `app/static/icon.png` was never replaced when the face became the snowflake. It is used by
+  `notify-send -i` (`app/server.py`), the hicolor launcher icon (`nix/package.nix`) and the
+  favicon.
+- Re-rendered from `miniNixi(curLook())` in headless Chromium (512×512, transparent, viewBox
+  `-150 -150 300 300`). GUIDE.md "The app icon" has the command for the next face change.
+- Merged to the fork's `main` in olafkfreund/nixoarchy-snowflake#3 (`bfd3668`). The system
+  picks it up when its `nixi-companion` flake input is updated.
+
+**S19b. `restart` reaches a companion from an older build** (fork `bin/nixi-companion`; done by
+the session model)
+*Found while verifying S19 (2026-10-26): after the update the old companion kept running.*
+- A rebuild doesn't restart the companion (it is not a systemd unit). `stop`, `quitwin`,
+  `winalive` and `doctor` matched `$APP/…`, the new store path, so `restart` left the old build
+  running and the new window crashed against it ("overlay window keeps crashing").
+- They now match python running any `…/nixi-companion/app/{server,window}.py`, and `restart`
+  also closes the window. Merged in olafkfreund/nixoarchy-snowflake#4 (`93fc1de`).
+- Verified: the S19 icon in a real notification after the old build was stopped by hand.
+
+**S20. "Continue in Nixi": hand the conversation to the card** (fork `app/quick.py`,
+`app/server.py`, `app/static/index.html`, tests; coder "bridge")
+*User request (2026-10-26). Approved by the user in conversation (2026-10-26).*
+- Why: a longer back-and-forth, approvals and `/undo` belong in nixi's card, not in a new window
+  or the face. The card already does all of that, so the companion hands over to it.
+- Nixi mode only (`BRIDGED`). Without the bridge, Void's behaviour is unchanged.
+- Voice, an instant command in `quick.py` (no agent): "continue in nixi", "open this/that in
+  nixi", "hand this/it to nixi", optionally followed by a new request ("open nixi and ask how do
+  I …"). It returns `{"nixi_ask": <text or None>}`.
+- Click: an "Open in Nixi" link on the last answer's caption posts the same action.
+- `/api/nixi-ask` (token-gated like the other routes) and the `/api/quick` branch call
+  `open_in_nixi(text)`:
+  - What is asked: the spoken request after the trigger, or else the last request (`you`) from
+    the history. Only the user's own words. Nixi's answer and tool output are never passed on,
+    because they may carry text from files or the web.
+  - Text is ≤ 2000 chars and trimmed. Empty → say "What should I ask Nixi?".
+  - Stop the companion's running turn first (`stop_proc()`), so two agents don't do the same
+    work.
+  - Run `nixi --ask <text>` as argv, no shell, `setsid` / `uwsm-app` like `attach_argv`.
+    nixi escapes the JSON itself (nixi#37).
+  - `nixi` missing, or exiting non-zero (card off) → say "Nixi's card is off. Turn it on in
+    Setup → Plugins." Otherwise say "Over to Nixi." and go quiet. The companion's session is
+    kept. The card starts its own conversation (one bridge per conversation, architecture
+    invariant 1), so it does not share the companion's context.
+- Not doing: carrying the companion's whole transcript into the card (a new card mode in nixi,
+  which is a separate issue if wanted), or changing "show me the X session", which stays a
+  terminal window running `herdr agent attach`.
+- Verify: unit-test the trigger regexes (with and without a new request; "continue" alone and
+  "continue the music" don't match) and `open_in_nixi`'s argv, length cap and "last request"
+  fallback with `nixi` stubbed. Live: say "continue in nixi" after a question; the card opens
+  with that question asked, and the companion's turn stops.
+- Implemented (coder "bridge", then fixes by the session model after an Opus review), merged in
+  olafkfreund/nixoarchy-snowflake#5 (`0a81393`). Deviations:
+  - `nixi --ask` runs directly, not through `setsid` / `uwsm-app`. With `start_new_session`,
+    `setsid` forks and returns 0, so "card off" was never seen. A summon is only a message, so
+    it needs no scope.
+  - `stop_proc()` runs after the card confirms (exit 0, or still running after 3s), not before.
+    Card off keeps the companion's turn.
+  - The last request is kept in memory (`ST.last_you`), because nixi mode writes no history. It
+    comes from a new `you` field the page sends next to `prompt`, because a session summary's
+    `prompt` carries that session's terminal output.
+  - The triggers accept the wake word's spellings (nixie, nixy, …).
+
+**S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
+done by the session model)
+*User request (2026-10-26), after S19b.*
+- A home-manager activation step, `nixiCompanionRestart`, runs after `linkGeneration`, only with
+  `companion.enable`. If a companion server is running from a store path other than this
+  generation's package, it runs `nixi-companion restart` (S19b's) through
+  `systemd-run --user --collect`. That way it gets the user manager's `WAYLAND_DISPLAY` and
+  `HYPRLAND_INSTANCE_SIGNATURE`, which activation itself does not have.
+- No companion running, or already the same build → nothing happens. A failure never fails the
+  activation (`|| true`), and `$DRY_RUN_CMD` is honoured.
+- Verify: eval the module; after a rebuild with a changed companion, the running server's store
+  path is the new one. With the companion stopped, a rebuild starts nothing.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
