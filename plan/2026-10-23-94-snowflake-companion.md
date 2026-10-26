@@ -540,7 +540,7 @@ the session model)
 
 **S20. "Continue in Nixi": hand the conversation to the card** (fork `app/quick.py`,
 `app/server.py`, `app/static/index.html`, tests; coder "bridge")
-*User request (2026-10-26). **Draft: not approved yet.***
+*User request (2026-10-26). Approved by the user in conversation (2026-10-26).*
 - Why: a longer back-and-forth, approvals and `/undo` belong in nixi's card, not in a new window
   or the face. The card already does all of that, so the companion hands over to it.
 - Nixi mode only (`BRIDGED`). Without the bridge, Void's behaviour is unchanged.
