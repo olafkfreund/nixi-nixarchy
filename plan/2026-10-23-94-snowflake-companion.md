@@ -538,6 +538,38 @@ the session model)
   also closes the window. Merged in olafkfreund/nixoarchy-snowflake#4 (`93fc1de`).
 - Verified: the S19 icon in a real notification after the old build was stopped by hand.
 
+**S20. "Continue in Nixi": hand the conversation to the card** (fork `app/quick.py`,
+`app/server.py`, `app/static/index.html`, tests; coder "bridge")
+*User request (2026-10-26). **Draft: not approved yet.***
+- Why: a longer back-and-forth, approvals and `/undo` belong in nixi's card, not in a new window
+  or the face. The card already does all of that, so the companion hands over to it.
+- Nixi mode only (`BRIDGED`). Without the bridge, Void's behaviour is unchanged.
+- Voice, an instant command in `quick.py` (no agent): "continue in nixi", "open this/that in
+  nixi", "hand this/it to nixi", optionally followed by a new request ("open nixi and ask how do
+  I …"). It returns `{"nixi_ask": <text or None>}`.
+- Click: an "Open in Nixi" link on the last answer's caption posts the same action.
+- `/api/nixi-ask` (token-gated like the other routes) and the `/api/quick` branch call
+  `open_in_nixi(text)`:
+  - What is asked: the spoken request after the trigger, or else the last request (`you`) from
+    the history. Only the user's own words. Nixi's answer and tool output are never passed on,
+    because they may carry text from files or the web.
+  - Text is ≤ 2000 chars and trimmed. Empty → say "What should I ask Nixi?".
+  - Stop the companion's running turn first (`stop_proc()`), so two agents don't do the same
+    work.
+  - Run `nixi --ask <text>` as argv, no shell, `setsid` / `uwsm-app` like `attach_argv`.
+    nixi escapes the JSON itself (nixi#37).
+  - `nixi` missing, or exiting non-zero (card off) → say "Nixi's card is off. Turn it on in
+    Setup → Plugins." Otherwise say "Over to Nixi." and go quiet. The companion's session is
+    kept. The card starts its own conversation (one bridge per conversation, architecture
+    invariant 1), so it does not share the companion's context.
+- Not doing: carrying the companion's whole transcript into the card (a new card mode in nixi,
+  which is a separate issue if wanted), or changing "show me the X session", which stays a
+  terminal window running `herdr agent attach`.
+- Verify: unit-test the trigger regexes (with and without a new request; "continue" alone and
+  "continue the music" don't match) and `open_in_nixi`'s argv, length cap and "last request"
+  fallback with `nixi` stubbed. Live: say "continue in nixi" after a question; the card opens
+  with that question asked, and the companion's turn stops.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
