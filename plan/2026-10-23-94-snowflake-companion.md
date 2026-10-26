@@ -581,6 +581,103 @@ the session model)
     `prompt` carries that session's terminal output.
   - The triggers accept the wake word's spellings (nixie, nixy, …).
 
+**S22. The terminal sheet becomes a cartoon bubble beside him** (fork `app/static/index.html`,
+`app/server.py`; done by the session model)
+*User request with a mockup (2026-10-26), variant A chosen. Approved by the user in conversation
+(2026-10-26): "Go with A … the same colors as the desktop and terminal … dynamic size".*
+- Placement: beside him, on the side with more room in the window (`window.py` already moves
+  growth away from a screen edge), vertically centred on his face and clamped to the window. It is
+  no longer under his eyes and no longer circles. It keeps the springy follow and the small tilt
+  while it moves.
+- Always readable: the mirrored "faces him" mode and its Settings chips go. `code_face` is
+  ignored.
+- Look: a comic bubble with a rounded body (radius ~22), an ink outline in the theme's
+  foreground, a hard offset shadow in its darker background, a −1° tilt, and a tail on the side
+  facing him that points at his face. 15px mono text (was 13).
+- Colours: the Omarchy theme's `colors.toml`, the same file Omarchy builds the terminal themes
+  from (kitty includes `~/.config/omarchy/runtime/kitty.conf`, identical values). Background =
+  `background`, text = `foreground`, title and prompt = `accent`, added/removed and ok/bad =
+  `green`/`red`, keywords = `yellow`, output = `dark_foreground`/`muted`. `theme_colors()` reads
+  `red`, `green` and `yellow` as optional keys. Without a theme, today's built-in colours are kept.
+  It recolours live on `omarchy theme set`, like the panels.
+- Dynamic size: width follows the longest line (min 380, max 760, then wrap). Height follows the
+  lines (trimmed at the current max). The window is asked for enough extra width that the bubble
+  fits beside him on one side, not under him.
+- Not changed: notch (bar) mode, which keeps its own in-notch layout, and hover mode, where the
+  sheet stays hidden.
+- Verify: render with a theme and without one (screenshot); with him near the left and the right
+  screen edge the bubble goes to the open side; long lines widen it, then wrap; `omarchy theme set`
+  recolours it.
+- Implemented in olafkfreund/nixoarchy-snowflake#6 (`8919dc7`). Deviation: the gap from his face is
+  measured to the tips of his arms (`#body .nix`), not the plate, because the plate radius put the
+  bubble over his arms. Checked with headless renders (Gruvbox, Latte, no theme, near the right
+  edge, a long line). The live window, notch mode and live recolouring are still to be checked.
+
+**Live checks, S19b–S22 (2026-10-26)**, run against `sg66z1sh…-nixi-companion`, the package p620's
+next update builds (`nixi` master + fork main), without switching the system:
+- S21 + S19b pass. The activation logic, run with an environment as bare as activation's (no
+  Wayland/Hyprland variables), restarted the old build (`j5nv…`) into `sg66…` inside a transient
+  user unit, and the overlay came up. A second run did nothing.
+- S20 passes. "Open Nixi and ask how do I change my wallpaper?" opened the card with that
+  question asked, and it started working. Bare "continue in nixi" with no earlier request
+  answered "What should I ask Nixi?". `/api/nixi-ask` with the tool token gives 403.
+- S22 colours: the live server's theme carries `red`/`green`/`yellow`, equal to kitty's
+  runtime colours.
+- Still to check by hand: the bubble in the real overlay window (the window growing for it),
+  notch mode, and recolouring on `omarchy theme set`. Typing into the overlay from a script did
+  not work: `kbd:grab` did not take focus from Chrome, and a right click passed through to the
+  page. Desktop input from scripts was dropped after two failed tries.
+
+**S23. Nixi steps aside while nixi's card is open** (fork `app/window.py`, `app/server.py`,
+`app/static/index.html`; coder "bridge")
+*User request (2026-10-26): the card covers part or all of him. Approved by the user in
+conversation (2026-10-26).*
+- Why: nixi's card is a full-screen Overlay layer (`nixi`), centred, 38% of the way down, 540px
+  wide by default and up to ~1000px (scaled), at most 70% of the screen. Its veil dims everything,
+  and a click outside the card closes it. The companion is also an Overlay layer, and the card,
+  mapped later, sits above him.
+- Trigger: `_watch_focus` (the Hyprland socket2 reader) also handles `openlayer>>nixi` and
+  `closelayer>>nixi`, as an exact namespace match (not `nixi-companion`). It runs for every
+  opening: handoff, keybind, bar button. Without Hyprland, `open_in_nixi()` sends the window an
+  `aside:on` socket command after a successful summon. There is no automatic return then.
+- Step aside, only if the card's layer is on his monitor (`hyprctl -j layers`): remember his
+  position and glide to the nearer left/right edge of that monitor, vertically at the card's band
+  (38% down), clamped to the monitor. Use the existing glide and `_place`. Skipped while docked
+  (bar), in hover mode or mid-drag.
+- Stay on top: once in place, re-map the window (hide and show, the existing show path) so it
+  stacks above the card. He is then not dimmed, and clicking him doesn't close the card.
+- Too narrow: if the free side gap ((monitor width − worst-case card width) / 2, with worst case
+  `min(1000 × scale, 70%)`) is below his visible width, move to another monitor (`go_monitor`
+  next) when there is one, else go to hover mode. Undo on close.
+- Return: on `closelayer>>nixi`, glide back to the remembered spot, unless he was dragged or
+  moved while aside. Back from hover / another monitor likewise.
+- Setting "Step aside for Nixi's card" (`step_aside`, default on), in Settings next to "Follow my
+  focused screen".
+- Not doing: telling the card where he is (a nixi change), or the pinned card (a tiled window).
+- Verify: unit-test the pure parts (event-line parsing and exact namespace match, side choice,
+  gap and fallback choice, return-unless-moved) with Hyprland stubbed. Live: open the card with
+  the keybind and with "continue in nixi"; he glides aside, stays bright and clickable, and the
+  card stays open; he comes back when it closes.
+- Implemented (coder "bridge", fixes by the session model after an Opus review), merged in
+  olafkfreund/nixoarchy-snowflake#7 (`89605ba`), together with an S22 fix. The S22 fix: the bubble
+  asks for room as soon as it opens, because a tool that writes no lines never asked and the
+  bubble was clamped onto him.
+- Deviations:
+  - The worst-case card is 70% of the screen. Its px width depends on scales the companion can't
+    see.
+  - The fit check counts his padded 340px strip and the 10px margin: 290px. 1920px screens go to
+    another monitor or hover mode.
+  - Re-mapping is GTK-level `win.hide()` / `show_all()`, 30ms apart, without the page callbacks.
+  - `aside:on` / `aside:off` are unix-socket commands; the setting goes to the window as
+    `aside:set-on` / `aside:set-off`.
+  - Review fixes: closing mid-glide still returns him; hover mode re-maps too; his spot includes
+    `top_shift`; a delayed save can't record the aside spot.
+  - Accepted: going to another monitor updates the saved monitor; a re-map while his password
+    card holds the keyboard.
+- Live on p620 (DP-3 2560×1440, the branch built as the next update would): the card opened, and
+  he moved (3801,196) → (4770,317), stacked above it (layer #2 over the card's #1). He was bright,
+  and the card stayed open. When it closed he came back to (3801,196).
+
 **S21. A rebuild restarts a running companion from an older build** (nixi `nix/hm-module.nix`;
 done by the session model)
 *User request (2026-10-26), after S19b.*
