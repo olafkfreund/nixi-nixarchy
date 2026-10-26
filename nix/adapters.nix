@@ -36,15 +36,30 @@ let
           + "Set nixpkgs.config.allowUnfree, or an allowUnfreePredicate covering whatever "
           + "unfree DEPENDENCY it pulls in rather than ${attribute} itself."
           + lib.optionalString (agent == "claude")
-            (" ${attribute} is Apache-2.0 and fails only through the unfree claude-code,"
-              + " so a predicate naming ${attribute} will not help.")
+          (" ${attribute} is Apache-2.0 and fails only through the unfree claude-code,"
+            + " so a predicate naming ${attribute} will not help.")
           + " Or set services.nixi.agents to the agents you want. "
           + "${agent} still works if its adapter is on PATH.")
         null
     else pkgs.${attribute};
+
+  # Before 0.97.0 the adapter's sign-in probe runs `claude auth status --json
+  # --settings …`, which the CLI rejects: --settings is a global option and has
+  # to come before the subcommand (#111, upstream #1392). The null check comes
+  # first because reading .version on a refused unfree package throws.
+  authStatusFix = acp:
+    if acp == null || lib.versionAtLeast acp.version "0.97.0" then acp
+    else
+      acp.overrideAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace src/acp-agent.ts --replace-fail \
+            'args.push("--settings", JSON.stringify(context.override))' \
+            'args.unshift("--settings", JSON.stringify(context.override))'
+        '';
+      });
 in
 {
-  claudeAcp = adapterFor "claude" "claude-agent-acp";
+  claudeAcp = authStatusFix (adapterFor "claude" "claude-agent-acp");
   codexAcp = adapterFor "codex" "codex-acp";
   # OpenCode speaks ACP itself; the package is its own adapter.
   opencodeAcp = adapterFor "opencode" "opencode";

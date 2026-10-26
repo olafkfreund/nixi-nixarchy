@@ -44,7 +44,7 @@ Small enough to implement myself: one step, one file, so no `coder` handoff.
    - `grep 'args.unshift("--settings"' <out>/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/acp-agent.js` must match.
 3. Live:
    - Run the bridge once with `NIXI_CLAUDE_ACP_COMMAND='["<out>/bin/claude-agent-acp"]'` for one Claude session.
-   - Its stderr must not contain `unknown option '--settings'`.
+   - Its stdout must not contain `unknown option '--settings'`. Deviation: the bridge forwards the adapter's log as `diagnostic` events on stdout, not stderr. Result: the stock adapter logged it 1×, the patched one 0×, and both answered "ok".
    - The baseline: the current server log shows the error on every session.
 
 ## Rollback
