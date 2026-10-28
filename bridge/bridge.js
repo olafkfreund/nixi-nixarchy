@@ -305,6 +305,8 @@ let userStopped = false; // the stop button, not a refusal, ended the turn
 // requestPermission): a standing yes would skip this backup on later edits.
 const EDIT_KINDS = new Set(["edit", "delete", "move"]);
 const stateHome = process.env.XDG_STATE_HOME || join(process.env.HOME || process.cwd(), ".local", "state");
+// Remembered approvals (#114): exact commands the user answered "always", per agent and folder.
+const always = createAlways(storePath(stateHome));
 const changes = createChanges({
   stateDir: join(stateHome, "nixi", "changes"),
   cwd,
@@ -421,15 +423,30 @@ const client = {
       if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
       return guarded(params.toolCall, outcome, options);
     }
-    const { detail, omitted } = permissionDetail(params.toolCall);
-    const summary = params.toolCall?.rawInput?.description;  // plain words for the companion's question (S26)
-    emit({ type: "permission", id: requestId, title, options, detail, omitted,
-      ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
-      ...(herdrWrite ? { confirm: "click" } : {}) });
-    return new Promise((resolve) => {
-      pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
-      armStall();
-    });
+    return (async () => {
+      // #114: after Guide and YOLO, never before. rememberable() rechecks secrets and chaining
+      // at match time, and the adapter only ever hears allow_once.
+      if (policy.permission === "ask" && rememberable(params.toolCall)) {
+        const command = keyOf(params.toolCall);
+        let hit = false;
+        try { hit = await always.match(agentName, cwd, command); }
+        catch (error) { emit({ type: "diagnostic", text: `Remembered approvals: ${error.message}` }); }
+        if (hit) {
+          always.touch(agentName, cwd, command).catch(() => {});
+          emit({ type: "status", text: `Remembered · ${title}` });
+          return guarded(params.toolCall, choose(options, "allow_once"), options);
+        }
+      }
+      const { detail, omitted } = permissionDetail(params.toolCall);
+      const summary = params.toolCall?.rawInput?.description;  // plain words for the companion's question (S26)
+      emit({ type: "permission", id: requestId, title, options, detail, omitted,
+        ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
+        ...(herdrWrite ? { confirm: "click" } : {}) });
+      return new Promise((resolve) => {
+        pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
+        armStall();
+      });
+    })();
   },
 };
 
@@ -620,11 +637,39 @@ function answerPermission(message) {
   const pending = pendingPermissions.get(message.id);
   if (!pending) return;
   pendingPermissions.delete(message.id);
-  pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
+  // #114: "always" for a plain command is kept by the bridge; the adapter gets allow_once, so no
+  // adapter-side rule (Claude's own can be wildcards) ever widens it. Anything else is forwarded as picked.
+  if (picked?.kind === "allow_always" && rememberable(pending.toolCall)) {
+    const command = keyOf(pending.toolCall);
+    always.record(agentName, cwd, command)
+      .then(() => emit({ type: "notice", text: `Remembered: ${command} — /always to review` }))
+      .catch((error) => emit({ type: "diagnostic", text: `Remembered approvals: ${error.message}` }));
+    pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
+  } else {
+    pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
+  }
   if (!String(picked?.kind || "").startsWith("allow")) toolsInProgress.delete(pending.toolCall?.toolCallId);
   if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, picked);
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
+}
+
+// /always list | forget <n> | clear, for this agent in this folder (#114). Never adds.
+async function alwaysCommand(message) {
+  const action = String(message.action || "list");
+  try {
+    if (action === "forget") {
+      if (!(await always.forget(agentName, cwd, Number(message.n)))) emit({ type: "notice", text: `No remembered approval ${message.n}.` });
+    } else if (action === "clear") await always.clear(agentName, cwd);
+    else if (action !== "list") return emit({ type: "notice", text: `Unknown /always action: ${action}. Use list, forget <n> or clear.` });
+    const entries = await always.list(agentName, cwd);
+    emit({ type: "notice", text: entries.length
+      ? `Remembered for ${agentName} here:\n${entries.map((e) => `${e.n}. ${e.command}`).join("\n")}\n/always forget <n> or /always clear to take one back.`
+      : `Nothing remembered for ${agentName} here.` });
+    emit({ type: "always_list", entries });
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Remembered approvals: ${error.message}` });
+  }
 }
 
 // The ACP answer for the option of this kind, or cancelled if there is none.
@@ -753,6 +798,8 @@ input.on("line", (line) => {
     emit({ type: "error", message: "Invalid UI command" });
     return;
   }
+  // /always only reads or narrows, so it works at any trust level and with no session (#114).
+  if (message.type === "always") return alwaysCommand(message);
   if (codexRefused) {
     if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
     else if (message.type === "trust") {

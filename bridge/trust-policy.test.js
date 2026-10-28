@@ -547,7 +547,8 @@ const always = { FAKE_AGENT_OPTIONS: "always" };
 const execute = { type: "prompt", text: "PLEASE_PLAIN a command" };
 
 test("the chosen option reaches the agent, not a derived one (#53)", async () => {
-  for (const [optionId, expected] of [["allow-all", "allow-all"], ["reject-all", "reject-all"],
+  // #114: "always" for a plain command is kept by the bridge, and the agent hears allow_once.
+  for (const [optionId, expected] of [["allow-all", "allow"], ["reject-all", "reject-all"],
                                       ["allow", "allow"], ["reject", "reject"]]) {
     const run = await runBridge({
       env: always, settings: { trust: "mechanic" }, messages: [execute],

@@ -73,8 +73,10 @@ export function createAlways(path) {
     return run;
   }
 
+  // Reads wait for queued writes: a yes recorded a moment ago must already match.
+  const settled = async () => { await queue; return load(); };
   const mine = (agent, cwd) => (entry) => entry.agent === agent && entry.cwd === cwd;
-  const list = async (agent, cwd) => (await load()).entries.filter(mine(agent, cwd))
+  const list = async (agent, cwd) => (await settled()).entries.filter(mine(agent, cwd))
     .map((entry, i) => ({ n: i + 1, command: entry.command, added: entry.added, lastUsed: entry.lastUsed }));
   // Removes the n-th of this agent's and folder's entries, as list() numbers them.
   const drop = (agent, cwd, keep) => (store) => {
@@ -87,7 +89,7 @@ export function createAlways(path) {
   return {
     load,
     list,
-    match: async (agent, cwd, command) => (await load()).entries.some((entry) => mine(agent, cwd)(entry) && entry.command === command),
+    match: async (agent, cwd, command) => (await settled()).entries.some((entry) => mine(agent, cwd)(entry) && entry.command === command),
     record: (agent, cwd, command) => change((store) => {
       if (store.entries.some((entry) => mine(agent, cwd)(entry) && entry.command === command)) return false;
       const now = new Date().toISOString();
