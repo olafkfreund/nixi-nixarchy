@@ -16,6 +16,7 @@ import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
 import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
+import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
 import {
@@ -303,14 +304,6 @@ let userStopped = false; // the stop button, not a refusal, ended the turn
 // arrive as `execute` and are not covered. Edits get no "allow always" (see
 // requestPermission): a standing yes would skip this backup on later edits.
 const EDIT_KINDS = new Set(["edit", "delete", "move"]);
-// A shell command that runs other commands: a standing yes to it would also approve whatever is
-// chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
-const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
-// An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as herdr-policy does.
-const isChained = (toolCall) => {
-  const command = toolCall?.rawInput?.command;
-  return CHAINED.test(Array.isArray(command) ? command.join(" ") : typeof command === "string" ? command : "");
-};
 const stateHome = process.env.XDG_STATE_HOME || join(process.env.HOME || process.cwd(), ".local", "state");
 const changes = createChanges({
   stateDir: join(stateHome, "nixi", "changes"),

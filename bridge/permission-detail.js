@@ -16,7 +16,7 @@ const lines = (text) => text.replace(/\n$/, "").split("\n");
 // already knows how to read, and makes the appearance of a quote a signal --
 // this argument contains something surprising -- rather than punctuation.
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
-const shellQuote = (arg) => SHELL_SAFE.test(String(arg))
+export const shellQuote = (arg) => SHELL_SAFE.test(String(arg))
   ? String(arg)
   : `'${String(arg).replace(/'/g, "'\\''")}'`;
 
