@@ -692,7 +692,7 @@ done by the session model)
   path is the new one. With the companion stopped, a rebuild starts nothing.
 
 **S24. Point at a command instead of reading it out** (fork `app/server.py`, new
-`tests/test_speakable.py`; done by the session model) — *draft, awaiting approval*
+`tests/test_speakable.py`; done by the session model) — *approved 2026-10-28*
 *User request (2026-10-28): Nixi read a long command aloud; it should say to look at it.*
 - Why: `speakable()` (`server.py:1815`) already turns a fenced block into "I put some code on
   screen", but inline code only loses its backticks (`:1818`), so
@@ -709,7 +709,7 @@ done by the session model)
   Live: "how do I install firefox?" is answered without the command read out.
 
 **S25. The theme follows the omarchy tree the hook runs in** (fork `app/server.py`; done by the
-session model) — *draft, awaiting approval*
+session model) — *approved 2026-10-28*
 *Found 2026-10-28 while recording #108: under Osaka Jade the snowflake stayed blue.*
 - Why: the server keeps the `OMARCHY_PATH` it started with. After a rebuild that changes the
   omarchy tree but not the companion, S21 doesn't restart it, and `omarchy theme dir <name>`
