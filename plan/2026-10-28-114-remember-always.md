@@ -64,6 +64,9 @@ spec: spec/2026-10-28-114-remember-always.md
   - Codex can't be fenced (#97). That is a documented residual: at Mechanic, Codex asks before
     each edit.
   - Don't reorder the existing denies.
+- Deviation (implemented): one anchor-free pattern, `**/nixi/always.json` (Claude) and
+  `*nixi/always.json` (OpenCode `edit`), covers any `XDG_STATE_HOME`, so `claudePermissions`
+  gets no new argument. The OpenCode env test now expects `edit: {"*": "ask", store: "deny"}`.
 
 **2. The store module** — a new `bridge/always.js`, with its tests in `bridge/always.test.js`.
 *Session model.*
