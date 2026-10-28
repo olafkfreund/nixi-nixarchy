@@ -141,6 +141,10 @@ panel, SUPER+,). *Coder.*
 - Traps:
   - Match the existing font scaling (`root.fontScale`) and `Commons.Color.menu.*`.
   - The panel never writes `nixi.json` for this (#103 ownership: the bridge owns the store).
+- Implemented by coder "always-ui". Deviations: `rememberedEntries` is a `var` array in `Ask.qml`;
+  the panel's list/forget requests are quiet, swallowing only the bridge's own listing notice
+  (`Remembered for …` / `Nothing remembered for …`), never any other notice (lead's fix).
+
 
 **6. Tests** — `bridge/always.test.js`, `bridge/testing/fake-agent.js` (reuse `PLEASE_PLAIN` and
 `PLEASE_ARGV` from S26, and add `PLEASE_SECRET`: `cat ~/.ssh/id_ed25519`, unchained), and

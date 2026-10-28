@@ -15,6 +15,9 @@ Item {
   property var shell: null
   property var activeOverlay: null
   property var conversations: []
+  // The bridge's remembered approvals for the conversation that last reported (#114).
+  property var rememberedEntries: []
+  property var rememberedSource: null
   property int conversationSequence: 0
   readonly property bool opened: activeOverlay !== null
     && activeOverlay.opened
@@ -272,9 +275,19 @@ Item {
     }
   }
 
+  Connections {
+    target: harnessSelectorLoader.item
+    function onForgetRequested(n) {
+      if (rememberedSource) rememberedSource.alwaysRequest("forget", n, true)
+    }
+  }
+
   function openHarnessSelector() {
     var selector = harnessSelectorLoader.item
     if (!selector) return
+    selector.remembered = Qt.binding(function() { return root.rememberedEntries })
+    var source = activeOverlay || conversations[conversations.length - 1]
+    if (source && source.alwaysRequest("list", 0, true)) rememberedSource = source
     selector.fontScale = Qt.binding(function() { return root.fontScale })
     selector.agent = selectedAgent
     selector.model = selectedModel
@@ -419,6 +432,10 @@ Item {
       if (conversation.pinned && root.activeOverlay === conversation)
         root.activeOverlay = null
       root.reconcileShortcutSubmap()
+    })
+    conversation.alwaysListed.connect(function(entries) {
+      root.rememberedSource = conversation
+      root.rememberedEntries = entries
     })
     conversation.tourRequested.connect(function() { root.startTour(conversation) })
     conversation.learnRequested.connect(function() { root.teachNext(conversation) })

@@ -28,6 +28,7 @@ Item {
   signal permissionModeConfirmed(string mode)
   signal tourRequested()
   signal learnRequested()
+  signal alwaysListed(var entries)
   property bool opened: false
   property bool layoutReady: false
   property bool waiting: false
@@ -81,6 +82,8 @@ Item {
   property var fileOpenCommand: []
   property var fileEditCommand: []
   property bool harnessSelectorOpen: false
+  // The panel asked for the list: swallow the bridge's readable notice (#114).
+  property bool alwaysQuiet: false
 
   // #38: has anything in this conversation earned a wider card? Set from the
   // text, never from geometry, and never cleared mid-conversation -- close()
@@ -946,6 +949,14 @@ Item {
     }
   }
 
+  // /always and the panel's Remembered list: the bridge owns the store (#114).
+  function alwaysRequest(action, n, quiet) {
+    if (!bridgeReady || !agent.running) return false
+    alwaysQuiet = !!quiet
+    agent.write(JSON.stringify({ type: "always", action: action, n: n }) + "\n")
+    return true
+  }
+
   function submit() {
     var text = prompt.text.trim()
     if (text === "" || sessionLost) return
@@ -961,6 +972,14 @@ Item {
       prompt.text = ""
       if (bridgeReady && agent.running) agent.write(JSON.stringify({ type: "undo" }) + "\n")
       else showNixiMessage("Undo needs the agent bridge running.")
+      return
+    }
+    var always = /^\/always(?:\s+(forget\s+(\d+)|clear))?$/.exec(text)
+    if (always) {
+      prompt.text = ""
+      var alwaysAction = !always[1] ? "list" : always[1] === "clear" ? "clear" : "forget"
+      if (!alwaysRequest(alwaysAction, alwaysAction === "forget" ? parseInt(always[2]) : 0, false))
+        showNixiMessage("/always needs the agent bridge running.")
       return
     }
     // The tour and the learning path are typed, not permanent buttons.
@@ -1227,7 +1246,12 @@ Item {
         // The bridge speaking for itself (#90): a backup it could not make, a
         // Hyprland change it restored, the result of /undo. Paths in it are
         // already in code spans, with backticks stripped (#42).
-        showNixiMessage(String(event.text || ""))
+        // Only the panel's own listing is swallowed; any other notice always shows (#114).
+        var noticeText = String(event.text || "")
+        if (!(alwaysQuiet && /^(Remembered for |Nothing remembered for )/.test(noticeText))) showNixiMessage(noticeText)
+      } else if (event.type === "always_list") {
+        alwaysQuiet = false
+        alwaysListed(event.entries || [])
       } else if (event.type === "status") {
         statusText = String(event.text || "Working…")
       } else if (event.type === "tool") {

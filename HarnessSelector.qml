@@ -56,6 +56,9 @@ PanelWindow {
     { label: "Sol (GPT-5.6)", value: "gpt-5.6-sol" },
     { label: "Astra", value: "gpt-6-astra" }
   ]
+  // The bridge's remembered approvals, supplied by Ask.qml (#114). The bridge owns the store.
+  property var remembered: []
+  signal forgetRequested(int n)
   signal applied(string agent, string model, string reasoningEffort)
 
   function open() {
@@ -171,6 +174,40 @@ PanelWindow {
             height: Style.space(34)
             textSize: Style.font.caption * root.fontScale
             onClicked: root.draftReasoningEffort = modelData
+          }
+        }
+      }
+
+      Text { text: "Remembered"; color: Commons.Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body * root.fontScale }
+      Text {
+        visible: root.remembered.length === 0
+        text: "Nothing remembered"
+        color: Qt.rgba(Commons.Color.menu.text.r, Commons.Color.menu.text.g, Commons.Color.menu.text.b, 0.58)
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption * root.fontScale
+      }
+      Repeater {
+        model: root.remembered
+        delegate: Row {
+          required property var modelData
+          width: content.width
+          spacing: Style.space(8)
+          Text {
+            width: parent.width - removeChip.width - parent.spacing
+            text: modelData.command + "  ·  " + String(modelData.lastUsed || modelData.added || "").slice(0, 10)
+            color: Commons.Color.menu.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption * root.fontScale
+            elide: Text.ElideRight
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Chip {
+            id: removeChip
+            label: "Remove"
+            padding: Style.space(18)
+            height: Style.space(30)
+            textSize: Style.font.caption * root.fontScale
+            onClicked: root.forgetRequested(modelData.n)
           }
         }
       }
