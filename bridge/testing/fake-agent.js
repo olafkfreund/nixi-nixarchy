@@ -116,6 +116,13 @@ new AgentSideConnection((conn) => ({
         content: [{ type: "diff", path: "/tmp/probe", oldText: "a\n", newText: "b\n" }] }
       : text.includes("PLEASE_RUN") ? { toolCallId: "t3", title: "Run a long command", kind: "execute",
         rawInput: { command: "echo " + "x".repeat(2048 - "echo  && echo TAIL".length) + " && echo TAIL" } }
+      // PLEASE_PLAIN: one unchained command whose description the adapter repeats as content (S26).
+      : text.includes("PLEASE_PLAIN") ? { toolCallId: "t6", title: "uname -r", kind: "execute",
+        rawInput: { command: "uname -r", description: "Show the kernel version" },
+        content: [{ type: "content", content: { type: "text", text: "Show the kernel version" } }] }
+      // PLEASE_ARGV: a chained command sent as an argv array, as codex does (S26 review).
+      : text.includes("PLEASE_ARGV") ? { toolCallId: "t7", title: "bash -lc", kind: "execute",
+        rawInput: { command: ["bash", "-lc", "btop --version; command -v btop"] } }
       // PLEASE_HERDR: a Bash call that types into another session (#95).
       : text.includes("PLEASE_HERDR") ? { toolCallId: "t5", title: "Bash", kind: "execute",
         rawInput: { command: 'herdr agent prompt 1-2 "run the tests"' } }

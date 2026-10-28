@@ -530,8 +530,9 @@ test("no generated shell pattern is trivial (#96)", () => {
 const always = { FAKE_AGENT_OPTIONS: "always" };
 // #90: edits (kind edit/delete/move) never offer allow_always, so these two
 // #53 tests use an execute request, where every option still reaches the card.
-// The edit side is asserted in changes-bridge.test.js.
-const execute = run;
+// The edit side is asserted in changes-bridge.test.js. S26: an unchained one,
+// since a chained command (PLEASE_RUN's "&&") is never offered allow_always.
+const execute = { type: "prompt", text: "PLEASE_PLAIN a command" };
 
 test("the chosen option reaches the agent, not a derived one (#53)", async () => {
   for (const [optionId, expected] of [["allow-all", "allow-all"], ["reject-all", "reject-all"],

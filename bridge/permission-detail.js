@@ -70,7 +70,10 @@ function contentText(item) {
 }
 
 export function permissionDetail(toolCall) {
-  const parts = [rawInputText(toolCall?.rawInput), ...(toolCall?.content || []).map(contentText)];
+  // The adapter repeats rawInput's description as content: show it once (S26). What runs stays in full.
+  const said = typeof toolCall?.rawInput?.description === "string" ? toolCall.rawInput.description.trim() : null;
+  const parts = [rawInputText(toolCall?.rawInput),
+    ...(toolCall?.content || []).map(contentText).filter((text) => !said || text.trim() !== said)];
   const full = parts.filter(Boolean).join("\n\n");
   const kept = full.split("\n").slice(0, CAP_LINES).join("\n").slice(0, CAP_BYTES);
   const omitted = full.length - kept.length;

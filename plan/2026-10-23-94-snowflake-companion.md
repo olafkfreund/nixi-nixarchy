@@ -691,6 +691,108 @@ done by the session model)
 - Verify: eval the module; after a rebuild with a changed companion, the running server's store
   path is the new one. With the companion stopped, a rebuild starts nothing.
 
+**S24. Point at a command instead of reading it out** (fork `app/server.py`, new
+`tests/test_speakable.py`; done by the session model) — *approved 2026-10-28*
+*User request (2026-10-28): Nixi read a long command aloud; it should say to look at it.*
+- Why: `speakable()` (`server.py:1815`) already turns a fenced block into "I put some code on
+  screen", but inline code only loses its backticks (`:1818`), so
+  `` `nixarchy pkg add firefox && nixarchy apply` `` is spoken word for word. The voice prompt asks
+  the model not to, and it doesn't always comply.
+- Change `:1818`: inline code containing whitespace (a command) becomes "the command on screen".
+  Inline code without whitespace (`btop`, `apps.nix`) is still spoken, without backticks. The
+  approval card's spoken summary (`:537`) is unchanged.
+- Verify: `tests/test_speakable.py`:
+  - "Run `nixarchy pkg add firefox` then `nixarchy apply`." → contains "the command on screen",
+    no "pkg add";
+  - "`btop` is already installed." → "btop is already installed.";
+  - a fenced block → still "I put some code on screen".
+  Live: "how do I install firefox?" is answered without the command read out.
+
+**S25. The theme follows the omarchy tree the hook runs in** (fork `app/server.py`; done by the
+session model) — *approved 2026-10-28*
+*Found 2026-10-28 while recording #108: under Osaka Jade the snowflake stayed blue.*
+- Why: the server keeps the `OMARCHY_PATH` it started with. After a rebuild that changes the
+  omarchy tree but not the companion, S21 doesn't restart it, and `omarchy theme dir <name>`
+  resolves into the old tree. A theme missing there (Osaka Jade: the old tree has 23 themes)
+  gives `theme_colors()` → None, swallowed, so `/api/theme` answers `{"theme": null}` and the
+  page keeps its default colours.
+- `--theme-changed` (`:4046`) sends `{"omarchy_path": $OMARCHY_PATH}`; the theme-set hook runs in
+  the fresh environment, so that value is current. `/api/theme` passes it to `theme_colors()`,
+  which uses it as `OMARCHY_PATH` for the `omarchy theme dir` call, only if it is an existing
+  directory with a `themes/` subdirectory. Otherwise it keeps the old behaviour. The endpoint
+  stays token-gated; the path is only used to find a `colors.toml` to read.
+- Not doing: a wider S21 trigger (restart on any omarchy change). It restarts mid-conversation for
+  a colour change.
+- Verify: a unit test with a fake tree holding a theme that the server's own `OMARCHY_PATH`
+  lacks → colours come back. Live: start the companion with an old `OMARCHY_PATH`, run
+  `omarchy theme set "Osaka Jade"`, and he turns jade without a restart.
+
+**S26. The approval card and the terminal bubble in nixi mode** (nixi `bridge/bridge.js`,
+`bridge/permission-detail.js`; fork `app/server.py`, `app/static/index.html`; coders below) —
+*approved 2026-10-28*
+*User report (2026-10-28): the bubble and the approval card look weird. Reproduced on p620 through
+`/api/ask` (three turns, a 2 fps clip, stills).*
+- Findings:
+  - The bubble has nothing to show in nixi mode. `run_bridge` emits `tool` with only a title
+    (`id=""`, `input=None`) and never a `toolres`, so `VIEWS.other` opens it headed by the raw
+    command, "Terminal" or "Using a tool", waits ~1s for a result that never comes, and is
+    replaced by the next title.
+  - The card asks "Can I use <the whole command>?", because the adapter's `toolCall.title` is the
+    command.
+  - The card's detail shows the description three times, once as a raw `description:` line:
+    `permissionDetail` joins `rawInput` (command + description) with the tool's content (the
+    description again).
+  - Words break mid-word ("do / ne"); the card's position jumps between frames and was once cut
+    off at the window's edge; it covers his lower arms.
+  - **"always" was offered for a chained command** (`btop --version 2>&1 | head -3; command -v
+    btop`). In nixi mode the button follows the bridge's `allow_always`, and the bridge filters it
+    only for edits and herdr writes (`bridge.js:401-403`).
+- Bridge (nixi; done by the session model, since it touches trust):
+  - `requestPermission` drops `allow_always` when a Bash command is chained (`;`, `&&`, `||`, `|`,
+    `` ` ``, `$(`, newline), the same rule as the fork's `CHAINED_RE`. It covers nixi's card too.
+  - The permission event gains `summary` = `rawInput.description` when that is a non-empty string.
+  - `permissionDetail` leaves out a content block whose text equals `rawInput.description`. The
+    command and everything that runs stay in full; only the repeated description goes.
+- Fork (coder "snow"):
+  - `ask_bridge` uses `summary` for the card's question and its spoken line ("Can I <summary,
+    lower-cased first letter>?"), falling back to the title.
+  - The card's detail wraps at spaces (`white-space: pre-wrap; overflow-wrap: anywhere` only for
+    a token longer than the line), with no mid-word `break-all`.
+  - The card's position is set once per card from his position: below him with a gap clear of
+    his arms (his `reach`), clamped inside the window, and moved only when he moves.
+  - In nixi mode (`BRIDGED`) the terminal bubble isn't opened. The `tool` event shows a one-line
+    caption under him ("working: <title>"), cleared on `result` / `done`.
+- Not doing: forwarding tool output from the bridge to the companion (it widens what leaves the
+  bridge; a separate decision), and remembering "always" across chats (its own issue).
+- Verify:
+  - Bridge tests: a chained command is offered no `allow_always`, a plain one still is; `summary`
+    is set; the detail has the description once and the command in full.
+  - Fork tests: the question uses `summary`; the fallback is the title.
+  - `npm test` and the fork's `pytest` pass.
+  - Live on p620: the slow test command from the review shows one clean card ("Can I print
+    twelve numbered test lines?", the command once, no "always", no mid-word breaks, clear of
+    him, steady), then the caption while it runs, and no empty bubble.
+- Implemented: the bridge part by the session model (nixi `68944bf`); the fork part by coder
+  "snow" (fork `fix/94-speak-theme`).
+- Deviations:
+  - The `approve` event carries the question as a new `q` field, and the caption is a new `#wk`
+    element under `#cap`.
+  - The card's top uses the same offset-only layout as its left, so it ignores `fitK` scaling.
+  - Two #53 bridge tests used `PLEASE_RUN` (chained) to check that `allow_always` passes through.
+    They now use a new unchained fixture, `PLEASE_PLAIN` (`uname -r`).
+- Opus review fixes:
+  - The chained filter also joins an argv-array command (codex's `["bash", "-lc", …]`); a new
+    `PLEASE_ARGV` fixture tests it.
+  - S24 still speaks a key combo (`` `Super + Space` ``).
+  - S25 reads `<omarchy_path>/themes/<name>/colors.toml` directly instead of running `omarchy`
+    with the caller's path; a theme name containing `/` or `..` is refused, and `/api/theme`
+    ignores a non-object body.
+  - Accepted: the approval card's spoken summary also points at spaced inline code, which
+    S24 said stays unchanged. A description rarely has backticks, and not reading a command
+    aloud is the point.
+  - Left for the live check: the card can still shift when the window resizes (review #3), and
+    the caption's fixed `top:404px` (review #4).
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.

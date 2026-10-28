@@ -44,13 +44,21 @@ test("YOLO: the same backup, with no card prompt (b), under XDG_STATE_HOME", asy
   assert.deepEqual(readdirSync(join(state, "nixi", "changes", turns[0])).sort().length, 2);
 });
 
-test("an edit is never offered allow_always; a command still is (c)", async () => {
-  const offered = {};
-  const decline = (event) => { offered[event.title] = event.options.map((o) => o.kind); return { type: "permission", id: event.id, optionId: "reject" }; };
+test("an edit is never offered allow_always; a plain command still is, a chained one isn't (c, S26)", async () => {
+  const offered = {}, seen = {};
+  const decline = (event) => { offered[event.title] = event.options.map((o) => o.kind); seen[event.title] = event; return { type: "permission", id: event.id, optionId: "reject" }; };
   await runBridge(setup({ env: { FAKE_AGENT_OPTIONS: "always" }, onPermission: decline,
-    messages: [edit("new"), { type: "prompt", text: "PLEASE_RUN it" }] }));
+    messages: [edit("new"), { type: "prompt", text: "PLEASE_RUN it" }, { type: "prompt", text: "PLEASE_PLAIN it" },
+      { type: "prompt", text: "PLEASE_ARGV it" }] }));
+  assert.ok(!offered["bash -lc"].includes("allow_always"));  // chained inside an argv array
   assert.deepEqual(offered["Edit bindings.lua"], ["allow_once", "reject_once", "reject_always"]);
-  assert.ok(offered["Run a long command"].includes("allow_always"));
+  assert.ok(!offered["Run a long command"].includes("allow_always"));  // "... && echo TAIL"
+  assert.ok(offered["uname -r"].includes("allow_always"));
+  // S26: the plain words come as summary, and the detail says them once.
+  assert.equal(seen["uname -r"].summary, "Show the kernel version");
+  assert.equal(seen["uname -r"].detail.split("Show the kernel version").length - 1, 1);
+  assert.match(seen["uname -r"].detail, /^uname -r\n/);
+  assert.equal(seen["Run a long command"].summary, undefined);
 });
 
 test("a rejected edit is not backed up", async () => {

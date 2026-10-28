@@ -303,6 +303,14 @@ let userStopped = false; // the stop button, not a refusal, ended the turn
 // arrive as `execute` and are not covered. Edits get no "allow always" (see
 // requestPermission): a standing yes would skip this backup on later edits.
 const EDIT_KINDS = new Set(["edit", "delete", "move"]);
+// A shell command that runs other commands: a standing yes to it would also approve whatever is
+// chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
+const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
+// An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as herdr-policy does.
+const isChained = (toolCall) => {
+  const command = toolCall?.rawInput?.command;
+  return CHAINED.test(Array.isArray(command) ? command.join(" ") : typeof command === "string" ? command : "");
+};
 const stateHome = process.env.XDG_STATE_HOME || join(process.env.HOME || process.cwd(), ".local", "state");
 const changes = createChanges({
   stateDir: join(stateHome, "nixi", "changes"),
@@ -400,7 +408,8 @@ const client = {
       kind: option.kind,
     })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
       // A standing yes to typing into another session would turn one click into all (#95).
-      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"));
+      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"))
+      .filter((option) => !(isChained(params.toolCall) && option.kind === "allow_always"));
     noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
@@ -420,7 +429,9 @@ const client = {
       return guarded(params.toolCall, outcome, options);
     }
     const { detail, omitted } = permissionDetail(params.toolCall);
+    const summary = params.toolCall?.rawInput?.description;  // plain words for the companion's question (S26)
     emit({ type: "permission", id: requestId, title, options, detail, omitted,
+      ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
       ...(herdrWrite ? { confirm: "click" } : {}) });
     return new Promise((resolve) => {
       pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
