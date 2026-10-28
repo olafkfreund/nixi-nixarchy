@@ -231,6 +231,20 @@ perhaps one search, and the edit. To be asked before every read, set
 `"askBeforeReading": true` in `~/.config/omarchy/nixi.json`. It applies from
 the next session, and to OpenCode as well.
 
+**"Always" is narrow, and Nixi keeps it.** Choosing *allow always* on a shell
+command remembers that one exact command, for this agent, in this folder, until
+you take it back; the next identical request is answered without a card and the
+status line says `Remembered`. A different agent, a different folder or a
+one-character change asks again. It never covers edits, deletes or moves,
+chained commands (`;`, `&&`, `|`, redirects, `$(`), herdr sends or commands that
+name a secret path, and it does nothing at Guide or by voice (click only). Fetch
+and MCP tools keep their agent's own "always". The list is
+`~/.local/state/nixi/always.json` (mode `0600`; Nixi's agents may not write it).
+Type `/always` to list it, `/always forget <n>` or `/always clear` to remove
+entries, or use the Remembered list in the agent panel (`SUPER+,`). Older
+"always" answers left in `~/.config/nixi/.claude/settings.local.json` are no
+longer used and can be deleted.
+
 OpenCode's own defaults let tools run without asking, so Nixi always starts it
 with its own rules — everything asks except reading, and it may
 not leave plan mode — replacing any `OPENCODE_CONFIG_CONTENT` in the

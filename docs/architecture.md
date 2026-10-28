@@ -90,6 +90,29 @@ The durable mode is `permission` or `yolo`, stored in
   it would also approve whatever is chained after it. The `permission` event
   carries `summary`, the tool's own plain description when it has one, and
   the detail shows that description once.
+- Remembered approvals (#114): the bridge, not the adapter, keeps an "always".
+  Picking `allow_always` on a rememberable request (`kind: "execute"`, not
+  chained, not a herdr write, no secret substring) records `agent` + `cwd` + the
+  exact command (trimmed; an argv array is joined with `shellQuote`) and answers
+  the adapter `allow_once`. Fetch and MCP `allow_always` is forwarded unchanged.
+  Answer order in `requestPermission`: Guide cancels, then YOLO, then a
+  remembered match (ask mode only: `allow_once`, no card, `status: "Remembered ·
+  <title>"`, `lastUsed` touched; chaining and secrets re-checked), then the card.
+  The store is `$XDG_STATE_HOME/nixi/always.json` (default
+  `~/.local/state/nixi/always.json`), `{ version: 1, entries: [{ agent, cwd,
+  command, added, lastUsed }] }`, written `0600` by one serialized chain that
+  re-reads, merges and renames a temp file. A missing file is empty; an
+  unreadable, non-object or non-version-1 file is left untouched, a `diagnostic`
+  is emitted and nothing is remembered. Claude (`**/nixi/always.json`) and
+  OpenCode (`edit`) deny agent writes; Codex can't be fenced (#97). Residuals: a
+  remembered command can run a script whose contents change later, and a one-off
+  approved shell command could write the store.
+- stdin `{"type":"always","action":"list"|"forget"|"clear","n":<int>}` works at
+  any trust level and with no session (it only reads or narrows). It emits a
+  readable `notice` and `{"type":"always_list","entries":[{n,command,added,
+  lastUsed}]}` for this agent and folder; unknown actions only emit a notice. The
+  card's `/always` and the agent panel's Remembered list use it, and `nixi.json`
+  is not involved. The companion sees only the `Remembered` `status` event.
 - The one exception to "the companion never writes": a front end such as the
   voice companion may *read* herdr locally (`agent list`, `agent read`). It never
   writes to a session; every send goes through the bridge and its card.
