@@ -82,9 +82,9 @@ intent: intent/2026-10-28-114-remember-always.md
    the "Remembered" status, and voice can never add an entry, because "always" stays click-only
    (S18).
 
-### Proposed decisions (user to confirm at spec review)
+### Decisions (user approved 2026-10-28)
 
-| Question | Proposed |
+| Question | Decided |
 |---|---|
 | Scope | Per agent + per bridge `cwd`. Claude's yes doesn't apply to Codex, and one folder's doesn't apply to another. |
 | Lifetime | Until revoked; the visible list with last-used dates is the control. No expiry. |
