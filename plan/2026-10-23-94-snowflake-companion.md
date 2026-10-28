@@ -727,6 +727,52 @@ session model) — *draft, awaiting approval*
   lacks → colours come back. Live: start the companion with an old `OMARCHY_PATH`, run
   `omarchy theme set "Osaka Jade"`, and he turns jade without a restart.
 
+**S26. The approval card and the terminal bubble in nixi mode** (nixi `bridge/bridge.js`,
+`bridge/permission-detail.js`; fork `app/server.py`, `app/static/index.html`; coders below) —
+*draft, awaiting approval*
+*User report (2026-10-28): the bubble and the approval card look weird. Reproduced on p620 through
+`/api/ask` (three turns, a 2 fps clip, stills).*
+- Findings:
+  - The bubble has nothing to show in nixi mode. `run_bridge` emits `tool` with only a title
+    (`id=""`, `input=None`) and never a `toolres`, so `VIEWS.other` opens it headed by the raw
+    command, "Terminal" or "Using a tool", waits ~1s for a result that never comes, and is
+    replaced by the next title.
+  - The card asks "Can I use <the whole command>?", because the adapter's `toolCall.title` is the
+    command.
+  - The card's detail shows the description three times, once as a raw `description:` line:
+    `permissionDetail` joins `rawInput` (command + description) with the tool's content (the
+    description again).
+  - Words break mid-word ("do / ne"); the card's position jumps between frames and was once cut
+    off at the window's edge; it covers his lower arms.
+  - **"always" was offered for a chained command** (`btop --version 2>&1 | head -3; command -v
+    btop`). In nixi mode the button follows the bridge's `allow_always`, and the bridge filters it
+    only for edits and herdr writes (`bridge.js:401-403`).
+- Bridge (nixi; done by the session model, since it touches trust):
+  - `requestPermission` drops `allow_always` when a Bash command is chained (`;`, `&&`, `||`, `|`,
+    `` ` ``, `$(`, newline), the same rule as the fork's `CHAINED_RE`. It covers nixi's card too.
+  - The permission event gains `summary` = `rawInput.description` when that is a non-empty string.
+  - `permissionDetail` leaves out a content block whose text equals `rawInput.description`. The
+    command and everything that runs stay in full; only the repeated description goes.
+- Fork (coder "snow"):
+  - `ask_bridge` uses `summary` for the card's question and its spoken line ("Can I <summary,
+    lower-cased first letter>?"), falling back to the title.
+  - The card's detail wraps at spaces (`white-space: pre-wrap; overflow-wrap: anywhere` only for
+    a token longer than the line), with no mid-word `break-all`.
+  - The card's position is set once per card from his position: below him with a gap clear of
+    his arms (his `reach`), clamped inside the window, and moved only when he moves.
+  - In nixi mode (`BRIDGED`) the terminal bubble isn't opened. The `tool` event shows a one-line
+    caption under him ("working: <title>"), cleared on `result` / `done`.
+- Not doing: forwarding tool output from the bridge to the companion (it widens what leaves the
+  bridge; a separate decision), and remembering "always" across chats (its own issue).
+- Verify:
+  - Bridge tests: a chained command is offered no `allow_always`, a plain one still is; `summary`
+    is set; the detail has the description once and the command in full.
+  - Fork tests: the question uses `summary`; the fallback is the title.
+  - `npm test` and the fork's `pytest` pass.
+  - Live on p620: the slow test command from the review shows one clean card ("Can I print
+    twelve numbered test lines?", the command once, no "always", no mid-word breaks, clear of
+    him, steady), then the caption while it runs, and no empty bubble.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
