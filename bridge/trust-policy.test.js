@@ -209,8 +209,10 @@ test("OpenCode always starts with Nixi's permission rules, whatever the environm
   assert.deepEqual(sent, opencodePermissions(false));
   assert.equal(sent.permission["*"], "ask", "anything not listed must ask");
   assert.equal(sent.permission.plan_exit, "deny");
-  for (const tool of ["edit", "bash", "webfetch", "task", "write", "patch"])
+  for (const tool of ["bash", "webfetch", "task", "write", "patch"])
     assert.equal(sent.permission[tool], undefined, `${tool} must fall through to ask`);
+  // edit (which covers write and patch) still asks, except the remembered-approvals store (#114)
+  assert.deepEqual(sent.permission.edit, { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" });
 });
 
 test("other agents never receive OpenCode's config", async () => {
@@ -274,6 +276,18 @@ test("Claude may read, grep and glob without asking; nothing else, and never sec
       assert.ok(rules.ask.includes(secret), secret);
   }
   assert.deepEqual(open.ask, strict.ask);
+});
+
+test("no agent may write the remembered-approvals store, at any trust level (#114)", () => {
+  for (const trust of ["guide", "mechanic"])
+    for (const ask of [false, true])
+      for (const tool of ["Write", "Edit", "MultiEdit", "NotebookEdit"])
+        for (const path of ["~/.local/state/nixi/always.json", "//**/nixi/always.json",  // anchored, #95
+                            "~/.local/state/nixi/always.json.*", "//**/nixi/always.json.*"])  // lock, temp
+          assert.ok(claudePermissions(ask, trust).deny.includes(`${tool}(${path})`), `${tool} ${path} ${trust}`);
+  for (const ask of [false, true])
+    assert.equal(opencodePermissions(ask).permission.edit["*nixi/always.json"], "deny");
+  assert.equal(opencodePermissions(false).permission.edit["*"], "ask", "every other edit still asks");
 });
 
 test("askBeforeReading makes OpenCode's reads ask too, and changes nothing else (#27)", () => {
@@ -535,7 +549,8 @@ const always = { FAKE_AGENT_OPTIONS: "always" };
 const execute = { type: "prompt", text: "PLEASE_PLAIN a command" };
 
 test("the chosen option reaches the agent, not a derived one (#53)", async () => {
-  for (const [optionId, expected] of [["allow-all", "allow-all"], ["reject-all", "reject-all"],
+  // #114: "always" for a plain command is kept by the bridge, and the agent hears allow_once.
+  for (const [optionId, expected] of [["allow-all", "allow"], ["reject-all", "reject-all"],
                                       ["allow", "allow"], ["reject", "reject"]]) {
     const run = await runBridge({
       env: always, settings: { trust: "mechanic" }, messages: [execute],

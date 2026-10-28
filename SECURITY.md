@@ -23,6 +23,7 @@ matter, and which are therefore in scope:
 | Acting on your machine at Guide (the default) | the bridge cancels every ACP permission request before it reaches the card, and sets the agent's most restrictive mode as a second layer |
 | An agent whose own defaults skip permission requests | OpenCode is always started with Nixi's rules (`*` asks, read-only tools allowed, `plan_exit` denied), replacing any `OPENCODE_CONFIG_CONTENT` from the environment |
 | Reaching auto-approve | YOLO is honoured only at Mechanic, and leaving Mechanic cancels anything still waiting |
+| Remembered approvals | an "always" on a shell command is kept by the bridge, not the adapter: one exact command per agent and folder in `~/.local/state/nixi/always.json` (`0600`, atomic, an unreadable store is never overwritten), answered `allow_once`; never edits, chained commands, herdr writes or secret paths (re-checked on every match); not at Guide, not in YOLO; agent writes to the store are denied for Claude and OpenCode. Residuals: an exact command can run a script whose contents change later; a one-off approved shell command could write the store; Codex can't be fenced from it (#97) |
 | Learned facts | written by the bridge, not the agent: `0600`, atomic, bounded, a symlinked `LEARNED.md` refused |
 | The manual fetch (`nixi-update-manual`) | two pinned repos, pinned commits, every page verified against its git blob hash before use |
 | Bundled code | no agent adapter or SDK in `bridge/node_modules`; adapters come from your system |

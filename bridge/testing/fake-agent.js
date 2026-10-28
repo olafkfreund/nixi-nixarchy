@@ -123,6 +123,9 @@ new AgentSideConnection((conn) => ({
       // PLEASE_ARGV: a chained command sent as an argv array, as codex does (S26 review).
       : text.includes("PLEASE_ARGV") ? { toolCallId: "t7", title: "bash -lc", kind: "execute",
         rawInput: { command: ["bash", "-lc", "btop --version; command -v btop"] } }
+      // PLEASE_SECRET: an unchained command naming a secret path (#114: never remembered).
+      : text.includes("PLEASE_SECRET") ? { toolCallId: "t8", title: "cat key", kind: "execute",
+        rawInput: { command: "cat ~/.ssh/id_ed25519" } }
       // PLEASE_HERDR: a Bash call that types into another session (#95).
       : text.includes("PLEASE_HERDR") ? { toolCallId: "t5", title: "Bash", kind: "execute",
         rawInput: { command: 'herdr agent prompt 1-2 "run the tests"' } }

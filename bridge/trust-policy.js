@@ -70,6 +70,7 @@ function opencodeRules(readDefault) {
     "*": "ask",
     external_directory: "allow",
     read,
+    edit: { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" },  // remembered approvals (#114), as EXEC_WRITE_PATHS
     grep: "ask",
     glob: "ask",
     list: "ask",
@@ -165,6 +166,13 @@ export const EXEC_WRITE_PATHS = [
   "~/.config/omarchy/plugins/**",    // bridge scripts spawn on card load
   "~/.config/systemd/user/**",       // units and drop-ins
   "~/.local/bin/nixi-*",             // the binaries those units run at login
+  // Remembered approvals (#114): a write would grant standing yeses. `//**` (absolute, #95) also
+  // covers a non-default XDG_STATE_HOME; a bare `**/` would only match under the session dir.
+  "~/.local/state/nixi/always.json",
+  "//**/nixi/always.json",
+  // ...and its lock and temp files: a planted lock would stall every remembered request.
+  "~/.local/state/nixi/always.json.*",
+  "//**/nixi/always.json.*",
 ];
 
 const READ_TOOLS = ["Read", "Grep", "Glob"];
