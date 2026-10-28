@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 114
 spec: spec/2026-10-28-114-remember-always.md
 ---
