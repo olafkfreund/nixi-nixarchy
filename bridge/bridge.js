@@ -426,11 +426,18 @@ const client = {
     return (async () => {
       // #114: after Guide and YOLO, never before. rememberable() rechecks secrets and chaining
       // at match time, and the adapter only ever hears allow_once.
-      if (policy.permission === "ask" && rememberable(params.toolCall)) {
+      if (policy.permission === "ask" && rememberable(params.toolCall, cwd) && options.some((o) => o.kind === "allow_once")) {
         const command = keyOf(params.toolCall);
         let hit = false;
         try { hit = await always.match(agentName, cwd, command); }
         catch (error) { emit({ type: "diagnostic", text: `Remembered approvals: ${error.message}` }); }
+        // The lookup awaited: a switch to Guide meanwhile wins, as it does for a queued card.
+        if (currentPolicy().permission === "cancel") {
+          refusedThisTurn = title;
+          toolsInProgress.delete(params.toolCall?.toolCallId);
+          emit({ type: "status", text: `Guide · not run: ${title}` });
+          return { outcome: { outcome: "cancelled" } };
+        }
         if (hit) {
           always.touch(agentName, cwd, command).catch(() => {});
           emit({ type: "status", text: `Remembered · ${title}` });
@@ -640,7 +647,8 @@ function answerPermission(message) {
   const picked = pending.options.find((item) => item.id === String(message.optionId || ""));
   // #114: "always" for a plain command is kept by the bridge; the adapter gets allow_once, so no
   // adapter-side rule (Claude's own can be wildcards) ever widens it. Anything else is forwarded as picked.
-  if (picked?.kind === "allow_always" && rememberable(pending.toolCall)) {
+  if (picked?.kind === "allow_always" && rememberable(pending.toolCall, cwd)
+      && pending.options.some((o) => o.kind === "allow_once")) {
     const command = keyOf(pending.toolCall);
     always.record(agentName, cwd, command)
       .then(() => emit({ type: "notice", text: `Remembered: ${command} — /always to review` }))

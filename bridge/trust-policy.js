@@ -166,7 +166,10 @@ export const EXEC_WRITE_PATHS = [
   "~/.config/omarchy/plugins/**",    // bridge scripts spawn on card load
   "~/.config/systemd/user/**",       // units and drop-ins
   "~/.local/bin/nixi-*",             // the binaries those units run at login
-  "**/nixi/always.json",             // remembered approvals (#114): a write would grant standing yeses; any XDG_STATE_HOME
+  // Remembered approvals (#114): a write would grant standing yeses. `//**` (absolute, #95) also
+  // covers a non-default XDG_STATE_HOME; a bare `**/` would only match under the session dir.
+  "~/.local/state/nixi/always.json",
+  "//**/nixi/always.json",
 ];
 
 const READ_TOOLS = ["Read", "Grep", "Glob"];

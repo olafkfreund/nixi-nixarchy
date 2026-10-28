@@ -67,6 +67,9 @@ spec: spec/2026-10-28-114-remember-always.md
 - Deviation (implemented): one anchor-free pattern, `**/nixi/always.json` (Claude) and
   `*nixi/always.json` (OpenCode `edit`), covers any `XDG_STATE_HOME`, so `claudePermissions`
   gets no new argument. The OpenCode env test now expects `edit: {"*": "ask", store: "deny"}`.
+- Opus review fix: the bare `**/nixi/always.json` was wrong. Claude reads `**/` relative to the
+  session directory (#95), so it never matched `~/.local/state`. It is now
+  `~/.local/state/nixi/always.json` plus `//**/nixi/always.json` (absolute, any XDG_STATE_HOME).
 
 **2. The store module** — a new `bridge/always.js`, with its tests in `bridge/always.test.js`.
 *Session model.*
@@ -125,6 +128,13 @@ branch `:768-777` and the session branch `:780-800`). *Session model.*
 - Allowed at any trust level and with no session (it only reads or narrows).
 - Verify: covered by step 6's tests.
 - Trap: unknown actions emit a notice and do nothing.
+
+- Opus review fixes to steps 2-3 (implemented): a switch to Guide during the awaited lookup
+  cancels; a `mkdir` lock across the two bridges, and no write when nothing changed; a tool call
+  whose `cwd`/`workdir` differs from the bridge's is not remembered; nothing is recorded or
+  answered without an `allow_once` option; the panel clears stale rows until its list arrives.
+  Accepted: an argv `["FOO=1","cmd"]` and the string `FOO=1 cmd` share a key (each agent uses one
+  form); Claude's Bash keeps an earlier `cd` (documented).
 
 **5. The card** — `Conversation.qml:950-975` (slash commands) and `HarnessSelector.qml` (the agent
 panel, SUPER+,). *Coder.*

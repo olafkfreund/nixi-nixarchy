@@ -282,7 +282,8 @@ test("no agent may write the remembered-approvals store, at any trust level (#11
   for (const trust of ["guide", "mechanic"])
     for (const ask of [false, true])
       for (const tool of ["Write", "Edit", "MultiEdit", "NotebookEdit"])
-        assert.ok(claudePermissions(ask, trust).deny.includes(`${tool}(**/nixi/always.json)`), `${tool} ${trust}`);
+        for (const path of ["~/.local/state/nixi/always.json", "//**/nixi/always.json"])  // anchored, #95
+          assert.ok(claudePermissions(ask, trust).deny.includes(`${tool}(${path})`), `${tool} ${path} ${trust}`);
   for (const ask of [false, true])
     assert.equal(opencodePermissions(ask).permission.edit["*nixi/always.json"], "deny");
   assert.equal(opencodePermissions(false).permission.edit["*"], "ask", "every other edit still asks");

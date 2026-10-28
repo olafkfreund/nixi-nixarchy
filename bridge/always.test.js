@@ -1,7 +1,7 @@
 // #114: the remembered-approvals store.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
@@ -19,6 +19,10 @@ test("only a plain, unchained, non-secret, non-herdr shell command can be rememb
   assert.ok(!rememberable(bash("uname -r", "edit")), "not execute");
   assert.ok(!rememberable(bash("   ")), "empty");
   assert.ok(isChained(bash(["bash", "-lc", "a; b"])));
+  // a tool call that runs in another directory is not this folder's to remember
+  assert.ok(rememberable({ kind: "execute", rawInput: { command: "ls", cwd: "/p" } }, "/p"));
+  assert.ok(!rememberable({ kind: "execute", rawInput: { command: "ls", cwd: "/elsewhere" } }, "/p"));
+  assert.ok(!rememberable({ kind: "execute", rawInput: { command: "ls", workdir: "/elsewhere" } }, "/p"));
 });
 
 test("the key is the exact command: ends trimmed, nothing else", () => {
@@ -60,6 +64,34 @@ test("an unreadable or foreign store is never overwritten", async () => {
     await assert.rejects(always.match("claude", "/p", "date"));
     assert.equal(readFileSync(path, "utf8"), bad, "left as it was");
   }
+});
+
+test("a held lock is waited for; a crashed writer's old lock is taken over", async () => {
+  const path = fresh();
+  const always = createAlways(path);
+  await always.record("claude", "/p", "date");
+  mkdirSync(`${path}.lock`);
+  let done = false;
+  const pending = always.record("claude", "/p", "id").then((r) => { done = true; return r; });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(done, false, "waits while another nixi holds the lock");
+  rmdirSync(`${path}.lock`);
+  assert.equal(await pending, true);
+  mkdirSync(`${path}.lock`);
+  utimesSync(`${path}.lock`, new Date(0), new Date(0));
+  assert.equal(await always.record("claude", "/p", "uname -r"), true, "stale lock taken over");
+  assert.equal(existsSync(`${path}.lock`), false);
+});
+
+test("a change that changes nothing writes nothing", async () => {
+  const path = fresh();
+  const always = createAlways(path);
+  await always.record("claude", "/p", "date");
+  const before = statSync(path).mtimeMs;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(await always.touch("claude", "/p", "gone"), false);
+  assert.equal(await always.forget("claude", "/p", 5), 0);
+  assert.equal(statSync(path).mtimeMs, before);
 });
 
 test("concurrent writes keep every entry", async () => {

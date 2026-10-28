@@ -287,7 +287,8 @@ Item {
     if (!selector) return
     selector.remembered = Qt.binding(function() { return root.rememberedEntries })
     var source = activeOverlay || conversations[conversations.length - 1]
-    if (source && source.alwaysRequest("list", 0, true)) rememberedSource = source
+    rememberedEntries = []   // the source is set when its list arrives, so a Remove never sends an old n
+    if (source) source.alwaysRequest("list", 0, true)
     selector.fontScale = Qt.binding(function() { return root.fontScale })
     selector.agent = selectedAgent
     selector.model = selectedModel

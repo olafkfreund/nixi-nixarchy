@@ -103,10 +103,15 @@ The durable mode is `permission` or `yolo`, stored in
   command, added, lastUsed }] }`, written `0600` by one serialized chain that
   re-reads, merges and renames a temp file. A missing file is empty; an
   unreadable, non-object or non-version-1 file is left untouched, a `diagnostic`
-  is emitted and nothing is remembered. Claude (`**/nixi/always.json`) and
-  OpenCode (`edit`) deny agent writes; Codex can't be fenced (#97). Residuals: a
-  remembered command can run a script whose contents change later, and a one-off
-  approved shell command could write the store.
+  is emitted and nothing is remembered. Two bridges (card and companion) take a
+  `mkdir` lock around each change, and a change that changes nothing writes
+  nothing. A tool call naming another directory (`cwd`, `workdir`) is never
+  remembered, and nothing is answered without an `allow_once` option. A switch
+  to Guide during the lookup wins. Claude (`~/.local/state/nixi/always.json`,
+  `//**/nixi/always.json`) and OpenCode (`edit`) deny agent writes; Codex can't
+  be fenced (#97). Residuals: a remembered command can run a script whose
+  contents change later; a one-off approved shell command could write the store;
+  Claude's Bash keeps a `cd` from an earlier command, which the key can't see.
 - stdin `{"type":"always","action":"list"|"forget"|"clear","n":<int>}` works at
   any trust level and with no session (it only reads or narrows). It emits a
   readable `notice` and `{"type":"always_list","entries":[{n,command,added,

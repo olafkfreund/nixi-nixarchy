@@ -90,6 +90,36 @@ test("an unreadable store is left alone and the card still asks", async () => {
   assert.ok(run.events.some((e) => e.type === "diagnostic" && /Remembered approvals/.test(e.text)));
 });
 
+test("a secret-path command is never answered from the store, even if an entry exists", async () => {
+  const run = await runBridge(base({
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
+    messages: [seed([entry("cat ~/.ssh/id_ed25519")]), { type: "prompt", text: "PLEASE_SECRET it" }],
+  }));
+  assert.equal(cards(run), 1);
+});
+
+test("\"always\" with an unreadable store still runs the command once and leaves the store alone", async () => {
+  const seen = {};
+  const run = await runBridge(base({
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "allow-all" }),
+    messages: [({ home }) => { mkdirSync(join(home, ".local", "state", "nixi"), { recursive: true }); writeFileSync(store(home), "{broken"); },
+      plain, ({ home }) => { seen.text = readFileSync(store(home), "utf8"); }],
+  }));
+  assert.deepEqual(outcomes(run), [{ outcome: "selected", optionId: "allow" }]);
+  assert.equal(seen.text, "{broken");
+});
+
+test("/always works at Guide (it only reads or narrows)", async () => {
+  const lists = [];
+  await runBridge(base({ settings: { trust: "guide" },
+    messages: [seed([entry("uname -r")]), async ({ send, until, events }) => {
+      send({ type: "always", action: "list" });
+      await until(() => events.some((e) => e.type === "always_list"), "always_list");
+      lists.push(events.find((e) => e.type === "always_list").entries.map((e) => e.command));
+    }] }));
+  assert.deepEqual(lists, [["uname -r"]]);
+});
+
 test("/always lists, forgets and clears only this agent's entries here", async () => {
   const lists = [];
   const run = await runBridge(base({

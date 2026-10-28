@@ -2,7 +2,7 @@
 // for one agent in one folder and one exact command, and answered allow_once to the
 // adapter next time, so no adapter-side rule ever widens it. Only plain shell
 // commands qualify: never an edit, a herdr write, a chained command or a secret path.
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isHerdrWrite } from "./herdr-policy.js";
 import { shellQuote } from "./permission-detail.js";
@@ -27,8 +27,12 @@ export function keyOf(toolCall) {
   return typeof command === "string" ? command.trim() : "";
 }
 
-export function rememberable(toolCall) {
+// cwd: the bridge's folder. A tool call that names its own directory (codex `cwd`, opencode
+// `workdir`) elsewhere is not remembered: the key is this folder.
+export function rememberable(toolCall, cwd) {
   if (toolCall?.kind !== "execute") return false;
+  const dir = toolCall.rawInput?.cwd ?? toolCall.rawInput?.workdir;
+  if (dir !== undefined && dir !== cwd) return false;
   const key = keyOf(toolCall);
   return Boolean(key) && !isChained(toolCall) && !isHerdrWrite(toolCall)
     && !SECRETS.some((secret) => commandText(toolCall.rawInput.command).includes(secret));
@@ -54,11 +58,28 @@ export function createAlways(path) {
   // never sees half a file -- mergeSettings' rules (#103).
   let queue = Promise.resolve();
   let writes = 0;
+  // The card's bridge and the companion's share the file: mkdir is the cross-process lock,
+  // so a touch() in one can't write back an entry the other just forgot. A lock older than
+  // 10s is a crashed writer's and is taken over.
+  const lock = `${path}.lock`;
+  async function locked(fn) {
+    await mkdir(dirname(path), { recursive: true });
+    for (let tries = 0; ; tries++) {
+      try { await mkdir(lock); break; } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
+        if (age > 10000) { await rmdir(lock).catch(() => {}); continue; }
+        if (tries >= 100) throw new Error(`${path} is locked by another nixi`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    try { return await fn(); } finally { await rmdir(lock).catch(() => {}); }
+  }
   function change(edit) {
-    const run = queue.then(async () => {
+    const run = queue.then(() => locked(async () => {
       const store = await load();
       const result = edit(store);
-      await mkdir(dirname(path), { recursive: true });
+      if (!result) return result;           // nothing changed: no write that could undo another's
       const tmp = `${path}.tmp-${process.pid}-${++writes}`;
       try {
         await writeFile(tmp, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
@@ -68,7 +89,7 @@ export function createAlways(path) {
         throw error;
       }
       return result;
-    });
+    }));
     queue = run.catch(() => {});
     return run;
   }
