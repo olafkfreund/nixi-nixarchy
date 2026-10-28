@@ -2,7 +2,7 @@
 // for one agent in one folder and one exact command, and answered allow_once to the
 // adapter next time, so no adapter-side rule ever widens it. Only plain shell
 // commands qualify: never an edit, a herdr write, a chained command or a secret path.
-import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isHerdrWrite } from "./herdr-policy.js";
 import { shellQuote } from "./permission-detail.js";
@@ -60,20 +60,24 @@ export function createAlways(path) {
   let writes = 0;
   // The card's bridge and the companion's share the file: mkdir is the cross-process lock,
   // so a touch() in one can't write back an entry the other just forgot. A lock older than
-  // 10s is a crashed writer's and is taken over.
+  // 10s is a crashed writer's and is taken over: renamed aside first, so of two takers only one
+  // wins. Every try counts, so a lock that can't be removed fails the change instead of spinning.
   const lock = `${path}.lock`;
   async function locked(fn) {
     await mkdir(dirname(path), { recursive: true });
     for (let tries = 0; ; tries++) {
+      if (tries >= 100) throw new Error(`${path} is locked by another nixi`);
       try { await mkdir(lock); break; } catch (error) {
         if (error.code !== "EEXIST") throw error;
         const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
-        if (age > 10000) { await rmdir(lock).catch(() => {}); continue; }
-        if (tries >= 100) throw new Error(`${path} is locked by another nixi`);
+        if (age > 10000) {
+          const aside = `${lock}.stale-${process.pid}-${tries}`;
+          if (await rename(lock, aside).then(() => true, () => false)) await rm(aside, { recursive: true, force: true });
+        }
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
     }
-    try { return await fn(); } finally { await rmdir(lock).catch(() => {}); }
+    try { return await fn(); } finally { await rm(lock, { recursive: true, force: true }); }
   }
   function change(edit) {
     const run = queue.then(() => locked(async () => {

@@ -83,6 +83,17 @@ test("a held lock is waited for; a crashed writer's old lock is taken over", asy
   assert.equal(existsSync(`${path}.lock`), false);
 });
 
+test("a lock that is a file can't stall the store forever", async () => {
+  const path = fresh();
+  const always = createAlways(path);
+  await always.record("claude", "/p", "date");
+  writeFileSync(`${path}.lock`, "planted");
+  utimesSync(`${path}.lock`, new Date(0), new Date(0));
+  assert.equal(await always.record("claude", "/p", "id"), true, "an old planted lock is taken over");
+  writeFileSync(`${path}.lock`, "planted");             // a fresh one: wait, then give up
+  await assert.rejects(always.record("claude", "/p", "uname -r"), /locked by another nixi/);
+});
+
 test("a change that changes nothing writes nothing", async () => {
   const path = fresh();
   const always = createAlways(path);

@@ -136,6 +136,11 @@ branch `:768-777` and the session branch `:780-800`). *Session model.*
   Accepted: an argv `["FOO=1","cmd"]` and the string `FOO=1 cmd` share a key (each agent uses one
   form); Claude's Bash keeps an earlier `cd` (documented).
 
+- Second review fix: a lock that can't be removed (a planted file) failed nothing and spun
+  forever, hanging every remembered request. Every try now counts, a stale lock is renamed aside
+  before removal (one taker wins), and agents may not write `always.json.*` (lock, temp files)
+  either, for Claude and OpenCode.
+
 **5. The card** — `Conversation.qml:950-975` (slash commands) and `HarnessSelector.qml` (the agent
 panel, SUPER+,). *Coder.*
 - `/always`, `/always forget <n>` and `/always clear` are matched exactly, like `/undo`

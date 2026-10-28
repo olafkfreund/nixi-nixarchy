@@ -212,7 +212,7 @@ test("OpenCode always starts with Nixi's permission rules, whatever the environm
   for (const tool of ["bash", "webfetch", "task", "write", "patch"])
     assert.equal(sent.permission[tool], undefined, `${tool} must fall through to ask`);
   // edit (which covers write and patch) still asks, except the remembered-approvals store (#114)
-  assert.deepEqual(sent.permission.edit, { "*": "ask", "*nixi/always.json": "deny" });
+  assert.deepEqual(sent.permission.edit, { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" });
 });
 
 test("other agents never receive OpenCode's config", async () => {
@@ -282,7 +282,8 @@ test("no agent may write the remembered-approvals store, at any trust level (#11
   for (const trust of ["guide", "mechanic"])
     for (const ask of [false, true])
       for (const tool of ["Write", "Edit", "MultiEdit", "NotebookEdit"])
-        for (const path of ["~/.local/state/nixi/always.json", "//**/nixi/always.json"])  // anchored, #95
+        for (const path of ["~/.local/state/nixi/always.json", "//**/nixi/always.json",  // anchored, #95
+                            "~/.local/state/nixi/always.json.*", "//**/nixi/always.json.*"])  // lock, temp
           assert.ok(claudePermissions(ask, trust).deny.includes(`${tool}(${path})`), `${tool} ${path} ${trust}`);
   for (const ask of [false, true])
     assert.equal(opencodePermissions(ask).permission.edit["*nixi/always.json"], "deny");

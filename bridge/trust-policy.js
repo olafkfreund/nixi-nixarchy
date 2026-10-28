@@ -70,7 +70,7 @@ function opencodeRules(readDefault) {
     "*": "ask",
     external_directory: "allow",
     read,
-    edit: { "*": "ask", "*nixi/always.json": "deny" },  // remembered approvals (#114), as EXEC_WRITE_PATHS
+    edit: { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" },  // remembered approvals (#114), as EXEC_WRITE_PATHS
     grep: "ask",
     glob: "ask",
     list: "ask",
@@ -170,6 +170,9 @@ export const EXEC_WRITE_PATHS = [
   // covers a non-default XDG_STATE_HOME; a bare `**/` would only match under the session dir.
   "~/.local/state/nixi/always.json",
   "//**/nixi/always.json",
+  // ...and its lock and temp files: a planted lock would stall every remembered request.
+  "~/.local/state/nixi/always.json.*",
+  "//**/nixi/always.json.*",
 ];
 
 const READ_TOOLS = ["Read", "Grep", "Glob"];
