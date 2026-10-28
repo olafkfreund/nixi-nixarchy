@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 114
 intent: intent/2026-10-28-114-remember-always.md
 ---
@@ -38,7 +38,7 @@ intent: intent/2026-10-28-114-remember-always.md
    - not a command matching a secret rule (`secretBashRules()`, #96).
 
    Other kinds (fetch, MCP tools) keep today's behaviour, in which `allow_always` goes to the
-   adapter. They aren't remembered by nixi. *Proposed — user to confirm at spec review.*
+   adapter. They aren't remembered by nixi. *Decided — user approved 2026-10-28.*
 2. **The key is exact.** The key is `agent` + the bridge's `cwd` + the full command string.
    - An argv array is joined exactly as `permissionDetail` shows it (`shellQuote`).
    - No trimming beyond leading and trailing whitespace. No prefix, no first word, no glob.
