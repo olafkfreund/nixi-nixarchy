@@ -729,7 +729,7 @@ session model) — *approved 2026-10-28*
 
 **S26. The approval card and the terminal bubble in nixi mode** (nixi `bridge/bridge.js`,
 `bridge/permission-detail.js`; fork `app/server.py`, `app/static/index.html`; coders below) —
-*draft, awaiting approval*
+*approved 2026-10-28*
 *User report (2026-10-28): the bubble and the approval card look weird. Reproduced on p620 through
 `/api/ask` (three turns, a 2 fps clip, stills).*
 - Findings:
