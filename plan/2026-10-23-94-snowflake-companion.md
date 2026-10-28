@@ -691,6 +691,42 @@ done by the session model)
 - Verify: eval the module; after a rebuild with a changed companion, the running server's store
   path is the new one. With the companion stopped, a rebuild starts nothing.
 
+**S24. Point at a command instead of reading it out** (fork `app/server.py`, new
+`tests/test_speakable.py`; done by the session model) — *draft, awaiting approval*
+*User request (2026-10-28): Nixi read a long command aloud; it should say to look at it.*
+- Why: `speakable()` (`server.py:1815`) already turns a fenced block into "I put some code on
+  screen", but inline code only loses its backticks (`:1818`), so
+  `` `nixarchy pkg add firefox && nixarchy apply` `` is spoken word for word. The voice prompt asks
+  the model not to, and it doesn't always comply.
+- Change `:1818`: inline code containing whitespace (a command) becomes "the command on screen".
+  Inline code without whitespace (`btop`, `apps.nix`) is still spoken, without backticks. The
+  approval card's spoken summary (`:537`) is unchanged.
+- Verify: `tests/test_speakable.py`:
+  - "Run `nixarchy pkg add firefox` then `nixarchy apply`." → contains "the command on screen",
+    no "pkg add";
+  - "`btop` is already installed." → "btop is already installed.";
+  - a fenced block → still "I put some code on screen".
+  Live: "how do I install firefox?" is answered without the command read out.
+
+**S25. The theme follows the omarchy tree the hook runs in** (fork `app/server.py`; done by the
+session model) — *draft, awaiting approval*
+*Found 2026-10-28 while recording #108: under Osaka Jade the snowflake stayed blue.*
+- Why: the server keeps the `OMARCHY_PATH` it started with. After a rebuild that changes the
+  omarchy tree but not the companion, S21 doesn't restart it, and `omarchy theme dir <name>`
+  resolves into the old tree. A theme missing there (Osaka Jade: the old tree has 23 themes)
+  gives `theme_colors()` → None, swallowed, so `/api/theme` answers `{"theme": null}` and the
+  page keeps its default colours.
+- `--theme-changed` (`:4046`) sends `{"omarchy_path": $OMARCHY_PATH}`; the theme-set hook runs in
+  the fresh environment, so that value is current. `/api/theme` passes it to `theme_colors()`,
+  which uses it as `OMARCHY_PATH` for the `omarchy theme dir` call, only if it is an existing
+  directory with a `themes/` subdirectory. Otherwise it keeps the old behaviour. The endpoint
+  stays token-gated; the path is only used to find a `colors.toml` to read.
+- Not doing: a wider S21 trigger (restart on any omarchy change). It restarts mid-conversation for
+  a colour change.
+- Verify: a unit test with a fake tree holding a theme that the server's own `OMARCHY_PATH`
+  lacks → colours come back. Live: start the companion with an old `OMARCHY_PATH`, run
+  `omarchy theme set "Osaka Jade"`, and he turns jade without a restart.
+
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
   reaches r≈140, inside the viewBox.
