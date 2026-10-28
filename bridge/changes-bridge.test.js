@@ -48,7 +48,9 @@ test("an edit is never offered allow_always; a plain command still is, a chained
   const offered = {}, seen = {};
   const decline = (event) => { offered[event.title] = event.options.map((o) => o.kind); seen[event.title] = event; return { type: "permission", id: event.id, optionId: "reject" }; };
   await runBridge(setup({ env: { FAKE_AGENT_OPTIONS: "always" }, onPermission: decline,
-    messages: [edit("new"), { type: "prompt", text: "PLEASE_RUN it" }, { type: "prompt", text: "PLEASE_PLAIN it" }] }));
+    messages: [edit("new"), { type: "prompt", text: "PLEASE_RUN it" }, { type: "prompt", text: "PLEASE_PLAIN it" },
+      { type: "prompt", text: "PLEASE_ARGV it" }] }));
+  assert.ok(!offered["bash -lc"].includes("allow_always"));  // chained inside an argv array
   assert.deepEqual(offered["Edit bindings.lua"], ["allow_once", "reject_once", "reject_always"]);
   assert.ok(!offered["Run a long command"].includes("allow_always"));  // "... && echo TAIL"
   assert.ok(offered["uname -r"].includes("allow_always"));

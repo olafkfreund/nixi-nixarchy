@@ -306,7 +306,11 @@ const EDIT_KINDS = new Set(["edit", "delete", "move"]);
 // A shell command that runs other commands: a standing yes to it would also approve whatever is
 // chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
 const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
-const isChained = (toolCall) => typeof toolCall?.rawInput?.command === "string" && CHAINED.test(toolCall.rawInput.command);
+// An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as herdr-policy does.
+const isChained = (toolCall) => {
+  const command = toolCall?.rawInput?.command;
+  return CHAINED.test(Array.isArray(command) ? command.join(" ") : typeof command === "string" ? command : "");
+};
 const stateHome = process.env.XDG_STATE_HOME || join(process.env.HOME || process.cwd(), ".local", "state");
 const changes = createChanges({
   stateDir: join(stateHome, "nixi", "changes"),

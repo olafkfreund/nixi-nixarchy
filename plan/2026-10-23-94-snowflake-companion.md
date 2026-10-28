@@ -780,6 +780,18 @@ session model) — *approved 2026-10-28*
   - The card's top uses the same offset-only layout as its left, so it ignores `fitK` scaling.
   - Two #53 bridge tests used `PLEASE_RUN` (chained) to check that `allow_always` passes through.
     They now use a new unchained fixture, `PLEASE_PLAIN` (`uname -r`).
+- Opus review fixes:
+  - The chained filter also joins an argv-array command (codex's `["bash", "-lc", …]`); a new
+    `PLEASE_ARGV` fixture tests it.
+  - S24 still speaks a key combo (`` `Super + Space` ``).
+  - S25 reads `<omarchy_path>/themes/<name>/colors.toml` directly instead of running `omarchy`
+    with the caller's path; a theme name containing `/` or `..` is refused, and `/api/theme`
+    ignores a non-object body.
+  - Accepted: the approval card's spoken summary also points at spaced inline code, which
+    S24 said stays unchanged. A description rarely has backticks, and not reading a command
+    aloud is the point.
+  - Left for the live check: the card can still shift when the window resizes (review #3), and
+    the caption's fixed `top:404px` (review #4).
 
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
