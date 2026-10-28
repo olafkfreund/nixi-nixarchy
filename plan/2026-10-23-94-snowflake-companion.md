@@ -772,6 +772,14 @@ session model) — *approved 2026-10-28*
   - Live on p620: the slow test command from the review shows one clean card ("Can I print
     twelve numbered test lines?", the command once, no "always", no mid-word breaks, clear of
     him, steady), then the caption while it runs, and no empty bubble.
+- Implemented: the bridge part by the session model (nixi `68944bf`); the fork part by coder
+  "snow" (fork `fix/94-speak-theme`).
+- Deviations:
+  - The `approve` event carries the question as a new `q` field, and the caption is a new `#wk`
+    element under `#cap`.
+  - The card's top uses the same offset-only layout as its left, so it ignores `fitK` scaling.
+  - Two #53 bridge tests used `PLEASE_RUN` (chained) to check that `allow_always` passes through.
+    They now use a new unchained fixture, `PLEASE_PLAIN` (`uname -r`).
 
 **Implementation notes, S11b–S17** (where the code differs from the steps above):
 - S14: the sprout is drawn in front, because there is no gap behind the top lambda. The halo
