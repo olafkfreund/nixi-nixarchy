@@ -85,6 +85,11 @@ The durable mode is `permission` or `yolo`, stored in
 - Each answer to a herdr write appends one JSON line (`ts`, `pane`, `text`,
   `cwd`, `decision`, `optionKind`) to `~/.local/share/nixi/sends.log`, created
   0600 and append-only. It records the command, never terminal output.
+- A chained shell command (`;`, `&&`, `||`, `|`, `&`, redirects, backticks,
+  `$(`, newlines) is never offered `allow_always` (#94, S26): a standing yes to
+  it would also approve whatever is chained after it. The `permission` event
+  carries `summary`, the tool's own plain description when it has one, and
+  the detail shows that description once.
 - The one exception to "the companion never writes": a front end such as the
   voice companion may *read* herdr locally (`agent list`, `agent read`). It never
   writes to a session; every send goes through the bridge and its card.
