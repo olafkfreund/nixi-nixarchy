@@ -5,8 +5,8 @@ import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
-import { join } from "node:path";
-import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { mkdir, readFile, writeFile, rename, rm, realpath } from "node:fs/promises";
 import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
@@ -14,7 +14,7 @@ import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
-import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath } from "./trust-policy.js";
 import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
@@ -359,6 +359,14 @@ function noticeMcpSource(params) {
   emit({ type: "diagnostic", text: `A tool arrived from an MCP server Nixi did not attach: ${String(tool.mcpServer.name).slice(0, 60)} (${String(tool.mcpServer.source).slice(0, 20)}). Nixi's permission rules still apply to it.` });
 }
 
+// #114/#116: offer a standing yes only where Nixi can safely keep it.
+function offersAlways(toolCall) {
+  if (isHerdrWrite(toolCall) || isChained(toolCall)) return false;
+  if (toolCall?.kind === "execute") return rememberable(toolCall, cwd);
+  if (toolCall?.kind === "read" || toolCall?.kind === "search" || EDIT_KINDS.has(toolCall?.kind)) return false;
+  return true;
+}
+
 const client = {
   sessionUpdate(params) {
     armStall(); // any update is progress, shown or not (#102)
@@ -401,29 +409,44 @@ const client = {
       id: option.optionId,
       label: option.name,
       kind: option.kind,
-    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
-      // A standing yes to typing into another session would turn one click into all (#95).
-      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"))
-      .filter((option) => !(isChained(params.toolCall) && option.kind === "allow_always"));
+    })).filter((option) => option.kind !== "allow_always" || offersAlways(params.toolCall));
     noticeMcpSource(params);
-    const policy = currentPolicy();
-    // Guide: nothing that asks for permission ever runs, and nothing is shown
-    // to approve. This, not the session mode, is Guide's guarantee.
-    if (policy.permission === "cancel") {
-      refusedThisTurn = title;
-      toolsInProgress.delete(params.toolCall?.toolCallId); // refused: it will not run
-      if (isHerdrWrite(params.toolCall)) auditSend(params.toolCall, null);
-      emit({ type: "status", text: `Guide · not run: ${title}` });
-      return Promise.resolve({ outcome: { outcome: "cancelled" } });
-    }
-    // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
-    const herdrWrite = isHerdrWrite(params.toolCall);
-    if (policy.permission === "yolo" && !herdrWrite) {
-      const outcome = choose(options, "allow_once");
-      if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
-      return guarded(params.toolCall, outcome, options);
-    }
     return (async () => {
+      if (agentName === "opencode" && params.toolCall?.kind === "read") {
+        try {
+          const path = resolve(cwd, params.toolCall.locations?.[0]?.path ?? params.toolCall.rawInput?.path);
+          if (isSecretPath(await realpath(path))) {
+            toolsInProgress.delete(params.toolCall.toolCallId);
+            emit({ type: "status", text: "Read refused: secret path" });
+            return guarded(params.toolCall, choose(options, "reject_once"), options);
+          }
+        } catch (error) {
+          if (error.code !== "ENOENT") {
+            toolsInProgress.delete(params.toolCall.toolCallId);
+            emit({ type: "status", text: "Read refused: path could not be resolved" });
+            return guarded(params.toolCall, choose(options, "reject_once"), options);
+          }
+          // A missing file holds no secret; it is an ordinary read below (OpenCode reports it).
+        }
+        if (!askBeforeReading) return guarded(params.toolCall, choose(options, "allow_once"), options);
+      }
+      const policy = currentPolicy();
+      // Guide: non-read requests that ask for permission never run, and nothing
+      // is shown to approve. OpenCode reads were checked above.
+      if (policy.permission === "cancel") {
+        refusedThisTurn = title;
+        toolsInProgress.delete(params.toolCall?.toolCallId); // refused: it will not run
+        if (isHerdrWrite(params.toolCall)) auditSend(params.toolCall, null);
+        emit({ type: "status", text: `Guide · not run: ${title}` });
+        return { outcome: { outcome: "cancelled" } };
+      }
+      // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
+      const herdrWrite = isHerdrWrite(params.toolCall);
+      if (policy.permission === "yolo" && !herdrWrite) {
+        const outcome = choose(options, "allow_once");
+        if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
+        return guarded(params.toolCall, outcome, options);
+      }
       // #114: after Guide and YOLO, never before. rememberable() rechecks secrets and chaining
       // at match time, and the adapter only ever hears allow_once.
       if (policy.permission === "ask" && rememberable(params.toolCall, cwd) && options.some((o) => o.kind === "allow_once")) {

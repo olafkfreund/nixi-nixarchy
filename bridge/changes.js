@@ -2,8 +2,8 @@
 // writes the file itself, after the bridge answers its permission request, so
 // the bridge copies the file first and the agent cannot skip it. One directory
 // per turn under stateDir holds the copies and a manifest.json; /undo restores
-// the newest turn not yet undone. Shell edits are not covered (generations
-// already undo those).
+// the newest turn not yet undone, if its files still match their end-of-turn
+// state. Shell edits are not covered (generations already undo those).
 import { mkdir, readFile, readdir, rename, writeFile, lstat, realpath, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
@@ -55,7 +55,7 @@ export function createChanges({ stateDir, cwd, home, exec }) {
 
   const isHypr = (path) => path.startsWith(hyprDir);
   const saveManifest = (t) =>
-    writeAtomic(join(t.dir, "manifest.json"), JSON.stringify({ entries: t.entries }, null, 2), 0o600);
+    writeAtomic(join(t.dir, "manifest.json"), JSON.stringify({ entries: t.entries, closed: t.closed }, null, 2), 0o600);
 
   async function errorLines() {
     const result = await exec(["configerrors"]);
@@ -84,6 +84,8 @@ export function createChanges({ stateDir, cwd, home, exec }) {
     const existing = turn?.entries.find((e) => e.path === path);
     if (existing) { // second edit of one file in a turn: keep the first backup
       existing.ids.push(toolCallId);
+      existing.after = undefined; // the first edit's hash no longer describes the file; endTurn re-reads it
+      await saveManifest(turn);
       return null;
     }
     let info = null;
@@ -146,7 +148,8 @@ export function createChanges({ stateDir, cwd, home, exec }) {
       if (turn) {
         const hit = turn.entries.filter((e) => e.ids.includes(toolCallId));
         if (!hit.length) return;
-        for (const entry of hit) entry.after = await hashOf(entry.path);
+        // Only the file's last edit fixes its state; an earlier one's completion leaves it to endTurn.
+        for (const entry of hit) entry.after = entry.ids.at(-1) === toolCallId ? await hashOf(entry.path) : undefined;
         await saveManifest(turn);
         return;
       }
@@ -155,7 +158,9 @@ export function createChanges({ stateDir, cwd, home, exec }) {
       if (!name) return;
       const dir = join(stateDir, name);
       const manifest = JSON.parse(await readFile(join(dir, "manifest.json"), "utf8"));
-      const hit = manifest.entries.filter((e) => e.ids?.includes(toolCallId));
+      // A turn endTurn closed has its end state fixed: a late hash could be a user's later edit.
+      if (manifest.closed) return;
+      const hit = manifest.entries.filter((e) => e.ids?.includes(toolCallId) && e.after === undefined);
       if (!hit.length) return;
       for (const entry of hit) entry.after = await hashOf(entry.path);
       await writeAtomic(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), 0o600);
@@ -164,6 +169,17 @@ export function createChanges({ stateDir, cwd, home, exec }) {
     endTurn: () => serial(async () => {
       const done = turn;
       turn = null;
+      if (done?.entries.length) {
+        for (const entry of done.entries) {
+          if (entry.after === undefined) {
+            try { entry.after = await hashOf(entry.path); }
+            catch { /* Leave the entry unconfirmed if the file is unreadable. */ }
+          }
+        }
+        done.closed = true;
+        // A failed save leaves the older manifest, which undo refuses; the Hyprland check still runs.
+        await saveManifest(done).catch(() => {});
+      }
       const hypr = done?.entries.filter((e) => isHypr(e.path)) || [];
       if (!hypr.length) return [];
       try {
@@ -176,20 +192,12 @@ export function createChanges({ stateDir, cwd, home, exec }) {
         const fresh = [...now].filter((line) => !known.has(sameKind(line)));
         if (!fresh.length) return [];
         const restored = [];
-        const unverified = [];
         const failed = [];
         try {
           for (const entry of hypr) {
             try {
               const current = await hashOf(entry.path);
-              if (entry.after !== undefined) {
-                // Someone changed it since the agent wrote it: leave it.
-                if (current !== entry.after) continue;
-              } else {
-                // No completion seen: nothing to restore if it is untouched.
-                if (current === entry.before) continue;
-                unverified.push(show(entry.path));
-              }
+              if (current !== entry.after) continue;
               await restore(entry, done.dir);
               entry.restored = true;
               restored.push(show(entry.path));
@@ -203,7 +211,6 @@ export function createChanges({ stateDir, cwd, home, exec }) {
         await reloadHypr();
         return [`Hyprland reported an error: ${show(fresh.join("; "))}. ` +
           `Nixi restored ${restored.join(", ") || "nothing"}` +
-          (unverified.length ? ` (the edit to ${unverified.join(", ")} could not be verified)` : "") +
           (failed.length ? `; could not restore ${failed.join(", ")}` : "") + "."];
       } catch (error) {
         return [`The Hyprland change could not be checked (${show(error.code || error.message)}).`];
@@ -223,8 +230,10 @@ export function createChanges({ stateDir, cwd, home, exec }) {
           if (!todo.length) continue;
           // All or nothing: refuse if anything changed since the agent's edit.
           for (const entry of todo) {
-            const expected = entry.after !== undefined ? entry.after : entry.before;
-            if ((await hashOf(entry.path)) !== expected) {
+            if (entry.after === undefined) {
+              return { ok: false, message: `Not undone: ${show(entry.path)} changed since Nixi's edit, or the edit was never confirmed. The backup is in ${show(dir)}.` };
+            }
+            if ((await hashOf(entry.path)) !== entry.after) {
               return { ok: false, message: `Not undone: ${show(entry.path)} changed since Nixi's edit. Nothing was restored.` };
             }
           }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -12,7 +12,7 @@ import { createInterface } from "node:readline";
 const sandbox = mkdtempSync(join(tmpdir(), "nixi-files-"));
 const home = join(sandbox, "home");
 process.env.HOME = home;
-const { locatedUnderBase, filePattern } = await import("./files.js");
+const { locatedUnderBase, filePattern, fallbackFiles } = await import("./files.js");
 
 const put = (relative, content = "x") => {
   const path = join(home, relative);
@@ -86,6 +86,30 @@ test("filePattern strips regex and shell metacharacters", () => {
 test("filePattern yields nothing for a query with no usable characters", () => {
   assert.equal(filePattern("$(&)"), "");
   assert.equal(filePattern("   "), "");
+});
+
+test("an aborted fallback search does not start fd", async () => {
+  const bin = join(sandbox, "aborted-bin");
+  const calls = join(sandbox, "aborted-calls");
+  mkdirSync(bin);
+  for (const name of ["plocate", "fd"]) {
+    const path = join(bin, name);
+    writeFileSync(path, `#!/bin/sh\necho ${name} >> '${calls}'\n`);
+    chmodSync(path, 0o755);
+  }
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}:${oldPath}`;
+  const controller = new AbortController();
+  controller.abort();
+  let result;
+  try {
+    result = await fallbackFiles("report", controller.signal);
+  } finally {
+    process.env.PATH = oldPath;
+  }
+  assert.deepEqual(result, { rows: [], totalMatched: 0, capped: false, complete: false });
+  assert.ok(!existsSync(calls) || !readFileSync(calls, "utf8").split("\n").includes("fd"),
+    "fd did not run after abort");
 });
 
 // ---- end to end ----------------------------------------------------------

@@ -199,11 +199,11 @@ Two levels, so that neither claims a boundary it cannot enforce.
   searching are the exception, and deliberately so: Nixi may look at your
   configuration without asking, because a guide that cannot read your machine
   cannot explain it. Sensitive paths — keys, credentials, `.env` files — still
-  ask, in both levels. With Claude, switching to Guide inside a conversation
-  cancels every request at once, but commands Claude runs without asking (its
-  read-only commands, and anything your own Claude settings allow) can still run
-  until you start a new chat, because its rules are fixed when a conversation
-  starts.
+  ask with Claude and are refused with OpenCode, in both levels. With Claude,
+  switching to Guide inside a conversation cancels every request at once, but
+  commands Claude runs without asking (its read-only commands, and anything your
+  own Claude settings allow) can still run until you start a new chat, because
+  its rules are fixed when a conversation starts.
 - **Mechanic** — every change the agent wants is shown in the card and needs
   your yes. Click **MECHANIC** in the corner to switch to **YOLO**
   (auto-approve); YOLO cannot be reached from Guide.
@@ -224,7 +224,7 @@ prompts you see in Mechanic are for something that changes. With Claude that
 means its Read, Grep and Glob tools. This is why Guide can answer questions
 about your own configuration: it reads, it just never writes. Secrets still
 ask, in both levels and for all three tools: `~/.ssh`, `~/.gnupg`, cloud and
-GitHub credentials, `/run/agenix` (and its `/run/agenix.d` target), `.env` and `*.age` files. (OpenCode's read tool is stricter: it denies them outright, and its `grep`, `glob` and `list` tools ask.) Shell commands, even `grep` and `ls`,
+GitHub credentials, `/run/agenix` (and its `/run/agenix.d` target), `.env` and `*.age` files. Claude matches the resolved path itself. OpenCode's `read` tool is stricter: the bridge resolves the path, including symlinks, and refuses secrets without a card; its `grep`, `glob` and `list` tools ask. A file could be swapped between that check and the read. Shell commands, even `grep` and `ls`,
 still ask. In a conversation that starts at Guide, Claude has no shell at all, so
 it answers from the manual and its file tools. In one that starts at Mechanic, every
 shell command asks, and one naming a secret path asks even after an "always allow"
@@ -233,7 +233,7 @@ mostly does, but an occasional `grep` still arrives as a shell command. Adding
 one key binding typically takes two or three prompts: the live key list,
 perhaps one search, and the edit. To be asked before every read, set
 `"askBeforeReading": true` in `~/.config/omarchy/nixi.json`. It applies from
-the next session, and to OpenCode as well.
+the next session; at Mechanic, OpenCode also shows a card for ordinary reads.
 
 **"Always" is narrow, and Nixi keeps it.** Choosing *allow always* on a shell
 command remembers that one exact command, for this agent, in this folder, until
@@ -241,8 +241,9 @@ you take it back; the next identical request is answered without a card and the
 status line says `Remembered`. A different agent, a different folder or a
 one-character change asks again. It never covers edits, deletes or moves,
 chained commands (`;`, `&&`, `|`, redirects, `$(`), herdr sends or commands that
-name a secret path, and it does nothing at Guide or by voice (click only). Fetch
-and MCP tools keep their agent's own "always". The list is
+name a secret path, and it does nothing at Guide or by voice (click only). For
+those, and for reads, searches and commands run in another folder, the card
+doesn't offer it at all. Fetch and MCP tools keep their agent's own "always". The list is
 `~/.local/state/nixi/always.json` (mode `0600`; Nixi's agents may not write it).
 Type `/always` to list it, `/always forget <n>` or `/always clear` to remove
 entries, or use the Remembered list in the agent panel (`SUPER+,`). Older
@@ -250,10 +251,11 @@ entries, or use the Remembered list in the agent panel (`SUPER+,`). Older
 longer used and can be deleted.
 
 OpenCode's own defaults let tools run without asking, so Nixi always starts it
-with its own rules — everything asks except reading, and it may
+with its own rules — reads ask the bridge for a resolved-path check, and it may
 not leave plan mode — replacing any `OPENCODE_CONFIG_CONTENT` in the
-environment. Its `read` tool works anywhere except the secret paths above, which
-OpenCode itself denies; its `grep`, `glob` and `list` tools ask. OpenCode ends a
+environment. The bridge silently allows ordinary `read` requests and refuses
+secret paths; OpenCode's own rules also deny literal secret paths. Its `grep`,
+`glob` and `list` tools ask. OpenCode ends a
 turn when anything is refused, so at Guide Nixi says what it tried and suggests
 Mechanic. For every agent, a turn that goes silent for 5 minutes (15 with a tool
 running) ends the session with an error, so the card offers a restart rather than

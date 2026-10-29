@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
+import { createAlways, isChained, keyOf, lockFs, rememberable, storePath } from "./always.js";
 
 const bash = (command, kind = "execute") => ({ kind, rawInput: { command } });
 const fresh = () => storePath(mkdtempSync(join(tmpdir(), "nixi-always-")));
@@ -81,6 +81,32 @@ test("a held lock is waited for; a crashed writer's old lock is taken over", asy
   utimesSync(`${path}.lock`, new Date(0), new Date(0));
   assert.equal(await always.record("claude", "/p", "uname -r"), true, "stale lock taken over");
   assert.equal(existsSync(`${path}.lock`), false);
+});
+
+test("a lock refreshed during stale takeover is put back", async () => {
+  const path = fresh();
+  const lock = `${path}.lock`;
+  mkdirSync(join(path, ".."), { recursive: true });
+  mkdirSync(lock);
+  utimesSync(lock, new Date(Date.now() - 20_000), new Date(Date.now() - 20_000));
+  const originalStat = lockFs.stat;
+  let refreshed = false;
+  lockFs.stat = async (name) => {
+    if (!refreshed && name.startsWith(`${lock}.stale-`)) {
+      utimesSync(name, new Date(), new Date());
+      refreshed = true;
+    }
+    return originalStat(name);
+  };
+  try {
+    await assert.rejects(createAlways(path).record("claude", "/p", "date"), /locked by another nixi/);
+  } finally {
+    lockFs.stat = originalStat;
+  }
+  assert.equal(refreshed, true, "the lock became fresh after rename");
+  assert.equal(existsSync(lock), true, "the fresh lock was put back");
+  assert.ok(Date.now() - statSync(lock).mtimeMs < 10_000);
+  assert.equal(existsSync(path), false, "the change did not write through another lock");
 });
 
 test("a lock that is a file can't stall the store forever", async () => {
