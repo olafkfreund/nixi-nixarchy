@@ -8,6 +8,8 @@ import { isHerdrWrite } from "./herdr-policy.js";
 import { shellQuote } from "./permission-detail.js";
 import { secretBashRules } from "./trust-policy.js";
 
+export const lockFs = { stat, rename };
+
 // A shell command that runs other commands: a standing yes to it would also approve
 // whatever is chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
 const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
@@ -61,7 +63,11 @@ export function createAlways(path) {
   // The card's bridge and the companion's share the file: mkdir is the cross-process lock,
   // so a touch() in one can't write back an entry the other just forgot. A lock older than
   // 10s is a crashed writer's and is taken over: renamed aside first, so of two takers only one
-  // wins. Every try counts, so a lock that can't be removed fails the change instead of spinning.
+  // wins. The aside is re-checked: if it is fresh, a live writer took the lock after our stat, so
+  // it is put back (#120). Residual: rename() replaces an empty directory, so a third writer that
+  // takes the name in the gap before the put-back is overwritten, and two writers can hold the
+  // store at once; if the owner finished in that gap, the put-back lock has no owner until it is
+  // 10s old. Every try counts, so a stuck lock fails instead of spinning.
   const lock = `${path}.lock`;
   async function locked(fn) {
     await mkdir(dirname(path), { recursive: true });
@@ -69,10 +75,18 @@ export function createAlways(path) {
       if (tries >= 100) throw new Error(`${path} is locked by another nixi`);
       try { await mkdir(lock); break; } catch (error) {
         if (error.code !== "EEXIST") throw error;
-        const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
+        const age = await lockFs.stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
         if (age > 10000) {
           const aside = `${lock}.stale-${process.pid}-${tries}`;
-          if (await rename(lock, aside).then(() => true, () => false)) await rm(aside, { recursive: true, force: true });
+          if (await lockFs.rename(lock, aside).then(() => true, () => false)) {
+            const again = await lockFs.stat(aside).then((s) => Date.now() - s.mtimeMs, () => Infinity);
+            if (again <= 10000) {
+              if (!(await lockFs.rename(aside, lock).then(() => true, () => false)))
+                throw new Error(`${path} is locked by another nixi`);
+              continue;
+            }
+            await rm(aside, { recursive: true, force: true });
+          }
         }
         await new Promise((resolve) => setTimeout(resolve, 20));
       }

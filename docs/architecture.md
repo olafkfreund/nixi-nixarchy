@@ -321,7 +321,9 @@ permission mode in `nixi.json`; anything else is Guide.
   bridge runs `hyprctl reload` and `hyprctl configerrors`; errors not present
   before the edit restore those files. `/undo` restores the newest change set,
   all or nothing, and refuses if a file changed since. Symlinks, Nix store paths
-  and files over 1 MiB are not copied, and shell edits are not covered.
+  and files over 1 MiB are not copied, and shell edits are not covered. The
+  edit's recorded state is fixed at the end of the turn: a user edit to the same
+  file during that turn is undone with it, and any later change makes undo refuse.
 - OpenCode is always spawned with `OPENCODE_CONFIG_CONTENT` set to Nixi's
   permission rules, replacing any inherited value. Without them its defaults
   run tools with no request for Guide to cancel.
@@ -347,7 +349,7 @@ checks `listPlugins` and says when the card is off.
 **Learned facts** (`bridge/learned.js`). A reply line starting `LEARNED:` is
 withheld from the card, even when split across chunks, and appended to
 `~/.local/share/nixi/LEARNED.md` at the end of the turn. The bridge writes
-it, not the agent, so it works at Guide where agent writes are cancelled.
+it, not the agent, and only at Mechanic: at Guide it is skipped (#51).
 
 ## Compatibility boundary
 
