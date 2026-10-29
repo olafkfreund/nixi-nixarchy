@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 116
 intent: intent/2026-10-29-116-always-passthrough-opencode-exec.md
 ---
