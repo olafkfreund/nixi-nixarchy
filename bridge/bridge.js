@@ -359,6 +359,14 @@ function noticeMcpSource(params) {
   emit({ type: "diagnostic", text: `A tool arrived from an MCP server Nixi did not attach: ${String(tool.mcpServer.name).slice(0, 60)} (${String(tool.mcpServer.source).slice(0, 20)}). Nixi's permission rules still apply to it.` });
 }
 
+// #114/#116: offer a standing yes only where Nixi can safely keep it.
+function offersAlways(toolCall) {
+  if (isHerdrWrite(toolCall) || isChained(toolCall)) return false;
+  if (toolCall?.kind === "execute") return rememberable(toolCall, cwd);
+  if (toolCall?.kind === "read" || toolCall?.kind === "search" || EDIT_KINDS.has(toolCall?.kind)) return false;
+  return true;
+}
+
 const client = {
   sessionUpdate(params) {
     armStall(); // any update is progress, shown or not (#102)
@@ -401,10 +409,7 @@ const client = {
       id: option.optionId,
       label: option.name,
       kind: option.kind,
-    })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
-      // A standing yes to typing into another session would turn one click into all (#95).
-      .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"))
-      .filter((option) => !(isChained(params.toolCall) && option.kind === "allow_always"));
+    })).filter((option) => option.kind !== "allow_always" || offersAlways(params.toolCall));
     noticeMcpSource(params);
     const policy = currentPolicy();
     // Guide: nothing that asks for permission ever runs, and nothing is shown
