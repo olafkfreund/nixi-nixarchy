@@ -36,6 +36,24 @@ reviewers:
    and its `kind`. Also check Claude through the bridge: a read of the canary link is
    refused. Record both in this plan as a deviation note, with no code.
    Verify: the logged JSON is pasted into the plan.
+   **Step 1 result (2026-10-29, measured through the bridge):**
+   - **OpenCode 2.1.4, with `read: "ask"`:** the request for `notes.txt` arrived as
+     ```json
+     {"kind":"read","name":"read","title":"notes.txt",
+      "locations":[{"path":"<cwd>/notes.txt"}],"rawInput":{"path":"notes.txt","limit":1}}
+     ```
+     The path is in `locations[0].path` (absolute, the **literal link path, not
+     resolved**). `rawInput.path` is relative to `cwd`. The gate uses
+     `locations[0].path`, falling back to `resolve(cwd, rawInput.path)`.
+   - **Claude (claude-agent-acp 0.93.0) through the bridge:** the alias read became a
+     permission request (Claude resolved the link and matched the secret ask rule).
+     With the user's saved YOLO it was auto-allowed and the canary printed. At Guide
+     it would be cancelled and at Mechanic a card. That is the current design:
+     SECURITY.md puts what an agent does in YOLO out of scope. **Not changed here;
+     reported to the user as a separate question.**
+   - So OpenCode's gate *rejects* a secret read at every level (as its literal config
+     deny does), which is stricter than Claude in YOLO. Kept as the spec decided.
+
 2. **`bridge/trust-policy.js` and `bridge/bridge.js` (codex).**
    - `opencodeRules`: `read = { "*": "ask" }` always (the secret denies stay);
      `opencodePermissions(askBeforeReading)` no longer varies the read default.
