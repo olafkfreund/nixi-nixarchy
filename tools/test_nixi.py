@@ -531,10 +531,12 @@ def test_nixi_rows_are_searchable():
     assert "onFaqAnswered" in card and "onNixiActionRequested" in card, \
         "the card ignores its own search rows"
     # A model declared by id is not a property of root: `root.<id>` is
-    # undefined at runtime, and the handler throws (#19).
+    # undefined at runtime, and the handler throws (#19). Split-out parts
+    # reach root as `conversation` (#121).
     for model in re.findall(r"ListModel\s*\{\s*id:\s*(\w+)", card):
-        assert "root.%s" % model not in card, \
-            "Conversation.qml reaches ListModel %r as root.%s, which is undefined" % (model, model)
+        for via in ("root", "conversation"):
+            assert "%s.%s" % (via, model) not in card, \
+                "the card reaches ListModel %r as %s.%s, which is undefined" % (model, via, model)
     print("  ok  FAQ, tour and learn are searchable from the card")
 
 
