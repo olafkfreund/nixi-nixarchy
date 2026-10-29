@@ -1048,6 +1048,22 @@ def test_guide_switch_clears_cards():
     print("  ok  a switch to Guide clears the card's permission queue")
 
 
+def test_local_components_are_packaged():
+    """A QML file the card instantiates by name (ScrollPhysics { … }) loads only
+    if Nix installs it beside the card; a missing one is a blank card on the
+    desktop, which CI cannot see because it cannot run QML (#121)."""
+    nix = open(os.path.join(ROOT, "nix", "package.nix")).read()
+    install = re.search(r"for q in ([^;]+); do", nix).group(1).split()
+    checked = re.search(r"for f in (manifest\.json[^;]+); do", nix).group(1).split()
+    local = {f[:-4] for f in os.listdir(ROOT) if f.endswith(".qml")}
+    for name in sorted(local):
+        src = open(os.path.join(ROOT, name + ".qml")).read()
+        for used in set(re.findall(r"^\s*([A-Z]\w*)\s*\{", src, re.M)) & local:
+            assert used + ".qml" in install, "%s.qml uses %s, which package.nix does not install" % (name, used)
+            assert used + ".qml" in checked, "%s.qml uses %s, which the install check does not list" % (name, used)
+    print("  ok  every local QML component the card uses is installed and checked")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

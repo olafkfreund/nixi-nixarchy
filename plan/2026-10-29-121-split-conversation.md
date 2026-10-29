@@ -138,3 +138,22 @@ wc -l Conversation.qml   # ~2,000
 
 Revert the PR's merge commit; the moved files go with it. No data or config
 format changes.
+
+## Deviations
+
+- **Step 1 (user decision, 2026-10-29): `qml-syntax` + a packaging test, not
+  `qml-lint`.** qmllint 6.12 silently skips most of `Conversation.qml`: a
+  typo'd `ScrollPhysicz {` at line 1373 was not reported, even with stub
+  `qs.*` modules on the import path. A `for` loop with `continue` in the
+  `imageRoot` binding (~184) is one trigger; rewriting it did not restore
+  detection, so there are others. qmllint's exit 255 on a parse error is
+  reliable, so:
+  - `flake.nix` `checks.qml-syntax` runs `qmllint` on `*.qml button/*.qml`
+    and fails only on exit 255 (verified: clean tree passes, `ScrollPhysics ( {`
+    fails with `Unexpected token`). No script, no allowlist.
+  - `tools/test_nixi.py` `test_local_components_are_packaged`: every
+    `Name {` in a root `.qml` whose `Name.qml` exists must appear in
+    package.nix's install loop and install-check list.
+  - A typo'd component name is caught by the live check only.
+  - Later steps' verify read `qml-syntax` where they say `qml-lint`.
+  - Done by the lead; Codex's draft (allowlist script) was discarded.

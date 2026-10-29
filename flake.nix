@@ -34,6 +34,20 @@
       });
 
       checks = forAllSystems (pkgs: {
+        # QML syntax (#121): qmllint exits 255 only on a parse error. Its type
+        # checks are not used -- on Conversation.qml they silently skip most of
+        # the file (a loop with `continue` in a binding is one trigger), so a
+        # typo'd component name passes; test_nixi.py checks packaging instead.
+        qml-syntax = pkgs.runCommand "nixi-qml-syntax"
+          { nativeBuildInputs = [ pkgs.qt6.qtdeclarative ]; } ''
+          cd ${./.}
+          for f in *.qml button/*.qml; do
+            rc=0; qmllint "$f" >/dev/null 2>&1 || rc=$?
+            [ "$rc" -ne 255 ] || { qmllint "$f"; echo "QML syntax error in $f"; exit 1; }
+          done
+          touch $out
+        '';
+
         # Building the package runs its installCheckPhase (py_compile on every
         # program, bash -n on the launcher, and every shipped file non-empty).
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.nixi;
