@@ -157,3 +157,8 @@ format changes.
   - A typo'd component name is caught by the live check only.
   - Later steps' verify read `qml-syntax` where they say `qml-lint`.
   - Done by the lead; Codex's draft (allowlist script) was discarded.
+- **Step 5's helper landed with step 2** (as step 5's trap allows):
+  `test_permission_keys_guard` failed once `WindowShortcuts` moved.
+  `card_source()` reads `CARD_PARTS` (Conversation.qml plus the four split
+  files, those that exist); all ten reads use it. Step 5 is left with checking
+  `root.`-prefixed assertions after steps 3-4.

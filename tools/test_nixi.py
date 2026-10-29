@@ -24,6 +24,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Loading them from here instead means saying where it is (#60).
 sys.path.insert(0, os.path.join(ROOT, "bin"))
 
+# Conversation.qml plus the parts split out of it (#121): the text checks below
+# guard code by content, wherever in the card it now lives.
+CARD_PARTS = ("Conversation.qml", "ScrollPhysics.qml", "WindowShortcuts.qml",
+              "FilePreview.qml", "InlineResults.qml")
+
+
+def card_source():
+    return "\n".join(open(os.path.join(ROOT, f)).read()
+                     for f in CARD_PARTS if os.path.exists(os.path.join(ROOT, f)))
+
 
 def load(name, path):
     # Dropping the cached nixi_safeio makes the loaded program re-import it, so
@@ -512,7 +522,7 @@ def test_nixi_rows_are_searchable():
     search, not only as typed commands -- and an FAQ answer is shown in the
     card rather than launching something."""
     menu = open(os.path.join(ROOT, "MenuSearch.qml")).read()
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
     assert "share/faq.json" in menu, "the FAQ is not loaded into the search"
     for flag in ("isNixiFaq", "isNixiAction"):
         assert flag in menu, "search has no %s row" % flag
@@ -611,7 +621,7 @@ def test_settings_keep_bridge_keys():
 def test_permission_keys_guard():
     """Y and N answer a permission prompt from the composer too, but only while
     it is empty, and Return does not send while the prompt is up (#20)."""
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
     handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
     assert "pendingPermission.id" in handler, "the composer ignores a permission prompt"
     guard = _block(handler, handler.index("pendingPermission.id"))
@@ -644,7 +654,7 @@ def test_permission_settle_window():
     the design depends on is still in the file, so removing one fails CI. Each
     was confirmed to fail when its gate was deleted.
     """
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
 
     # The agent's options have to reach the card at all: the Repeater renders one
     # button per option and the keys resolve through them, so an enqueue that
@@ -696,7 +706,7 @@ def test_permission_detail_is_plain():
     """The permission card shows what is being approved as plain text: an
     agent-supplied title or detail cannot restyle or hide part of itself, and a
     long detail scrolls inside the card instead of being cut short (#21)."""
-    qml = open(os.path.join(ROOT, "Conversation.qml")).read()
+    qml = card_source()
     card = qml.split("id: permissionLayer")[1].split("id: cardFade")[0]
     title = card.split("text: root.pendingPermission.title")[1].split("}")[0]
     assert "textFormat: Text.PlainText" in title, "the permission title is not PlainText"
@@ -906,7 +916,7 @@ def test_card_grows_with_content():
     measures creates a loop: wider wraps less, so the card shortens, so it
     narrows, so it lengthens again. CI does not run QML, so a loop would ship
     green and show up as a card that visibly flickers."""
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
 
     trigger = _block(card, card.index("function noteContentWidth"))
     for forbidden in ("height", "width", "implicit", "parent.", "stack."):
@@ -940,7 +950,7 @@ def test_card_grows_with_content():
 def test_yolo_keeps_click_confirm_cards():
     """#95: the bridge keeps a herdr write pending when YOLO is switched on, so the
     card must keep it too. CI does not run QML, so this reads the source."""
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
     assert "event.options, event.confirm)" in card, "the permission event's confirm is dropped"
     yolo = card[card.index('if (permissionMode === "yolo")'):][:80]
     assert "clearUnconfirmedPermissions()" in yolo, "switching to YOLO clears every card again"
@@ -952,7 +962,7 @@ def test_one_ack_shape():
     """#44: the card keeps ONE piece of in-flight state, so a reset cannot
     clear one request kind and miss another -- which is exactly how #40
     happened. CI does not run QML, so this is the only thing guarding it."""
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
 
     assert "property var pendingAck" in card, "the single ack state is gone"
     for name in ("steeringPending", "trustPending", "permissionModePending"):
@@ -992,7 +1002,7 @@ def test_bridge_command_is_pinned():
     trust badge. CI never executes QML, so this string check is the only guard
     there is.
     """
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
 
     command = re.search(r"^\s*readonly property var bridgeCommand:.*?\]$",
                         card, re.M | re.S).group(0)
@@ -1030,8 +1040,8 @@ def test_no_huginn_marker():
     security decision, which would have gated it on nothing. CI cannot execute
     QML at all, so a string check is the only guard the card has.
     """
-    for name in ("Conversation.qml", os.path.join("bridge", "bridge.js")):
-        body = open(os.path.join(ROOT, name)).read()
+    for name, body in (("Conversation.qml", card_source()),
+                       ("bridge.js", open(os.path.join(ROOT, "bridge", "bridge.js")).read())):
         assert "HUGINN" not in body, \
             "%s reinstates HUGINN_INTERNAL -- a marker with no reader (#79)" % name
 
@@ -1040,7 +1050,7 @@ def test_no_huginn_marker():
 def test_guide_switch_clears_cards():
     """The bridge cancels pending cards when it receives a switch to Guide, so
     the card must drop them too, or Allow shows "Working…" for nothing (#106)."""
-    card = open(os.path.join(ROOT, "Conversation.qml")).read()
+    card = card_source()
     trust = _block(card, card.index("function setTrust"))
     assert 'if (level !== "mechanic") clearPermissions()' in trust, \
         "setTrust keeps cards the bridge cancelled on a switch to Guide"
