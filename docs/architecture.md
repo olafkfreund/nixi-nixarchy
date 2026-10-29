@@ -347,7 +347,7 @@ checks `listPlugins` and says when the card is off.
 **Learned facts** (`bridge/learned.js`). A reply line starting `LEARNED:` is
 withheld from the card, even when split across chunks, and appended to
 `~/.local/share/nixi/LEARNED.md` at the end of the turn. The bridge writes
-it, not the agent, so it works at Guide where agent writes are cancelled.
+it, not the agent, and only at Mechanic: at Guide it is skipped (#51).
 
 ## Compatibility boundary
 

@@ -199,7 +199,9 @@ Two levels, so that neither claims a boundary it cannot enforce.
   searching are the exception, and deliberately so: Nixi may look at your
   configuration without asking, because a guide that cannot read your machine
   cannot explain it. Sensitive paths — keys, credentials, `.env` files — still
-  ask, in both levels.
+  ask, in both levels. Switching to Guide inside a conversation stops every
+  change at once; read-only shell commands can still run until you start a new
+  chat, because an agent's rules are fixed when a conversation starts.
 - **Mechanic** — every change the agent wants is shown in the card and needs
   your yes. Click **MECHANIC** in the corner to switch to **YOLO**
   (auto-approve); YOLO cannot be reached from Guide.
