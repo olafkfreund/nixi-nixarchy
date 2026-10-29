@@ -2011,129 +2011,13 @@ Item {
       }
     }
 
-    Item {
+    FilePreview {
       id: filePreviewCard
-      parent: root.pinned ? pinnedWindow.contentItem : panel.contentItem
-      visible: root.filePreviewVisible && root.searchMode === "@"
-      readonly property Item anchorCard: card
-      readonly property Item anchorItem: inlineResults.currentItem
-      width: Math.min(Style.space(500),
-        Math.max(Style.space(280), parent.width - anchorCard.x
-          - anchorCard.width - Style.space(12)))
-      height: Math.min(Style.space(520), parent.height - Style.gapsOut * 2)
-      x: anchorCard.x + anchorCard.width + Style.space(2)
-      y: {
-        if (!anchorItem) return anchorCard.y
-        var point = anchorItem.mapToItem(parent, 0, anchorItem.height / 2)
-        return Math.max(Style.gapsOut,
-          Math.min(parent.height - height - Style.gapsOut, point.y - height / 2))
-      }
-      z: 21
-      readonly property real bodyX: Style.space(18)
-      readonly property real wedgeCenterY: {
-        if (!anchorItem) return height / 2
-        var point = anchorItem.mapToItem(filePreviewCard, 0,
-          anchorItem.height / 2)
-        return Math.max(Style.space(28), Math.min(height - Style.space(28), point.y))
-      }
-      onWedgeCenterYChanged: previewOutline.requestPaint()
-
-      Canvas {
-        id: previewOutline
-        anchors.fill: parent
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        onPaint: {
-          var ctx = getContext("2d")
-          ctx.reset()
-          var bx = filePreviewCard.bodyX
-          var right = width - Math.max(1, Style.space(2))
-          var bottom = height - Math.max(1, Style.space(2))
-          var top = Math.max(1, Style.space(2))
-          var radius = Math.min(Style.cornerRadius, (right - bx) / 2, height / 2)
-          var halfWedge = Style.space(14)
-          var cy = filePreviewCard.wedgeCenterY
-          ctx.beginPath()
-          ctx.moveTo(bx + radius, top)
-          ctx.lineTo(right - radius, top)
-          ctx.quadraticCurveTo(right, top, right, top + radius)
-          ctx.lineTo(right, bottom - radius)
-          ctx.quadraticCurveTo(right, bottom, right - radius, bottom)
-          ctx.lineTo(bx + radius, bottom)
-          ctx.quadraticCurveTo(bx, bottom, bx, bottom - radius)
-          ctx.lineTo(bx, cy + halfWedge)
-          ctx.lineTo(1, cy)
-          ctx.lineTo(bx, cy - halfWedge)
-          ctx.lineTo(bx, top + radius)
-          ctx.quadraticCurveTo(bx, top, bx + radius, top)
-          ctx.closePath()
-          ctx.fillStyle = root.background
-          ctx.fill()
-          ctx.lineWidth = Math.max(1, Style.space(2))
-          ctx.strokeStyle = root.border
-          ctx.lineJoin = "round"
-          ctx.stroke()
-        }
-      }
-
-      Image {
-        anchors.fill: parent
-        anchors.leftMargin: filePreviewCard.bodyX + Style.space(14)
-        anchors.rightMargin: Style.space(14)
-        anchors.topMargin: Style.space(14)
-        anchors.bottomMargin: Style.space(14)
-        visible: root.filePreviewThumbnail !== ""
-        source: root.filePreviewThumbnail === ""
-          ? "" : root.localFileUrl(root.filePreviewThumbnail)
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        cache: false
-      }
-
-      ScrollView {
-        anchors.fill: parent
-        anchors.leftMargin: filePreviewCard.bodyX + Style.space(16)
-        anchors.rightMargin: Style.space(16)
-        anchors.topMargin: Style.space(16)
-        anchors.bottomMargin: Style.space(16)
-        visible: root.filePreviewText !== ""
-        clip: true
-        TextArea {
-          text: root.filePreviewText
-          readOnly: true
-          wrapMode: TextEdit.NoWrap
-          color: root.foreground
-          selectionColor: root.accent
-          background: null
-          padding: 0
-          font.family: "JetBrainsMono Nerd Font"
-          font.pixelSize: root.menuPathSize
-        }
-      }
-
-      Column {
-        anchors.centerIn: parent
-        width: parent.width - filePreviewCard.bodyX - Style.space(36)
-        anchors.horizontalCenterOffset: filePreviewCard.bodyX / 2
-        spacing: Style.space(8)
-        visible: root.filePreviewThumbnail === "" && root.filePreviewText === ""
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          text: "󰈙"
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.38)
-          font.family: "JetBrainsMono Nerd Font"
-          font.pixelSize: Style.space(54)
-        }
-        Text {
-          width: parent.width
-          text: root.filePreviewName
-          color: root.foreground
-          horizontalAlignment: Text.AlignHCenter
-          elide: Text.ElideMiddle
-          font.family: Style.font.family
-          font.pixelSize: root.menuTitleSize
-        }
-      }
+      conversation: root
+      cardRef: card
+      panelRef: panel
+      pinnedWindowRef: pinnedWindow
+      inlineResultsRef: inlineResults
     }
 
     Timer {

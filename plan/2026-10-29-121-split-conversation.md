@@ -162,3 +162,8 @@ format changes.
   `card_source()` reads `CARD_PARTS` (Conversation.qml plus the four split
   files, those that exist); all ten reads use it. Step 5 is left with checking
   `root.`-prefixed assertions after steps 3-4.
+- **Steps 3-4 name the sibling properties `cardRef`, `panelRef`,
+  `pinnedWindowRef`, `inlineResultsRef` (and `…Ref` in step 4) from the
+  start**, not only after a binding loop shows: qmllint can't detect the loop
+  here (see step 1), so the unambiguous name is the safe default. The moved
+  root gets a local id (`preview`) for its own children's references.
