@@ -84,6 +84,7 @@ export function createChanges({ stateDir, cwd, home, exec }) {
     const existing = turn?.entries.find((e) => e.path === path);
     if (existing) { // second edit of one file in a turn: keep the first backup
       existing.ids.push(toolCallId);
+      existing.after = undefined; // the first edit's hash no longer describes the file; endTurn re-reads it
       await saveManifest(turn);
       return null;
     }

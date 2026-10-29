@@ -66,6 +66,15 @@ reviewers:
    it.
    Verify: `node --test` all green; `nix flake check`.
 
+## Deviations
+
+- **Step 1(a), found by Codex during step 2:** a second edit also resets
+  `existing.after` to `undefined`. Without that, a first edit that was already
+  confirmed keeps its hash. `endTurn` only fills `undefined`, so after a late or missing
+  second completion the file never matches and `/undo` refuses. The spec's rejected
+  alternative ("reset after on a second edit … step 2 sets it at turn end anyway") was
+  wrong for exactly that reason. A test was added.
+
 ## Tests
 
 - `cd bridge && node --test`; `nix flake check`.
