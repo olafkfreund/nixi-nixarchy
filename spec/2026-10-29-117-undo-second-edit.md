@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 117
 intent: intent/2026-10-29-117-undo-second-edit.md
 ---
