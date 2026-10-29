@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 128
 intent: intent/2026-10-29-128-secrets-for-users.md
 ---
