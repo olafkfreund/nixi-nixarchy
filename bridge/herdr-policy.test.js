@@ -43,5 +43,7 @@ test("commands that never mention herdr, and other tools, are not herdr writes (
 test("the audit detail is the pane and the text (#95)", () => {
   assert.deepEqual(herdrWriteDetail(call('herdr --session s agent prompt 1-2 "do it"')),
     { pane: "1-2", text: '"do it"' });
+  assert.deepEqual(herdrWriteDetail(call(["herdr", "agent", "prompt", "p1", "hi there"])),
+    { pane: "p1", text: "hi there" });
   assert.equal(herdrWriteDetail(call("ls")), null);
 });
