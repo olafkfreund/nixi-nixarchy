@@ -167,6 +167,6 @@ format changes.
   start**, not only after a binding loop shows: qmllint can't detect the loop
   here (see step 1), so the unambiguous name is the safe default. The moved
   root gets a local id (`preview`) for its own children's references.
-- **Step 4 exposes `menuShortcutAssignmentRef`** (a `property alias` on the
+- **Step 4 exposes `shortcutTimer`** (a `property alias` on the
   InlineResults root): `Conversation.qml` restarts that timer from outside the
   moved block, as step 4 foresaw for ids used outside.

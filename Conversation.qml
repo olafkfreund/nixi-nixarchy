@@ -507,7 +507,7 @@ Item {
       root.menuShortcutLast = -1
       root.lastVisibleShortcut = ""
     }
-    inlineResults.menuShortcutAssignmentRef.restart()
+    inlineResults.shortcutTimer.restart()
   }
 
   function menuScrollKeyImpulse(direction, page) {

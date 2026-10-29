@@ -3,12 +3,11 @@ import QtQuick.Controls
 import qs.Commons
 
 ListView {
-  id: results
   required property Item conversation
   required property Item menuPhysicsRef
   required property Item menuResultsRef
   required property Item menuSearchRef
-  property alias menuShortcutAssignmentRef: menuShortcutAssignment
+  property alias shortcutTimer: menuShortcutAssignment
   width: parent.width
   height: Math.min(contentHeight, Style.space(360))
   model: conversation.menuOpen ? menuSearchRef.rows : []
