@@ -130,6 +130,7 @@ new AgentSideConnection((conn) => ({
         rawInput: { command: "uname -r", cwd: "/elsewhere" } }
       : text.includes("PLEASE_READ") ? { toolCallId: "t10", title: "Read /tmp/probe", kind: "read" }
       : text.includes("PLEASE_FETCH") ? { toolCallId: "t11", title: "Fetch example.com", kind: "fetch" }
+      : text.includes("PLEASE_SEARCH") ? { toolCallId: "t12", title: "Grep ~/.ssh", kind: "search" }
       // PLEASE_HERDR: a Bash call that types into another session (#95).
       : text.includes("PLEASE_HERDR") ? { toolCallId: "t5", title: "Bash", kind: "execute",
         rawInput: { command: 'herdr agent prompt 1-2 "run the tests"' } }

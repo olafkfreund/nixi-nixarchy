@@ -79,7 +79,7 @@ test("\"always\" on a chained command is never offered, so never stored", async 
 });
 
 for (const [fixture, offered] of [
-  ["PLEASE_SECRET", false], ["PLEASE_ELSEWHERE", false], ["PLEASE_READ", false],
+  ["PLEASE_SECRET", false], ["PLEASE_ELSEWHERE", false], ["PLEASE_READ", false], ["PLEASE_SEARCH", false],
   ["PLEASE_PLAIN", true], ["PLEASE_FETCH", true],
 ]) {
   test(`"always" ${offered ? "is" : "is not"} offered for ${fixture}`, async () => {

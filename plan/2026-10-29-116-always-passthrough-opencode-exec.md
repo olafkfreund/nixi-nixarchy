@@ -96,6 +96,8 @@ reviewers:
 - **Not done (optional hardening):** treating a call with no `kind` but a
   `rawInput.command` as `execute`. Adapters set the kind from the tool name (verified by
   the review), so it's noted in the PR only.
+- **agy review, Low (fixed):** a `search` case is added to the offer tests, and the SECURITY.md
+  row now says fetch and MCP tools keep their agent's own "always".
 
 ## Tests
 
