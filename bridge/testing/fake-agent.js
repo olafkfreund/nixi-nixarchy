@@ -77,6 +77,13 @@ new AgentSideConnection((conn) => ({
   async prompt(params) {
     const text = (params.prompt || []).map((block) => block.text || "").join("");
     log({ method: "prompt", text });
+    if (text.startsWith("PLEASE_OCREAD ")) {
+      const path = text.slice("PLEASE_OCREAD ".length);
+      const toolCall = { toolCallId: "read1", title: path, kind: "read", locations: [{ path }] };
+      const { outcome } = await conn.requestPermission({ sessionId: params.sessionId, toolCall, options: permissionOptions() });
+      log({ method: "permissionOutcome", outcome });
+      return { stopReason: "end_turn" };
+    }
     // PLEASE_HYPR <text>: a real edit (#90). Ask permission, and if allowed write
     // <text> into ~/.config/hypr/bindings.lua and report it completed, the way
     // the real agents write after the bridge answers. "THEN_FAIL" makes the turn fail.

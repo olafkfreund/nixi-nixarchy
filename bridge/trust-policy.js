@@ -5,9 +5,10 @@
 // asked over ACP, Claude describes `plan` as "Create a plan before making
 // changes" and Codex's closest, `read-only`, as "Always ask to edit external
 // files and use the internet". So Guide's guarantee is the bridge CANCELLING
-// every permission request it receives, with the session mode as a second layer.
+// every permission request it receives except OpenCode reads, with the session mode as a
+// second layer. OpenCode reads are checked against resolved paths in the bridge.
 //
-// "Every request it receives" is exact, and the difference matters (#41).
+// Permission coverage matters (#41).
 // Reading is not changing, and Guide deliberately allows it: a tutor that
 // cannot look at your configuration cannot teach you about it. Read, Grep and
 // Glob are granted below in BOTH trust levels, and Claude Code applies that
@@ -16,8 +17,7 @@
 // executes, or reaches the network still produces a request, and in Guide every
 // one of those is cancelled.
 //
-// Secrets ask in both levels, for all three read tools. That is the one part of
-// the read allowance that is not open: see SECRET_PATHS.
+// Secret reads are fenced in both levels: see SECRET_PATHS.
 //
 // Mechanic asks before each change: every request is shown in the card and
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
@@ -36,14 +36,14 @@ const MODES = {
 // OpenCode's own defaults resolve every tool to "allow": a write runs without
 // any permission request, so Guide's cancel would have nothing to cancel, and
 // its plan mode still allows bash. Nixi's rules are appended after OpenCode's
-// built-in ones and win: everything asks except reading, and the agent may not
+// built-in ones and win: everything asks, and the agent may not
 // leave plan mode itself. `*` also covers MCP and plugin tools from the user's
 // opencode.json. Verified on p620 (plan step 17b).
 //
 // #102: opencode 2.0.32 ends the whole turn on any refusal, and its own
 // external_directory check asks for every read outside the project, so Guide
 // could not read /etc/hostname. external_directory is allowed; `read` is
-// allowed except SECRET_PATHS, which are config denies (a deny is enforced by
+// asked, with SECRET_PATHS also config-denied (a deny is enforced by
 // opencode itself, no card). Measured: grep/glob apply no path denies, so
 // grep/glob/list ask for every path instead of silently reaching ~/.ssh.
 //
@@ -65,8 +65,15 @@ export function opencodePathDenies(paths) {
 
 export const opencodeSecretDenies = () => opencodePathDenies(SECRET_PATHS);
 
-function opencodeRules(readDefault) {
-  const read = { "*": readDefault };
+export function isSecretPath(realPath) {
+  return opencodeSecretDenies().some((pattern) => {
+    const regex = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    return new RegExp(`^${regex}$`, "s").test(realPath);
+  });
+}
+
+function opencodeRules() {
+  const read = { "*": "ask" };
   for (const pattern of opencodeSecretDenies()) read[pattern] = "deny";
   return { permission: {
     "*": "ask",
@@ -101,10 +108,10 @@ function opencodeRules(readDefault) {
 // agent joins it when someone does, not when it seems likely.
 export const MCP_CAPABLE_AGENTS = ["claude"];
 
-// askBeforeReading (nixi.json) turns OpenCode's reads back into asks: "ask for
-// everything" means every agent. The secret denies stay.
-export function opencodePermissions(askBeforeReading) {
-  return opencodeRules(askBeforeReading ? "ask" : "allow");
+// The bridge answers ordinary OpenCode reads silently unless askBeforeReading
+// is set; OpenCode must ask so the bridge can check symlink targets first.
+export function opencodePermissions() {
+  return opencodeRules();
 }
 
 // Claude asks before every Read/Grep/Glob outside its cwd (~/.config/nixi), so
@@ -181,7 +188,7 @@ export const EXEC_WRITE_PATHS = [
   "//**/nixi/always.json.*",
 ];
 
-export const OPENCODE_PERMISSIONS = opencodeRules("allow");
+export const OPENCODE_PERMISSIONS = opencodeRules();
 
 const READ_TOOLS = ["Read", "Grep", "Glob"];
 const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${tool}(${path})`));
