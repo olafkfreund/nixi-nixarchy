@@ -627,8 +627,9 @@ async function steer(text) {
 // command only: never terminal output.
 let sendsLogChecked = false;
 function auditSend(toolCall, picked) {
+  const command = toolCall?.rawInput?.command;
   const detail = herdrWriteDetail(toolCall)
-    || { pane: "", text: String(toolCall?.rawInput?.command || "") };
+    || { pane: "", text: String(Array.isArray(command) ? command.join(" ") : (command ?? "")) };
   try {
     const path = join(learnedDir, "sends.log");
     mkdirSync(learnedDir, { recursive: true });

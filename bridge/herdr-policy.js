@@ -18,6 +18,8 @@ const HERDR_WRITE = /\bherdr\b(?:\s+--session\s+\S+)?\s+(?:agent\s+(?:prompt|sen
 
 // {pane, text} for the audit line, or null when the command does not parse.
 export function herdrWriteDetail(toolCall) {
-  const match = HERDR_WRITE.exec(toolCall?.rawInput?.command ?? "");
+  const command = toolCall?.rawInput?.command;
+  const text = Array.isArray(command) ? command.join(" ") : (command ?? "");
+  const match = HERDR_WRITE.exec(text);
   return match ? { pane: match[1], text: match[2].trim() } : null;
 }
