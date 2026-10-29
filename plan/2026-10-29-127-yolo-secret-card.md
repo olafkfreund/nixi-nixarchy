@@ -91,6 +91,15 @@ reviewers:
   skips secret cards, re-checking that each card is still pending and the trust level is
   still Mechanic after the await. Its caller adds `.catch`. Step 3 adds the test: switching
   to YOLO with a secret card waiting leaves the card.
+- **Opus review (fixed):**
+  - medium: `touchesSecret` also runs `namesSecret` over `rawInput.glob`, `pattern` and
+    `include`, so a Grep/Glob that names a secret only in its glob (`glob: ".ssh/*"`) asks
+    in YOLO;
+  - low: the pending-card sweep stops if YOLO is switched off during its await;
+  - low: a non-array `locations` no longer throws.
+
+  Tests added. Reported separately: Claude's own Grep/Glob rules don't match the glob
+  parameter either, at any level (an older gap, not this change's).
 
 ## Tests
 

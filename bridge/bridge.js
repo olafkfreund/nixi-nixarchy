@@ -803,7 +803,7 @@ async function allowAllPendingPermissions() {
     if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
     if (await touchesSecret(pending.toolCall, cwd)) continue; // so does a secret (#127)
     // The check awaited: the card may have been answered, or the trust level left.
-    if (!pendingPermissions.has(id) || effectiveTrust() !== "mechanic") continue;
+    if (!pendingPermissions.has(id) || effectiveTrust() !== "mechanic" || permissionMode !== "yolo") continue;
     pendingPermissions.delete(id);
     pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
   }

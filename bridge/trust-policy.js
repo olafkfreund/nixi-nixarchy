@@ -78,7 +78,7 @@ export function isSecretPath(realPath) {
 export async function touchesSecret(toolCall, cwd) {
   const input = toolCall?.rawInput;
   const paths = [
-    ...(toolCall?.locations || []).map((location) => location?.path),
+    ...(Array.isArray(toolCall?.locations) ? toolCall.locations : []).map((location) => location?.path),
     input?.file_path, input?.path, input?.notebook_path,
   ];
   for (const path of paths) {
@@ -89,7 +89,8 @@ export async function touchesSecret(toolCall, cwd) {
     const target = await realpath(resolved).catch(() => resolved);
     if (isSecretPath(target)) return true;
   }
-  return namesSecret(input?.command);
+  // A search names its target in a glob or pattern too (Grep glob: ".ssh/*", Glob "$HOME/.ssh/*").
+  return [input?.command, input?.glob, input?.pattern, input?.include].some(namesSecret);
 }
 
 function opencodeRules() {

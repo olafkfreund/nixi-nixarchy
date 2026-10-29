@@ -522,6 +522,12 @@ test("touchesSecret checks named paths, resolved symlinks, and shell commands (#
     assert.equal(await touchesSecret({ rawInput: { command: ["cat", "/run/agenix/x"] } }, dir), true);
     assert.equal(await touchesSecret({ locations: [{ path: "plain.txt" }] }, dir), false);
     assert.equal(await touchesSecret({ rawInput: { command: "uname -r" } }, dir), false);
+    // #127 review: a search names its target in glob/pattern/include, and junk locations don't throw.
+    assert.equal(await touchesSecret({ rawInput: { path: dir, glob: ".ssh/*", pattern: "BEGIN" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { pattern: "/home/u/.ssh/*" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { include: "**/*.age" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { path: dir, glob: "*.txt", pattern: "TODO" } }, dir), false);
+    assert.equal(await touchesSecret({ locations: "not-an-array" }, dir), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
