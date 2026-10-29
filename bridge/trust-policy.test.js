@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath } from "./trust-policy.js";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath, touchesSecret } from "./trust-policy.js";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
@@ -508,6 +508,21 @@ test("the secret path list cannot silently shrink (#41)", () => {
     assert.ok(SECRET_PATHS.includes(path), `${path} is no longer guarded`);
   // Paths, not rules: a "Read(...)" here would not generate Grep/Glob cover.
   for (const path of SECRET_PATHS) assert.ok(!path.includes("("), `${path} looks like a rule`);
+});
+
+test("touchesSecret checks named paths, resolved symlinks, and shell commands (#127)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "nixi-secret-"));
+  try {
+    writeFileSync(join(dir, "key.age"), "test");
+    symlinkSync(join(dir, "key.age"), join(dir, "alias.txt"));
+    for (const path of ["key.age", "alias.txt"])
+      assert.equal(await touchesSecret({ locations: [{ path }] }, dir), true, path);
+    assert.equal(await touchesSecret({ rawInput: { file_path: "~/.ssh/k" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: "cat ~/.netrc" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: ["cat", "/run/agenix/x"] } }, dir), true);
+    assert.equal(await touchesSecret({ locations: [{ path: "plain.txt" }] }, dir), false);
+    assert.equal(await touchesSecret({ rawInput: { command: "uname -r" } }, dir), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("Guide and Mechanic still grant the same reads; only askBeforeReading withdraws them (#41)", () => {

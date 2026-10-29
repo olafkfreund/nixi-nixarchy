@@ -51,6 +51,32 @@ test("YOLO stays allow_once and records nothing", async () => {
   assert.equal(seen.exists, false);
 });
 
+test("YOLO asks for secrets and herdr writes, but auto-allows a plain command (#127)", async () => {
+  const run = await runBridge(base({
+    settings: { trust: "mechanic", permissionMode: "yolo" },
+    messages: ["PLEASE_SECRET", "PLEASE_PLAIN", "PLEASE_HERDR"].map((text) => ({ type: "prompt", text })),
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "reject" }),
+  }));
+  assert.deepEqual(run.events.filter((e) => e.type === "permission").map((e) => e.title), ["cat key", "Bash"]);
+  assert.ok(run.events.some((e) => e.type === "status" && e.text.includes("asks: secret path")));
+  assert.deepEqual(outcomes(run), [
+    { outcome: "selected", optionId: "reject" },
+    { outcome: "selected", optionId: "allow" },
+    { outcome: "selected", optionId: "reject" },
+  ]);
+});
+
+test("switching to YOLO leaves a waiting secret card pending (#127)", async () => {
+  const run = await runBridge(base({
+    messages: [{ type: "prompt", text: "PLEASE_SECRET it" }],
+    onPermission: (event) => [{ type: "permission_mode", mode: "yolo" }, 600,
+      { type: "permission", id: event.id, optionId: "reject" }],
+  }));
+  assert.equal(cards(run), 1);
+  assert.ok(run.events.some((e) => e.type === "ack" && e.of === "permission_mode" && e.ok));
+  assert.deepEqual(outcomes(run), [{ outcome: "selected", optionId: "reject" }]);
+});
+
 for (const [label, seeded, message] of [
   ["another agent", entry("uname -r", { agent: "codex" }), plain],
   ["another folder", entry("uname -r", { cwd: "/elsewhere" }), plain],
