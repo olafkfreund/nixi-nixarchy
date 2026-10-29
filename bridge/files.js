@@ -196,6 +196,7 @@ async function fallbackFiles(query, signal) {
     ]);
     const locatedPaths = [...new Set([...priorityOutputs, located]
       .flatMap((output) => locatedUnderBase(output, false)))];
+    if (signal?.aborted) return { rows: [], totalMatched: 0, capped: false, complete: false };
     if (locatedPaths.length > 0) return {
       rows: locatedPaths.slice(0, 100).map((path) => ({
         name: basename(path),
@@ -215,8 +216,12 @@ async function fallbackFiles(query, signal) {
     // A whole-home traversal is not ordered by relevance and can spend its
     // entire timeout in large hidden trees before reaching Downloads. Search
     // normal user-facing roots first, then fall back to the complete scope.
+    if (signal?.aborted) return { rows: [], totalMatched: 0, capped: false, complete: false };
     let found = await scan(priorityFileRoots, 3000);
-    if (found.length === 0) found = await scan(searchRoots, 15_000);
+    if (found.length === 0) {
+      if (signal?.aborted) return { rows: [], totalMatched: 0, capped: false, complete: false };
+      found = await scan(searchRoots, 15_000);
+    }
     return { rows: found.slice(0, 100).map((path) => {
       const absolute = resolve(path);
       return {

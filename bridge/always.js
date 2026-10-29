@@ -61,7 +61,9 @@ export function createAlways(path) {
   // The card's bridge and the companion's share the file: mkdir is the cross-process lock,
   // so a touch() in one can't write back an entry the other just forgot. A lock older than
   // 10s is a crashed writer's and is taken over: renamed aside first, so of two takers only one
-  // wins. Every try counts, so a lock that can't be removed fails the change instead of spinning.
+  // wins. The aside is re-checked: if it is fresh, a live writer took the lock after our stat, so
+  // it is put back (#120). Residual: a third writer could take the name in the microseconds before
+  // the put-back; that fails this change. Every try counts, so a stuck lock fails instead of spinning.
   const lock = `${path}.lock`;
   async function locked(fn) {
     await mkdir(dirname(path), { recursive: true });
@@ -72,7 +74,15 @@ export function createAlways(path) {
         const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
         if (age > 10000) {
           const aside = `${lock}.stale-${process.pid}-${tries}`;
-          if (await rename(lock, aside).then(() => true, () => false)) await rm(aside, { recursive: true, force: true });
+          if (await rename(lock, aside).then(() => true, () => false)) {
+            const again = await stat(aside).then((s) => Date.now() - s.mtimeMs, () => Infinity);
+            if (again <= 10000) {
+              if (!(await rename(aside, lock).then(() => true, () => false)))
+                throw new Error(`${path} is locked by another nixi`);
+              continue;
+            }
+            await rm(aside, { recursive: true, force: true });
+          }
         }
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
