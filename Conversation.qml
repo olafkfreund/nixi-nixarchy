@@ -1248,7 +1248,7 @@ Item {
         // already in code spans, with backticks stripped (#42).
         // Only the panel's own listing is swallowed; any other notice always shows (#114).
         var noticeText = String(event.text || "")
-        if (!(alwaysQuiet && /^(Remembered for |Nothing remembered for )/.test(noticeText))) showNixiMessage(noticeText)
+        if (!(alwaysQuiet && /^(Remembered for |Nothing remembered for |No remembered approval )/.test(noticeText))) showNixiMessage(noticeText)
       } else if (event.type === "always_list") {
         alwaysQuiet = false
         alwaysListed(event.entries || [])

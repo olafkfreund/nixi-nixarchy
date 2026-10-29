@@ -8,6 +8,8 @@ import { isHerdrWrite } from "./herdr-policy.js";
 import { shellQuote } from "./permission-detail.js";
 import { secretBashRules } from "./trust-policy.js";
 
+export const lockFs = { stat, rename };
+
 // A shell command that runs other commands: a standing yes to it would also approve
 // whatever is chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
 const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
@@ -71,13 +73,13 @@ export function createAlways(path) {
       if (tries >= 100) throw new Error(`${path} is locked by another nixi`);
       try { await mkdir(lock); break; } catch (error) {
         if (error.code !== "EEXIST") throw error;
-        const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
+        const age = await lockFs.stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
         if (age > 10000) {
           const aside = `${lock}.stale-${process.pid}-${tries}`;
-          if (await rename(lock, aside).then(() => true, () => false)) {
-            const again = await stat(aside).then((s) => Date.now() - s.mtimeMs, () => Infinity);
+          if (await lockFs.rename(lock, aside).then(() => true, () => false)) {
+            const again = await lockFs.stat(aside).then((s) => Date.now() - s.mtimeMs, () => Infinity);
             if (again <= 10000) {
-              if (!(await rename(aside, lock).then(() => true, () => false)))
+              if (!(await lockFs.rename(aside, lock).then(() => true, () => false)))
                 throw new Error(`${path} is locked by another nixi`);
               continue;
             }

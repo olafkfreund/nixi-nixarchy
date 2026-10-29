@@ -287,4 +287,4 @@ if (isMain) {
   process.on("SIGINT", shutdown);
 }
 
-export { locatedUnderBase, filePattern };
+export { locatedUnderBase, filePattern, fallbackFiles };
