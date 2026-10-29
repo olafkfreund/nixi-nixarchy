@@ -51,9 +51,9 @@ const MODES = {
 // it (the cwd falls back to $HOME), as well as absolute ones, so the patterns
 // are anchor-free: `*.ssh/*` matches `.ssh/k` and `/home/u/.ssh/k`, and `*.ssh`
 // the directory itself, which its read tool lists. Over-matching is fine for a deny.
-export function opencodeSecretDenies() {
+export function opencodePathDenies(paths) {
   const denies = [];
-  for (const path of SECRET_PATHS) {
+  for (const path of paths) {
     if (path.startsWith("//")) continue; // Claude's absolute spelling; these cover it already
     const dir = path.endsWith("/**");
     const base = dir ? path.slice(0, -3) : path;
@@ -63,6 +63,8 @@ export function opencodeSecretDenies() {
   return denies;
 }
 
+export const opencodeSecretDenies = () => opencodePathDenies(SECRET_PATHS);
+
 function opencodeRules(readDefault) {
   const read = { "*": readDefault };
   for (const pattern of opencodeSecretDenies()) read[pattern] = "deny";
@@ -70,7 +72,11 @@ function opencodeRules(readDefault) {
     "*": "ask",
     external_directory: "allow",
     read,
-    edit: { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" },  // remembered approvals (#114), as EXEC_WRITE_PATHS
+    edit: {
+      "*": "ask",
+      ...Object.fromEntries(opencodePathDenies(EXEC_WRITE_PATHS).map((p) => [p, "deny"])),
+      "*nixi/always.json": "deny", "*nixi/always.json.*": "deny",  // remembered approvals (#114)
+    },
     grep: "ask",
     glob: "ask",
     list: "ask",
@@ -130,8 +136,6 @@ export const SECRET_PATHS = [
   "//**/.env", "//**/.env.*", "//**/*.age",
 ];
 
-export const OPENCODE_PERMISSIONS = opencodeRules("allow");
-
 // Writes that will later run with nobody present (#52).
 //
 // `ask` would be a no-op here: Mechanic is Claude's `default` mode, where every
@@ -161,6 +165,8 @@ export const EXEC_WRITE_PATHS = [
   "~/.claude/settings.json",         // the agent's own permission rules (user scope)
   "~/.claude/settings.local.json",
   "~/.claude/hooks/**",              // PreToolUse: a shell command, no prompt
+  "~/.config/opencode/**",          // OpenCode's own permission config, loaded (#116)
+  "~/.opencode/**",                  // OpenCode's home config dir: config, agents, plugins; loaded even with project config off (#116)
   "~/.config/omarchy/hooks/**",      // post-boot.d runs at every boot
   "~/.config/omarchy/extensions/**", // #52 as filed: `when:` guards are bash
   "~/.config/omarchy/plugins/**",    // bridge scripts spawn on card load
@@ -174,6 +180,8 @@ export const EXEC_WRITE_PATHS = [
   "~/.local/state/nixi/always.json.*",
   "//**/nixi/always.json.*",
 ];
+
+export const OPENCODE_PERMISSIONS = opencodeRules("allow");
 
 const READ_TOOLS = ["Read", "Grep", "Glob"];
 const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${tool}(${path})`));
