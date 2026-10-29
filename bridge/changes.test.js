@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChanges, isStorePath } from "./changes.js";
@@ -14,7 +14,7 @@ async function setup(errors = () => "") {
   const exec = async (args) => {
     calls.push(args[0]);
     if (broken) return { ok: false, stdout: "" };
-    return { ok: true, stdout: args[0] === "configerrors" ? errors() : "" };
+    return { ok: true, stdout: args[0] === "configerrors" ? await errors() : "" };
   };
   const stateDir = join(home, "state", "changes");
   const changes = createChanges({ stateDir, cwd: home, home, exec });
@@ -212,7 +212,7 @@ test("endTurn: an existing error that only moved lines is not blamed on the edit
   assert.equal(await readFile(file, "utf8"), "good\n");
 });
 
-test("endTurn: with no completion seen, an untouched file is left and a changed one is restored, unverified", async () => {
+test("endTurn: with no completion seen, Hyprland files are restored without an unverified notice", async () => {
   let errors = "";
   const { home, changes } = await setup(() => errors);
   const same = join(home, ".config", "hypr", "same.lua");
@@ -224,8 +224,9 @@ test("endTurn: with no completion seen, an untouched file is left and a changed 
   errors = "error: bad bind";
   const [notice] = await changes.endTurn();
   assert.match(notice, /moved\.lua/);
-  assert.doesNotMatch(notice, /restored[^(]*same\.lua/);
-  assert.match(notice, /could not be verified/);
+  assert.match(notice, /same\.lua/);
+  assert.doesNotMatch(notice, /could not be verified/);
+  assert.equal(await readFile(same, "utf8"), "s\n");
   assert.equal(await readFile(moved, "utf8"), "m\n");
 });
 
@@ -237,14 +238,155 @@ test("backup with no usable location says the agent named no file", async () => 
     ["Not backed up: the agent named no file."]);
 });
 
-test("a completion that arrives after the turn closed is still recorded", async () => {
+test("a completion after the turn closed preserves its recorded end state", async () => {
   const { home, changes } = await setup();
   const file = join(home, "a.txt");
   await writeFile(file, "old\n");
   await changes.backup(call("t1", file));
-  await changes.endTurn();
   await writeFile(file, "new\n");
+  await changes.endTurn();
   await changes.completed("t1");
   assert.equal((await changes.undo()).ok, true);
   assert.equal(await readFile(file, "utf8"), "old\n");
+});
+
+test("a second edit completed after endTurn still undoes to the first backup", async () => {
+  const { home, stateDir, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "first edit\n");
+  await changes.backup(call("t2", file));
+  await writeFile(file, "second edit\n");
+  const [turn] = await readdir(stateDir);
+  const manifest = JSON.parse(await readFile(join(stateDir, turn, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.entries[0].ids, ["t1", "t2"]);
+  await changes.endTurn();
+  await changes.completed("t2");
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "original\n");
+});
+
+test("a second edit after the first was confirmed is undoable when its completion is late (#117 review)", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "first edit\n");
+  await changes.completed("t1");
+  await changes.backup(call("t2", file));
+  await writeFile(file, "second edit\n");
+  await changes.endTurn();
+  await changes.completed("t2");
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "original\n");
+});
+
+test("a file unreadable at endTurn is not confirmed by a late completion after a user edit (#117 review)", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "agent\n");
+  await chmod(file, 0);
+  await changes.endTurn();
+  await chmod(file, 0o644);
+  await writeFile(file, "user\n");
+  await changes.completed("t1");
+  assert.equal((await changes.undo()).ok, false);
+  assert.equal(await readFile(file, "utf8"), "user\n");
+});
+
+test("the first edit's completion arriving after a second edit does not fix a stale state (#117 review)", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await changes.backup(call("t2", file));
+  await writeFile(file, "first edit\n");
+  await changes.completed("t1");
+  await writeFile(file, "second edit\n");
+  await changes.endTurn();
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "original\n");
+});
+
+test("an edit without completion is undoable after endTurn", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "new\n");
+  await changes.endTurn();
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "old\n");
+});
+
+test("undo refuses a file modified after endTurn", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "agent edit\n");
+  await changes.endTurn();
+  await writeFile(file, "later edit\n");
+  const result = await changes.undo();
+  assert.equal(result.ok, false);
+  assert.match(result.message, /changed since/);
+  assert.equal(await readFile(file, "utf8"), "later edit\n");
+});
+
+test("a late completion cannot replace the recorded end state", async () => {
+  const { home, stateDir, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "agent edit\n");
+  await changes.endTurn();
+  const [turn] = await readdir(stateDir);
+  const manifestPath = join(stateDir, turn, "manifest.json");
+  const before = JSON.parse(await readFile(manifestPath, "utf8")).entries[0].after;
+  await writeFile(file, "later edit\n");
+  await changes.completed("t1");
+  const after = JSON.parse(await readFile(manifestPath, "utf8")).entries[0].after;
+  assert.equal(after, before);
+  assert.equal((await changes.undo()).ok, false);
+  assert.equal(await readFile(file, "utf8"), "later edit\n");
+});
+
+test("Hyprland recovery leaves a file modified after endTurn alone", async () => {
+  let checks = 0;
+  let file;
+  const { home, changes } = await setup(async () => {
+    if (++checks === 2) {
+      await writeFile(file, "later edit\n");
+      return "error: bad bind";
+    }
+    return "";
+  });
+  file = join(home, ".config", "hypr", "bindings.lua");
+  await writeFile(file, "old\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "agent edit\n");
+  const [notice] = await changes.endTurn();
+  assert.match(notice, /restored nothing/);
+  assert.equal(await readFile(file, "utf8"), "later edit\n");
+  assert.equal((await changes.undo()).ok, false);
+});
+
+test("an old manifest without after refuses undo and names its backup directory", async () => {
+  const { home, stateDir, changes } = await setup();
+  const file = join(home, "a.txt");
+  const dir = join(stateDir, "000000000000001-0000");
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, "new\n");
+  await writeFile(join(dir, "0-a.txt"), "old\n");
+  await writeFile(join(dir, "manifest.json"), JSON.stringify({ entries: [
+    { path: file, existed: true, backup: "0-a.txt", mode: 0o644, ids: ["t1"] },
+  ] }));
+  const result = await changes.undo();
+  assert.equal(result.ok, false);
+  assert.match(result.message, /edit was never confirmed/);
+  assert.ok(result.message.includes(dir));
+  assert.equal(await readFile(file, "utf8"), "new\n");
 });
