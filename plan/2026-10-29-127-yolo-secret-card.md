@@ -80,6 +80,18 @@ reviewers:
 
    Verify: the suite green; `nix flake check`.
 
+## Deviations
+
+- **Step 2 (Codex):** after the async `touchesSecret`, the YOLO branch re-checks the current
+  policy. A switch to Guide during the check cancels, the same pattern as #114's remembered
+  lookup.
+- **Step 2 (Claude, a gap in the plan):** switching *to* YOLO runs
+  `allowAllPendingPermissions()`, which auto-allowed every waiting card except herdr
+  writes, so a secret card already on screen would have been approved. It's now async and
+  skips secret cards, re-checking that each card is still pending and the trust level is
+  still Mechanic after the await. Its caller adds `.catch`. Step 3 adds the test: switching
+  to YOLO with a secret card waiting leaves the card.
+
 ## Tests
 
 - `cd bridge && node --test --test-reporter=dot ./*.test.js`; `nix flake check`.

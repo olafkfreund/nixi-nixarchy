@@ -14,7 +14,7 @@ import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
-import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret } from "./trust-policy.js";
 import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
@@ -442,7 +442,16 @@ const client = {
       }
       // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
       const herdrWrite = isHerdrWrite(params.toolCall);
-      if (policy.permission === "yolo" && !herdrWrite) {
+      const secret = policy.permission === "yolo" && await touchesSecret(params.toolCall, cwd);
+      if (policy.permission === "yolo" && currentPolicy().permission === "cancel") {
+        refusedThisTurn = title;
+        toolsInProgress.delete(params.toolCall?.toolCallId);
+        if (herdrWrite) auditSend(params.toolCall, null);
+        emit({ type: "status", text: `Guide · not run: ${title}` });
+        return { outcome: { outcome: "cancelled" } };
+      }
+      if (secret) emit({ type: "status", text: "YOLO · asks: secret path" });
+      if (policy.permission === "yolo" && currentPolicy().permission === "yolo" && !herdrWrite && !secret) {
         const outcome = choose(options, "allow_once");
         if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
         return guarded(params.toolCall, outcome, options);
@@ -788,10 +797,13 @@ async function applyTrustMode(targetTrust = trust) {
   emit({ type: "diagnostic", text: `Session mode ${modeId} is not offered by this agent; relying on permission handling` });
 }
 
-function allowAllPendingPermissions() {
+async function allowAllPendingPermissions() {
   if (effectiveTrust() !== "mechanic") return;
-  for (const [id, pending] of pendingPermissions.entries()) {
+  for (const [id, pending] of [...pendingPermissions.entries()]) {
     if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
+    if (await touchesSecret(pending.toolCall, cwd)) continue; // so does a secret (#127)
+    // The check awaited: the card may have been answered, or the trust level left.
+    if (!pendingPermissions.has(id) || effectiveTrust() !== "mechanic") continue;
     pendingPermissions.delete(id);
     pending.resolve(guarded(pending.toolCall, choose(pending.options, "allow_once"), pending.options));
   }
@@ -900,7 +912,7 @@ input.on("line", (line) => {
     });
   } else if (message.type === "permission_mode") {
     savePermissionMode(message.mode).then(() => {
-      if (permissionMode === "yolo") allowAllPendingPermissions();
+      if (permissionMode === "yolo") allowAllPendingPermissions().catch(() => {});
       ack("permission_mode", true, { mode: permissionMode });
     }).catch((error) => {
       ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
