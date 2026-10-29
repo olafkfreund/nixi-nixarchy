@@ -166,6 +166,7 @@ export const EXEC_WRITE_PATHS = [
   "~/.claude/settings.local.json",
   "~/.claude/hooks/**",              // PreToolUse: a shell command, no prompt
   "~/.config/opencode/**",          // OpenCode's own permission config, loaded (#116)
+  "~/.opencode/**",                  // OpenCode's home config dir: config, agents, plugins; loaded even with project config off (#116)
   "~/.config/omarchy/hooks/**",      // post-boot.d runs at every boot
   "~/.config/omarchy/extensions/**", // #52 as filed: `when:` guards are bash
   "~/.config/omarchy/plugins/**",    // bridge scripts spawn on card load

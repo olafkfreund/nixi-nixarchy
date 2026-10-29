@@ -82,6 +82,21 @@ reviewers:
    Verify: `cd bridge && node --test` all green, then `nix flake check`.
    Traps: fixture tool call ids must be unique (`t9`, `t10`, ...).
 
+## Deviations
+
+- **Opus review, HIGH (fixed):** OpenCode also loads `~/.opencode/**` (config, agent
+  permission blocks, plugins) even with project config disabled
+  (`bridge/bridge.js:265-267`). The plan's reason for `~/.config/opencode/**` applies to
+  it word for word, so it's added to `EXEC_WRITE_PATHS` and to the "cannot silently
+  shrink" test.
+- **Opus review, Low (fixed):** the SECURITY.md row named the edit-tool deny as if it
+  covered shell commands. It now states the residuals: a shell write still asks at
+  Mechanic and is auto-approved in YOLO; a non-default `$XDG_CONFIG_HOME` or
+  `OPENCODE_CONFIG_DIR` isn't covered.
+- **Not done (optional hardening):** treating a call with no `kind` but a
+  `rawInput.command` as `execute`. Adapters set the kind from the tool name (verified by
+  the review), so it's noted in the PR only.
+
 ## Tests
 
 - `cd bridge && node --test`: all pass.

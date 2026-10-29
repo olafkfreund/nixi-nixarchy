@@ -711,7 +711,7 @@ test("the unattended-write list cannot silently shrink (#52)", () => {
   // by dropping project settings entirely; ~/.claude/** is the scope that still
   // loads, so it is the one a path rule still has to cover.
   for (const path of ["~/.claude/settings.json", "~/.claude/hooks/**",
-                      "~/.config/opencode/**", "~/.config/omarchy/hooks/**", "~/.config/omarchy/extensions/**"])
+                      "~/.config/opencode/**", "~/.opencode/**", "~/.config/omarchy/hooks/**", "~/.config/omarchy/extensions/**"])
     assert.ok(EXEC_WRITE_PATHS.includes(path), path);
   // A rule pasted where a path belongs would generate Write(Write(...)).
   for (const path of EXEC_WRITE_PATHS) assert.ok(!path.includes("("), path);
