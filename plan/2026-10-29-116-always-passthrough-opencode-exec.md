@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 116
 spec: spec/2026-10-29-116-always-passthrough-opencode-exec.md
 coders:
