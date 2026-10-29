@@ -78,6 +78,24 @@ test("\"always\" on a chained command is never offered, so never stored", async 
   assert.equal(cards(run), 1);
 });
 
+for (const [fixture, offered] of [
+  ["PLEASE_SECRET", false], ["PLEASE_ELSEWHERE", false], ["PLEASE_READ", false], ["PLEASE_SEARCH", false],
+  ["PLEASE_PLAIN", true], ["PLEASE_FETCH", true],
+]) {
+  test(`"always" ${offered ? "is" : "is not"} offered for ${fixture}`, async () => {
+    const seen = {};
+    const run = await runBridge(base({
+      onPermission: (event) => {
+        seen.kinds = event.options.map((option) => option.kind);
+        return { type: "permission", id: event.id, optionId: "reject" };
+      },
+      messages: [{ type: "prompt", text: `${fixture} it` }],
+    }));
+    assert.equal(cards(run), 1);
+    assert.equal(seen.kinds.includes("allow_always"), offered);
+  });
+}
+
 test("an unreadable store is left alone and the card still asks", async () => {
   const seen = {};
   const run = await runBridge(base({

@@ -241,8 +241,9 @@ you take it back; the next identical request is answered without a card and the
 status line says `Remembered`. A different agent, a different folder or a
 one-character change asks again. It never covers edits, deletes or moves,
 chained commands (`;`, `&&`, `|`, redirects, `$(`), herdr sends or commands that
-name a secret path, and it does nothing at Guide or by voice (click only). Fetch
-and MCP tools keep their agent's own "always". The list is
+name a secret path, and it does nothing at Guide or by voice (click only). For
+those, and for reads, searches and commands run in another folder, the card
+doesn't offer it at all. Fetch and MCP tools keep their agent's own "always". The list is
 `~/.local/state/nixi/always.json` (mode `0600`; Nixi's agents may not write it).
 Type `/always` to list it, `/always forget <n>` or `/always clear` to remove
 entries, or use the Remembered list in the agent panel (`SUPER+,`). Older

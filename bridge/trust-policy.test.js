@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules } from "./trust-policy.js";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -211,8 +211,20 @@ test("OpenCode always starts with Nixi's permission rules, whatever the environm
   assert.equal(sent.permission.plan_exit, "deny");
   for (const tool of ["bash", "webfetch", "task", "write", "patch"])
     assert.equal(sent.permission[tool], undefined, `${tool} must fall through to ask`);
-  // edit (which covers write and patch) still asks, except the remembered-approvals store (#114)
-  assert.deepEqual(sent.permission.edit, { "*": "ask", "*nixi/always.json": "deny", "*nixi/always.json.*": "deny" });
+  assert.deepEqual(sent.permission.edit, {
+    "*": "ask",
+    ...Object.fromEntries(opencodePathDenies(EXEC_WRITE_PATHS).map((path) => [path, "deny"])),
+    "*nixi/always.json": "deny", "*nixi/always.json.*": "deny",
+  });
+});
+
+test("OpenCode denies every unattended-write path in edit (#116)", () => {
+  const edit = opencodePermissions(false).permission.edit;
+  for (const path of EXEC_WRITE_PATHS) {
+    if (path.startsWith("//")) continue;
+    for (const pattern of opencodePathDenies([path]))
+      assert.equal(edit[pattern], "deny", `${path} -> ${pattern}`);
+  }
 });
 
 test("other agents never receive OpenCode's config", async () => {
@@ -308,7 +320,7 @@ test("OpenCode: external reads allowed, secrets denied by config, search tools a
   const { "*": base, ...denies } = permission.read;
   assert.equal(base, "allow");
   assert.ok(Object.values(denies).every((v) => v === "deny"));
-  assert.deepEqual(Object.keys(denies), [
+  assert.deepEqual(opencodeSecretDenies(), [
     "*.ssh/*", "*.ssh", "*.gnupg/*", "*.gnupg", "*.aws/*", "*.aws", "*.kube/*", "*.kube",
     "*.config/gcloud/*", "*.config/gcloud", "*.azure/*", "*.azure", "*.docker/config.json",
     "*.config/gh/*", "*.config/gh", "*.config/op/*", "*.config/op", "*.config/sops/*", "*.config/sops",
@@ -316,6 +328,7 @@ test("OpenCode: external reads allowed, secrets denied by config, search tools a
     "/run/agenix/*", "/run/agenix", "/run/secrets/*", "/run/secrets",
     "/run/agenix.d/*", "/run/agenix.d", "/run/secrets.d/*", "/run/secrets.d",
     "*.env", "*.env.*", "*.age"]);
+  assert.deepEqual(Object.keys(denies), opencodeSecretDenies());
 });
 
 const sentPermissions = (run) =>
@@ -698,7 +711,7 @@ test("the unattended-write list cannot silently shrink (#52)", () => {
   // by dropping project settings entirely; ~/.claude/** is the scope that still
   // loads, so it is the one a path rule still has to cover.
   for (const path of ["~/.claude/settings.json", "~/.claude/hooks/**",
-                      "~/.config/omarchy/hooks/**", "~/.config/omarchy/extensions/**"])
+                      "~/.config/opencode/**", "~/.opencode/**", "~/.config/omarchy/hooks/**", "~/.config/omarchy/extensions/**"])
     assert.ok(EXEC_WRITE_PATHS.includes(path), path);
   // A rule pasted where a path belongs would generate Write(Write(...)).
   for (const path of EXEC_WRITE_PATHS) assert.ok(!path.includes("("), path);
