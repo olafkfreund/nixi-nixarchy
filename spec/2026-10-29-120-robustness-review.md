@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 120
 intent: intent/2026-10-29-120-robustness-review.md
 ---
