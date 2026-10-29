@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 119
 intent: intent/2026-10-29-119-review-docs-small-fixes.md
 ---
