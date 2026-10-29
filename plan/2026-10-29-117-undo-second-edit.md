@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 117
 spec: spec/2026-10-29-117-undo-second-edit.md
 coders:
