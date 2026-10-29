@@ -1217,7 +1217,7 @@ Item {
             statusText = trust === "mechanic"
               ? "Mechanic: Nixi asks before each change"
               : "Guide: Nixi explains, and changes nothing"
-                + (sessionStartTrust === "mechanic" ? ". Guide is complete from your next chat." : "")
+                + (sessionStartTrust === "mechanic" && agentName === "claude" ? ". Start a new chat for full Guide." : "")
           } else {
             statusText = String(event.message || "Could not change trust level")
           }
@@ -2148,7 +2148,7 @@ Item {
           onClicked: {
             if (root.trust !== "mechanic") {
               root.statusText = "Guide changes nothing. Type /mechanic to let Nixi make changes."
-                + (root.sessionStartTrust === "mechanic" ? " Guide is complete from your next chat." : "")
+                + (root.sessionStartTrust === "mechanic" && root.agentName === "claude" ? " Start a new chat for full Guide." : "")
               return
             }
             root.setPermissionMode(root.permissionMode === "yolo" ? "permission" : "yolo")

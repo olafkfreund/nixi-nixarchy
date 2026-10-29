@@ -49,6 +49,15 @@ reviewers:
 
    Verify: `cd bridge && node --test`; `nix flake check`.
 
+## Deviations
+
+- **Step 1 wording (Opus review):** in a session that started at Mechanic, the user's own
+  Claude allow rules also still apply after `/guide`, not only read-only commands, and
+  OpenCode's shell always asks (Guide is already complete for it). The README sentence
+  now says "commands Claude runs without asking (its read-only commands, and anything
+  your own Claude settings allow)". The card note shows only for Claude, as "Start a
+  new chat for full Guide."
+
 ## Tests
 
 - `cd bridge && node --test`; `nix flake check`.
