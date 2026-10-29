@@ -31,8 +31,7 @@ CARD_PARTS = ("Conversation.qml", "ScrollPhysics.qml", "WindowShortcuts.qml",
 
 
 def card_source():
-    return "\n".join(open(os.path.join(ROOT, f)).read()
-                     for f in CARD_PARTS if os.path.exists(os.path.join(ROOT, f)))
+    return "\n".join(open(os.path.join(ROOT, f)).read() for f in CARD_PARTS)
 
 
 def load(name, path):
@@ -1070,7 +1069,7 @@ def test_local_components_are_packaged():
     local = {f[:-4] for f in os.listdir(ROOT) if f.endswith(".qml")}
     for name in sorted(local):
         src = open(os.path.join(ROOT, name + ".qml")).read()
-        for used in set(re.findall(r"^\s*([A-Z]\w*)\s*\{", src, re.M)) & local:
+        for used in set(re.findall(r"\b([A-Z]\w*)\s*\{", src)) & local:
             assert used + ".qml" in install, "%s.qml uses %s, which package.nix does not install" % (name, used)
             assert used + ".qml" in checked, "%s.qml uses %s, which the install check does not list" % (name, used)
     print("  ok  every local QML component the card uses is installed and checked")
