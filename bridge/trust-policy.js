@@ -24,7 +24,7 @@
 // from Mechanic; it can never be reached from Guide.
 
 import { realpath } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export function resolveTrust(value) {
   return value === "mechanic" ? "mechanic" : "guide";
@@ -75,19 +75,32 @@ export function isSecretPath(realPath) {
   });
 }
 
+// The real path of `path`, or of its deepest existing parent plus the rest: a new file
+// inside a symlinked secret directory still resolves into that directory.
+async function realpathOfExisting(path) {
+  const rest = [];
+  for (let head = path; ; head = dirname(head)) {
+    try { return join(await realpath(head), ...rest); }
+    catch {
+      if (dirname(head) === head) return path;
+      rest.unshift(basename(head));
+    }
+  }
+}
+
 export async function touchesSecret(toolCall, cwd) {
   const input = toolCall?.rawInput;
   const paths = [
     ...(Array.isArray(toolCall?.locations) ? toolCall.locations : []).map((location) => location?.path),
-    input?.file_path, input?.path, input?.notebook_path,
+    input?.file_path, input?.filePath, input?.path, input?.notebook_path, input?.cwd, input?.workdir,
   ];
   for (const path of paths) {
     if (typeof path !== "string") continue;
     const resolved = path.startsWith("~/")
       ? resolve(process.env.HOME || "/", path.slice(2))
       : resolve(cwd, path);
-    const target = await realpath(resolved).catch(() => resolved);
-    if (isSecretPath(target)) return true;
+    // Both: a secret name can link to an innocent target, and an innocent name to a secret.
+    if (isSecretPath(resolved) || isSecretPath(await realpathOfExisting(resolved))) return true;
   }
   // A search names its target in a glob or pattern too (Grep glob: ".ssh/*", Glob "$HOME/.ssh/*").
   return [input?.command, input?.glob, input?.pattern, input?.include].some(namesSecret);

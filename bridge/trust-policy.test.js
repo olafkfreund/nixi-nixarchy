@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath, touchesSecret } from "./trust-policy.js";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
@@ -528,6 +528,16 @@ test("touchesSecret checks named paths, resolved symlinks, and shell commands (#
     assert.equal(await touchesSecret({ rawInput: { include: "**/*.age" } }, dir), true);
     assert.equal(await touchesSecret({ rawInput: { path: dir, glob: "*.txt", pattern: "TODO" } }, dir), false);
     assert.equal(await touchesSecret({ locations: "not-an-array" }, dir), false);
+    // #127 agy review: a secret name linking to an innocent target; a new file in a linked
+    // secret directory; a shell command run inside a secret directory.
+    writeFileSync(join(dir, "store-netrc"), "machine x");
+    symlinkSync(join(dir, "store-netrc"), join(dir, "creds.age"));
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "creds.age") } }, dir), true);
+    mkdirSync(join(dir, ".ssh"));
+    symlinkSync(join(dir, ".ssh"), join(dir, "work"));
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "work", "authorized_keys") } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: "cat id", cwd: join(dir, "work") } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "new-plain.txt") } }, dir), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

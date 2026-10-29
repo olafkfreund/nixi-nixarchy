@@ -100,6 +100,16 @@ reviewers:
 
   Tests added. Reported separately: Claude's own Grep/Glob rules don't match the glob
   parameter either, at any level (an older gap, not this change's).
+- **agy review (fixed):**
+  - high: the literal path is checked as well as the resolved one (a secret name linking to
+    a harmlessly named target, e.g. `~/.netrc` into the store);
+  - high: a path that doesn't exist yet is resolved through its deepest existing parent,
+    so a new file in a symlinked secret directory counts;
+  - medium: `rawInput.cwd`, `workdir` and `filePath` are checked as paths.
+
+  Tests added (they fail without the fix). The sweep race was already fixed above. Two lows
+  (UI marker for waiting cards; a plain command during the switch gets a card) are
+  cosmetic and left.
 
 ## Tests
 
