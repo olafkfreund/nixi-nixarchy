@@ -23,6 +23,9 @@
 // needs an explicit yes. YOLO (auto-approve) is upstream's and is only honoured
 // from Mechanic; it can never be reached from Guide.
 
+import { realpath } from "node:fs/promises";
+import { resolve } from "node:path";
+
 export function resolveTrust(value) {
   return value === "mechanic" ? "mechanic" : "guide";
 }
@@ -70,6 +73,23 @@ export function isSecretPath(realPath) {
     const regex = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
     return new RegExp(`^${regex}$`, "s").test(realPath);
   });
+}
+
+export async function touchesSecret(toolCall, cwd) {
+  const input = toolCall?.rawInput;
+  const paths = [
+    ...(toolCall?.locations || []).map((location) => location?.path),
+    input?.file_path, input?.path, input?.notebook_path,
+  ];
+  for (const path of paths) {
+    if (typeof path !== "string") continue;
+    const resolved = path.startsWith("~/")
+      ? resolve(process.env.HOME || "/", path.slice(2))
+      : resolve(cwd, path);
+    const target = await realpath(resolved).catch(() => resolved);
+    if (isSecretPath(target)) return true;
+  }
+  return namesSecret(input?.command);
 }
 
 function opencodeRules() {
@@ -216,6 +236,12 @@ export function secretBashRules() {
   }
   return [...rules].map((r) => `Bash(*${r}*)`);
 }
+
+export const namesSecret = (command) => {
+  const text = Array.isArray(command) ? command.join(" ") : command;
+  return typeof text === "string" && secretBashRules().some((rule) =>
+    text.includes(rule.slice("Bash(*".length, -"*)".length)));
+};
 
 // Rules are fixed per session, so they follow the level it STARTS at (#96). At
 // Guide a bare `Bash` ask makes every shell command a request, which Guide
