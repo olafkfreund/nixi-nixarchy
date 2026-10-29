@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 127
 intent: intent/2026-10-29-127-yolo-secret-card.md
 ---
