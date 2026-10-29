@@ -5,7 +5,7 @@
 // asked over ACP, Claude describes `plan` as "Create a plan before making
 // changes" and Codex's closest, `read-only`, as "Always ask to edit external
 // files and use the internet". So Guide's guarantee is the bridge CANCELLING
-// every non-read permission request it receives, with the session mode as a
+// every permission request it receives except OpenCode reads, with the session mode as a
 // second layer. OpenCode reads are checked against resolved paths in the bridge.
 //
 // Permission coverage matters (#41).
@@ -66,7 +66,7 @@ export function opencodeSecretDenies() {
 export function isSecretPath(realPath) {
   return opencodeSecretDenies().some((pattern) => {
     const regex = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-    return new RegExp(`^${regex}$`).test(realPath);
+    return new RegExp(`^${regex}$`, "s").test(realPath);
   });
 }
 

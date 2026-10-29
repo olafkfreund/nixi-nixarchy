@@ -88,6 +88,25 @@ reviewers:
 
    Verify: `node --test` green; `nix flake check`.
 
+## Deviations
+
+- **Opus review, HIGH (fixed):** with `askBeforeReading` at Mechanic, the OpenCode read card
+  offered "always", which OpenCode keeps as `read *`. Later reads would then never reach the
+  gate, and a symlink to a secret would be read. `allow_always` is now dropped for OpenCode
+  reads (#116 hides it for every read; this keeps #118 safe on its own). Test added.
+- **Opus review, Low (fixed):**
+  - a missing file now falls through to the ordinary-read handling, so `askBeforeReading`
+    still shows the card;
+  - the gate no longer sets `refusedThisTurn`, which made the "at Guide… try Mechanic"
+    notice appear at Mechanic;
+  - `isSecretPath` uses the `s` flag (a path with a newline);
+  - `locations[0].path` is resolved against `cwd`;
+  - the trust-policy comment names the exemption exactly.
+- **Out of scope, reported:** `/run/secrets-for-users` (sops-nix `neededForUsers`) isn't in
+  `SECRET_PATHS`. It predates this branch.
+- **Unverified:** whether OpenCode keeps an "always" across sessions, which would matter for
+  approvals given before this change. Live check after deploy.
+
 ## Tests
 
 - `cd bridge && node --test`; `nix flake check`.

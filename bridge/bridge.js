@@ -404,26 +404,26 @@ const client = {
     })).filter((option) => !(EDIT_KINDS.has(params.toolCall?.kind) && option.kind === "allow_always"))
       // A standing yes to typing into another session would turn one click into all (#95).
       .filter((option) => !(isHerdrWrite(params.toolCall) && option.kind === "allow_always"))
-      .filter((option) => !(isChained(params.toolCall) && option.kind === "allow_always"));
+      .filter((option) => !(isChained(params.toolCall) && option.kind === "allow_always"))
+      // OpenCode keeps an "always" read as `read *`: later reads would never reach the gate below (#118).
+      .filter((option) => !(agentName === "opencode" && params.toolCall?.kind === "read" && option.kind === "allow_always"));
     noticeMcpSource(params);
     return (async () => {
       if (agentName === "opencode" && params.toolCall?.kind === "read") {
         try {
-          const path = params.toolCall.locations?.[0]?.path ?? resolve(cwd, params.toolCall.rawInput?.path);
+          const path = resolve(cwd, params.toolCall.locations?.[0]?.path ?? params.toolCall.rawInput?.path);
           if (isSecretPath(await realpath(path))) {
-            refusedThisTurn = title;
             toolsInProgress.delete(params.toolCall.toolCallId);
             emit({ type: "status", text: "Read refused: secret path" });
             return guarded(params.toolCall, choose(options, "reject_once"), options);
           }
         } catch (error) {
           if (error.code !== "ENOENT") {
-            refusedThisTurn = title;
             toolsInProgress.delete(params.toolCall.toolCallId);
             emit({ type: "status", text: "Read refused: path could not be resolved" });
             return guarded(params.toolCall, choose(options, "reject_once"), options);
           }
-          return guarded(params.toolCall, choose(options, "allow_once"), options);
+          // A missing file holds no secret; it is an ordinary read below (OpenCode reports it).
         }
         if (!askBeforeReading) return guarded(params.toolCall, choose(options, "allow_once"), options);
       }

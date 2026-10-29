@@ -907,3 +907,9 @@ test("stall guard: a pending card pauses it (#102)", async () => {
   });
   assert.ok(!run.events.some((e) => e.type === "error"), JSON.stringify(run.events));
 });
+
+test("isSecretPath matches a secret path containing a newline (#118 review)", async () => {
+  const { isSecretPath } = await import("./trust-policy.js");
+  assert.equal(isSecretPath("/tmp/a\nb.age"), true);
+  assert.equal(isSecretPath("/home/u/.ssh/a\nb"), true);
+});
