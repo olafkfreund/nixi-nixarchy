@@ -324,6 +324,7 @@ test("OpenCode: external reads ask, secrets denied by config, search tools ask (
     "*.local/share/keyrings/*", "*.local/share/keyrings", "*.claude/.credentials.json", "*.netrc",
     "/run/agenix/*", "/run/agenix", "/run/secrets/*", "/run/secrets",
     "/run/agenix.d/*", "/run/agenix.d", "/run/secrets.d/*", "/run/secrets.d",
+    "/run/secrets-for-users/*", "/run/secrets-for-users", "/run/secrets-for-users.d/*", "/run/secrets-for-users.d",
     "*.env", "*.env.*", "*.age"]);
   assert.deepEqual(Object.keys(denies), opencodeSecretDenies());
 });
@@ -574,6 +575,7 @@ test("the Mechanic shell list is exactly this (#96)", () => {
     "Bash(*.docker/config.json*)", "Bash(*.env*)", "Bash(*.gnupg*)", "Bash(*.kube*)",
     "Bash(*.local/share/keyrings*)", "Bash(*.netrc*)", "Bash(*.ssh*)",
     "Bash(*/run/agenix*)", "Bash(*/run/agenix.d*)", "Bash(*/run/secrets*)", "Bash(*/run/secrets.d*)",
+    "Bash(*/run/secrets-for-users*)", "Bash(*/run/secrets-for-users.d*)",
   ].sort());
 });
 
@@ -956,4 +958,12 @@ test("isSecretPath matches a secret path containing a newline (#118 review)", as
   const { isSecretPath } = await import("./trust-policy.js");
   assert.equal(isSecretPath("/tmp/a\nb.age"), true);
   assert.equal(isSecretPath("/home/u/.ssh/a\nb"), true);
+});
+
+test("sops-nix user secrets are secret paths, for every consumer (#128)", () => {
+  for (const path of ["/run/secrets-for-users/**", "/run/secrets-for-users.d/**"])
+    assert.ok(SECRET_PATHS.includes(path), `${path} is not guarded`);
+  assert.ok(claudePermissions(false).ask.includes("Read(/run/secrets-for-users/**)"));
+  assert.equal(opencodePermissions(false).permission.read["/run/secrets-for-users/*"], "deny");
+  assert.equal(isSecretPath("/run/secrets-for-users.d/1/x"), true);
 });
