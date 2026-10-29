@@ -264,9 +264,10 @@ permission mode in `nixi.json`; anything else is Guide.
   matches a path relative to its project root (the cwd, or `$HOME`) as well as an
   absolute one: `~/X/**` becomes `*X/*` and `*X` (the directory itself, which its
   read tool lists), exact files `*X`, plus `*.env`, `*.env.*`, `*.age` and the
-  `/run/…` paths with their directories. `/run/agenix.d` and `/run/secrets.d`
-  are in `SECRET_PATHS` too: on NixOS they are the symlink targets of
-  `/run/agenix` and `/run/secrets`, and Claude's Read and opencode match the literal
+  `/run/…` paths with their directories. `/run/agenix.d`, `/run/secrets.d` and
+  `/run/secrets-for-users.d` (#128) are in `SECRET_PATHS` too: on NixOS they are
+  the symlink targets of `/run/agenix`, `/run/secrets` and sops-nix's
+  `/run/secrets-for-users`, and Claude's Read and opencode match the literal
   path. opencode enforces a config deny itself. `glob`
   applies no path denies (it listed `~/.ssh` file names), and `grep` and `list`
   could not be shown to, so `grep`, `glob` and `list` ask for every path: cancelled
