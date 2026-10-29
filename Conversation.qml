@@ -67,6 +67,7 @@ Item {
   // Nixi trust level, owned by the bridge (see bridge/trust-policy.js). Guide
   // explains and never changes the machine; Mechanic asks before each change.
   property string trust: "guide"
+  property string sessionStartTrust: "guide"
   readonly property bool trustPending: pendingAck.trust === true
 
   // Font scale is owned by the manager so every conversation and both window
@@ -1183,6 +1184,7 @@ Item {
         steeringSupported = event.steeringSupported === true
         permissionMode = event.permissionMode === "yolo" ? "yolo" : "permission"
         trust = event.trust === "mechanic" ? "mechanic" : "guide"
+        sessionStartTrust = trust
         statusText = queuedPrompt === "" ? "" : "Thinking…"
         sendQueuedPrompt()
       } else if (event.type === "text") {
@@ -1215,6 +1217,7 @@ Item {
             statusText = trust === "mechanic"
               ? "Mechanic: Nixi asks before each change"
               : "Guide: Nixi explains, and changes nothing"
+                + (sessionStartTrust === "mechanic" && agentName === "claude" ? ". Start a new chat for full Guide." : "")
           } else {
             statusText = String(event.message || "Could not change trust level")
           }
@@ -2145,6 +2148,7 @@ Item {
           onClicked: {
             if (root.trust !== "mechanic") {
               root.statusText = "Guide changes nothing. Type /mechanic to let Nixi make changes."
+                + (root.sessionStartTrust === "mechanic" && root.agentName === "claude" ? " Start a new chat for full Guide." : "")
               return
             }
             root.setPermissionMode(root.permissionMode === "yolo" ? "permission" : "yolo")
