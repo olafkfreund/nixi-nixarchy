@@ -64,8 +64,10 @@ export function createAlways(path) {
   // so a touch() in one can't write back an entry the other just forgot. A lock older than
   // 10s is a crashed writer's and is taken over: renamed aside first, so of two takers only one
   // wins. The aside is re-checked: if it is fresh, a live writer took the lock after our stat, so
-  // it is put back (#120). Residual: a third writer could take the name in the microseconds before
-  // the put-back; that fails this change. Every try counts, so a stuck lock fails instead of spinning.
+  // it is put back (#120). Residual: rename() replaces an empty directory, so a third writer that
+  // takes the name in the gap before the put-back is overwritten, and two writers can hold the
+  // store at once; if the owner finished in that gap, the put-back lock has no owner until it is
+  // 10s old. Every try counts, so a stuck lock fails instead of spinning.
   const lock = `${path}.lock`;
   async function locked(fn) {
     await mkdir(dirname(path), { recursive: true });

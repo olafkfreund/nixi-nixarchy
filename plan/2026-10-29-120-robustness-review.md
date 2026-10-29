@@ -55,6 +55,21 @@ reviewers:
    Verify: `node --test` green; `nix flake check`.
    Traps: `Conversation.qml` is also edited by #119: change only line 1251.
 
+## Deviations
+
+- **Stale takeover, found independently by both the Opus and agy reviews:** "if the
+  put-back fails, throw" can't happen in the race it was meant for. The lock is an empty
+  directory, and Linux `rename(2)` replaces an empty directory (measured on ext4), so a
+  third writer that takes the name in the gap is overwritten, not detected. Two writers can
+  then hold the store at once, and if the owner finished in the gap, the put-back lock has
+  no owner until it is 10 s old (it heals itself). Node has no rename-no-replace. The code
+  stays (it still narrows the old race, which deleted a fresh lock outright), and the code
+  comment states this residual instead of the spec's "fails this change". The throw stays
+  for other rename errors.
+- **The aborted-search test's "fd never ran" assertion is weak.** Node may spawn and kill
+  a child even with an already-aborted signal. The test is still deterministic through its
+  `deepEqual` on `complete: false`, which fails without the fix.
+
 ## Tests
 
 - `cd bridge && node --test`; `nix flake check`.
