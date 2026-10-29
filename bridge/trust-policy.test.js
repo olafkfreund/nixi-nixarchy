@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, secretBashRules, isSecretPath } from "./trust-policy.js";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -290,23 +290,20 @@ test("no agent may write the remembered-approvals store, at any trust level (#11
   assert.equal(opencodePermissions(false).permission.edit["*"], "ask", "every other edit still asks");
 });
 
-test("askBeforeReading makes OpenCode's reads ask too, and changes nothing else (#27)", () => {
+test("OpenCode read always asks upstream; askBeforeReading changes no rules (#118)", () => {
   assert.deepEqual(opencodePermissions(false), OPENCODE_PERMISSIONS);
-  const strict = opencodePermissions(true).permission;
-  assert.equal(strict.read["*"], "ask");
-  assert.deepEqual({ ...strict.read, "*": "allow" }, OPENCODE_PERMISSIONS.permission.read, "secret denies must stay");
-  for (const [key, value] of Object.entries(OPENCODE_PERMISSIONS.permission))
-    if (key !== "read") assert.deepEqual(strict[key], value, key);
+  assert.deepEqual(opencodePermissions(true), OPENCODE_PERMISSIONS);
+  assert.equal(OPENCODE_PERMISSIONS.permission.read["*"], "ask");
 });
 
-test("OpenCode: external reads allowed, secrets denied by config, search tools ask (#102)", () => {
+test("OpenCode: external reads ask, secrets denied by config, search tools ask (#118)", () => {
   const { permission } = opencodePermissions(false);
   assert.equal(permission.external_directory, "allow");
   assert.equal(permission["*"], "ask");
   assert.equal(permission.plan_exit, "deny");
   for (const tool of ["grep", "glob", "list"]) assert.equal(permission[tool], "ask", tool);
   const { "*": base, ...denies } = permission.read;
-  assert.equal(base, "allow");
+  assert.equal(base, "ask");
   assert.ok(Object.values(denies).every((v) => v === "deny"));
   assert.deepEqual(Object.keys(denies), [
     "*.ssh/*", "*.ssh", "*.gnupg/*", "*.gnupg", "*.aws/*", "*.aws", "*.kube/*", "*.kube",
@@ -316,6 +313,12 @@ test("OpenCode: external reads allowed, secrets denied by config, search tools a
     "/run/agenix/*", "/run/agenix", "/run/secrets/*", "/run/secrets",
     "/run/agenix.d/*", "/run/agenix.d", "/run/secrets.d/*", "/run/secrets.d",
     "*.env", "*.env.*", "*.age"]);
+});
+
+test("resolved secret paths include age files and SSH keys", () => {
+  assert.equal(isSecretPath("/tmp/canary.age"), true);
+  assert.equal(isSecretPath("/home/user/.ssh/x"), true);
+  assert.equal(isSecretPath("/tmp/notes.txt"), false);
 });
 
 const sentPermissions = (run) =>
