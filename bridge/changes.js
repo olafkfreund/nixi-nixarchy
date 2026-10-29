@@ -55,7 +55,7 @@ export function createChanges({ stateDir, cwd, home, exec }) {
 
   const isHypr = (path) => path.startsWith(hyprDir);
   const saveManifest = (t) =>
-    writeAtomic(join(t.dir, "manifest.json"), JSON.stringify({ entries: t.entries }, null, 2), 0o600);
+    writeAtomic(join(t.dir, "manifest.json"), JSON.stringify({ entries: t.entries, closed: t.closed }, null, 2), 0o600);
 
   async function errorLines() {
     const result = await exec(["configerrors"]);
@@ -157,6 +157,8 @@ export function createChanges({ stateDir, cwd, home, exec }) {
       if (!name) return;
       const dir = join(stateDir, name);
       const manifest = JSON.parse(await readFile(join(dir, "manifest.json"), "utf8"));
+      // A turn endTurn closed has its end state fixed: a late hash could be a user's later edit.
+      if (manifest.closed) return;
       const hit = manifest.entries.filter((e) => e.ids?.includes(toolCallId) && e.after === undefined);
       if (!hit.length) return;
       for (const entry of hit) entry.after = await hashOf(entry.path);
@@ -173,7 +175,9 @@ export function createChanges({ stateDir, cwd, home, exec }) {
             catch { /* Leave the entry unconfirmed if the file is unreadable. */ }
           }
         }
-        await saveManifest(done);
+        done.closed = true;
+        // A failed save leaves the older manifest, which undo refuses; the Hyprland check still runs.
+        await saveManifest(done).catch(() => {});
       }
       const hypr = done?.entries.filter((e) => isHypr(e.path)) || [];
       if (!hypr.length) return [];

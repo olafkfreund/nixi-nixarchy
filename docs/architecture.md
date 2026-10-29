@@ -322,8 +322,8 @@ permission mode in `nixi.json`; anything else is Guide.
   before the edit restore those files. `/undo` restores the newest change set,
   all or nothing, and refuses if a file changed since. Symlinks, Nix store paths
   and files over 1 MiB are not copied, and shell edits are not covered. The
-  edit's recorded state is fixed at the end of the turn, so a user edit during
-  that turn is undone with it.
+  edit's recorded state is fixed at the end of the turn: a user edit to the same
+  file during that turn is undone with it, and any later change makes undo refuse.
 - OpenCode is always spawned with `OPENCODE_CONFIG_CONTENT` set to Nixi's
   permission rules, replacing any inherited value. Without them its defaults
   run tools with no request for Guide to cancel.

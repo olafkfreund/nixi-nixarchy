@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChanges, isStorePath } from "./changes.js";
@@ -280,6 +280,21 @@ test("a second edit after the first was confirmed is undoable when its completio
   await changes.completed("t2");
   assert.equal((await changes.undo()).ok, true);
   assert.equal(await readFile(file, "utf8"), "original\n");
+});
+
+test("a file unreadable at endTurn is not confirmed by a late completion after a user edit (#117 review)", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await writeFile(file, "agent\n");
+  await chmod(file, 0);
+  await changes.endTurn();
+  await chmod(file, 0o644);
+  await writeFile(file, "user\n");
+  await changes.completed("t1");
+  assert.equal((await changes.undo()).ok, false);
+  assert.equal(await readFile(file, "utf8"), "user\n");
 });
 
 test("an edit without completion is undoable after endTurn", async () => {

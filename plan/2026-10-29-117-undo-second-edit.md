@@ -74,6 +74,16 @@ reviewers:
   second completion the file never matches and `/undo` refuses. The spec's rejected
   alternative ("reset after on a second edit … step 2 sets it at turn end anyway") was
   wrong for exactly that reason. A test was added.
+- **Opus review, Low 1 (data loss, fixed):** if a file was unreadable when the turn ended,
+  `after` stayed unset and a later completion filled it with whatever was on disk then,
+  possibly a user's edit, which undo would then overwrite. `endTurn` now marks the
+  manifest `closed`, and the late-completion path ignores closed manifests. Test added
+  (fails without the fix).
+- **Opus review, Low 4 (fixed):** a failed manifest save in `endTurn` no longer skips the
+  Hyprland check. It's caught, and the older manifest makes undo refuse.
+- **Accepted, safe:** a false refusal when both permissions of one file are answered
+  together and the second completion is late, or when an edit is still running at Stop.
+  Undo refuses rather than restoring.
 
 ## Tests
 
