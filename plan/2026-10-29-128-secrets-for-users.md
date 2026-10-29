@@ -29,6 +29,13 @@ implements it.
 
    Verify: `cd bridge && node --test --test-reporter=dot ./*.test.js`.
 
+## Deviations
+
+- **The spec's "no new shell rule needed" was too narrow.** `secretBashRules()` generates
+  one rule per path, so `Bash(*/run/secrets-for-users*)` and `Bash(*/run/secrets-for-users.d*)`
+  are added. They're redundant with the `/run/secrets` substring rule but harmless. The
+  exact-list tests for the Mechanic shell rules and the OpenCode read denies are updated.
+
 ## Tests
 
 - The suite green; `nix flake check`.

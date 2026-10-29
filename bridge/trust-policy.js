@@ -137,6 +137,8 @@ export const SECRET_PATHS = [
   "/run/agenix/**", "/run/secrets/**",
   // The symlink targets of the two above on NixOS; Read/opencode match the literal path (#102).
   "/run/agenix.d/**", "/run/secrets.d/**",
+  // sops-nix neededForUsers, and its target (#128).
+  "/run/secrets-for-users/**", "/run/secrets-for-users.d/**",
   "**/.env", "**/.env.*", "**/*.age",
   // `**/x` is relative to the session directory; `//` is absolute (#95). Without
   // these a canary ~/foo.age was read with no card. OpenCode has its own list.
