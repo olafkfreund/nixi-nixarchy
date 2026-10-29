@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 121
 spec: spec/2026-10-29-121-split-conversation.md
 coders:      # step -> implementer; unlisted steps use the coder agent
