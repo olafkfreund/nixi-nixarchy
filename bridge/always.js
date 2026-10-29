@@ -6,7 +6,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isHerdrWrite } from "./herdr-policy.js";
 import { shellQuote } from "./permission-detail.js";
-import { secretBashRules } from "./trust-policy.js";
+import { namesSecret } from "./trust-policy.js";
 
 export const lockFs = { stat, rename };
 
@@ -16,8 +16,6 @@ const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
 const commandText = (command) => Array.isArray(command) ? command.join(" ") : typeof command === "string" ? command : "";
 // An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as herdr-policy does.
 export const isChained = (toolCall) => CHAINED.test(commandText(toolCall?.rawInput?.command));
-
-const SECRETS = secretBashRules().map((rule) => rule.slice("Bash(*".length, -"*)".length));
 
 export const storePath = (stateHome) => join(stateHome, "nixi", "always.json");
 
@@ -37,7 +35,7 @@ export function rememberable(toolCall, cwd) {
   if (dir !== undefined && dir !== cwd) return false;
   const key = keyOf(toolCall);
   return Boolean(key) && !isChained(toolCall) && !isHerdrWrite(toolCall)
-    && !SECRETS.some((secret) => commandText(toolCall.rawInput.command).includes(secret));
+    && !namesSecret(toolCall.rawInput.command);
 }
 
 export function createAlways(path) {

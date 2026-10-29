@@ -206,7 +206,8 @@ Two levels, so that neither claims a boundary it cannot enforce.
   its rules are fixed when a conversation starts.
 - **Mechanic** — every change the agent wants is shown in the card and needs
   your yes. Click **MECHANIC** in the corner to switch to **YOLO**
-  (auto-approve); YOLO cannot be reached from Guide.
+  (auto-approve). YOLO still shows a card for secret paths and herdr writes;
+  it cannot be reached from Guide.
 
 | agent | Guide | Mechanic |
 |---|---|---|

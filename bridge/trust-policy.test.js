@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath } from "./trust-policy.js";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath, touchesSecret } from "./trust-policy.js";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
@@ -509,6 +509,37 @@ test("the secret path list cannot silently shrink (#41)", () => {
     assert.ok(SECRET_PATHS.includes(path), `${path} is no longer guarded`);
   // Paths, not rules: a "Read(...)" here would not generate Grep/Glob cover.
   for (const path of SECRET_PATHS) assert.ok(!path.includes("("), `${path} looks like a rule`);
+});
+
+test("touchesSecret checks named paths, resolved symlinks, and shell commands (#127)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "nixi-secret-"));
+  try {
+    writeFileSync(join(dir, "key.age"), "test");
+    symlinkSync(join(dir, "key.age"), join(dir, "alias.txt"));
+    for (const path of ["key.age", "alias.txt"])
+      assert.equal(await touchesSecret({ locations: [{ path }] }, dir), true, path);
+    assert.equal(await touchesSecret({ rawInput: { file_path: "~/.ssh/k" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: "cat ~/.netrc" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: ["cat", "/run/agenix/x"] } }, dir), true);
+    assert.equal(await touchesSecret({ locations: [{ path: "plain.txt" }] }, dir), false);
+    assert.equal(await touchesSecret({ rawInput: { command: "uname -r" } }, dir), false);
+    // #127 review: a search names its target in glob/pattern/include, and junk locations don't throw.
+    assert.equal(await touchesSecret({ rawInput: { path: dir, glob: ".ssh/*", pattern: "BEGIN" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { pattern: "/home/u/.ssh/*" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { include: "**/*.age" } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { path: dir, glob: "*.txt", pattern: "TODO" } }, dir), false);
+    assert.equal(await touchesSecret({ locations: "not-an-array" }, dir), false);
+    // #127 agy review: a secret name linking to an innocent target; a new file in a linked
+    // secret directory; a shell command run inside a secret directory.
+    writeFileSync(join(dir, "store-netrc"), "machine x");
+    symlinkSync(join(dir, "store-netrc"), join(dir, "creds.age"));
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "creds.age") } }, dir), true);
+    mkdirSync(join(dir, ".ssh"));
+    symlinkSync(join(dir, ".ssh"), join(dir, "work"));
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "work", "authorized_keys") } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { command: "cat id", cwd: join(dir, "work") } }, dir), true);
+    assert.equal(await touchesSecret({ rawInput: { file_path: join(dir, "new-plain.txt") } }, dir), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("Guide and Mechanic still grant the same reads; only askBeforeReading withdraws them (#41)", () => {
