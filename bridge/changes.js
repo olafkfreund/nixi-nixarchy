@@ -148,7 +148,8 @@ export function createChanges({ stateDir, cwd, home, exec }) {
       if (turn) {
         const hit = turn.entries.filter((e) => e.ids.includes(toolCallId));
         if (!hit.length) return;
-        for (const entry of hit) entry.after = await hashOf(entry.path);
+        // Only the file's last edit fixes its state; an earlier one's completion leaves it to endTurn.
+        for (const entry of hit) entry.after = entry.ids.at(-1) === toolCallId ? await hashOf(entry.path) : undefined;
         await saveManifest(turn);
         return;
       }

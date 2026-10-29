@@ -81,9 +81,13 @@ reviewers:
   (fails without the fix).
 - **Opus review, Low 4 (fixed):** a failed manifest save in `endTurn` no longer skips the
   Hyprland check. It's caught, and the older manifest makes undo refuse.
-- **Accepted, safe:** a false refusal when both permissions of one file are answered
-  together and the second completion is late, or when an edit is still running at Stop.
-  Undo refuses rather than restoring.
+- **agy and Opus reviews (fixed):** an in-turn completion sets `after` only when it belongs
+  to the entry's last edit. An earlier edit's completion arriving after a second edit
+  leaves `after` unset for `endTurn`, instead of fixing a stale hash. Test added (fails
+  without the fix).
+- **Accepted, safe:** a false refusal when an edit is still running at Stop: undo refuses
+  rather than restoring. Accepted as the spec's risk: a user edit during the turn is
+  counted as the agent's.
 
 ## Tests
 

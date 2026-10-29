@@ -297,6 +297,20 @@ test("a file unreadable at endTurn is not confirmed by a late completion after a
   assert.equal(await readFile(file, "utf8"), "user\n");
 });
 
+test("the first edit's completion arriving after a second edit does not fix a stale state (#117 review)", async () => {
+  const { home, changes } = await setup();
+  const file = join(home, "a.txt");
+  await writeFile(file, "original\n");
+  await changes.backup(call("t1", file));
+  await changes.backup(call("t2", file));
+  await writeFile(file, "first edit\n");
+  await changes.completed("t1");
+  await writeFile(file, "second edit\n");
+  await changes.endTurn();
+  assert.equal((await changes.undo()).ok, true);
+  assert.equal(await readFile(file, "utf8"), "original\n");
+});
+
 test("an edit without completion is undoable after endTurn", async () => {
   const { home, changes } = await setup();
   const file = join(home, "a.txt");
