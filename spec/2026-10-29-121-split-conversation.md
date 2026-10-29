@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 121
 intent: intent/2026-10-29-121-split-conversation.md
 ---
