@@ -68,7 +68,73 @@ Today:
   - Omarchy's own action messages
 
   Clicking a notification on the snowflake asks the shell to do what clicking
-  its popup would do.
+  its popup would do. Popups already on screen when the snowflake appears
+  finish their few seconds; only new ones are handed over.
+- **Speaking never opens the microphone.** Today every sentence the snowflake
+  speaks opens a follow-up listening window afterwards (`Wake.talking_until`,
+  `app/server.py:1559`, called from `Speaker` around line 2320). Anything it says
+  on its own does not open that window, including:
+  - notifications
+  - meeting warnings
+  - load warnings
+  - break nudges
+  - agent attention nudges
+
+  The window opens only after an answer to something the user asked.
+- **A notification arrival animation in the snowflake's own style.** It glances
+  toward the caption, squishes once, throws two or three aura sparks, and the
+  row settles into the caption or notch panel. In notch mode, the notch pulses
+  once and opens. Each category gets its own short variant, built from the
+  existing moods and effects (`MOODS`, `AURA`, `shock`, `burstLines`,
+  `notchPulse`, `sfx`) rather than a new animation system:
+
+  | Category | Variant |
+  |---|---|
+  | Mail | eyes sweep as if reading; one pale spark; soft pop |
+  | Chat / Teams | a curious double glance; a two-note bubble sound |
+  | Meeting reminder | amber sparks, a serious face, and the time stays on screen |
+  | Video | star pupils and a short bob |
+  | Download done | a proud `^ ^` face and green sparks |
+  | Critical (the shell keeps its own popup too) | a short shake and a red flash |
+
+  A notification that replaces an earlier one updates the row without playing
+  the arrival again. A burst plays one arrival with a count. The arrival gives
+  way at once to speech, listening, an approval card, or the agent working.
+- **Situational looks show what the user is doing.** A new layer of things the
+  snowflake wears, separate from the skin the user picked (halo, crown, sprout,
+  bow), so both show at once. It is drawn in the same flat SVG style as the
+  skins. Each look sits in its own zone, so looks do not collide with a skin:
+
+  | Zone | Looks |
+  |---|---|
+  | Chin | a tie (in a meeting) |
+  | Sides | headphones (music playing) |
+  | Eyes | sunglasses or glasses |
+
+  Eye-covering looks lift onto the forehead while the snowflake talks or
+  listens, so its eyes still show. A look springs on and off. It must hold for
+  a few seconds before it changes, so switching windows quickly does not make it
+  flicker.
+- Looks and reactions, ranked, each with its own switch:
+
+  | # | Signal (verified on this machine unless noted) | Look / reaction | Why |
+  |---|---|---|---|
+  | 1 | Meeting Mode `~/.local/state/meeting-mode/active` | **tie**; no speech, no wake word | helpful |
+  | 2 | `playerctl` status Playing (MPRIS) | **headphones**; a slow sway when idle | fun |
+  | 3 | gog calendar, 10 min then 1 min ahead | calendar mark and time; the tie goes on a minute early | helpful |
+  | 4 | sustained `/proc/loadavg` above the core count | a sweat drop and a squint | helpful |
+  | 5 | `/proc/meminfo` MemAvailable under 10% | puffed cheeks and one warning, with hysteresis | helpful |
+  | 6 | Hyprland fullscreen | **shades**; animation stops, everything quiet | helpful |
+  | 7 | an hour of active time | a stretch and a "get up" nudge | helpful |
+  | 8 | unlock after 30+ min away | a bounce and one line: missed notifications, next meeting | helpful |
+  | 9 | download or long command finished | proud face (the arrival variant above) | helpful |
+  | 10 | failed user unit (exists) | a confused glance when the count rises | helpful |
+  | 11 | new NixOS generation (the glint exists) | a proud `^ ^` | fun |
+  | 12 | editor or terminal focused for 60+ s (window class only) | round **glasses** | fun |
+  | 13 | late night, 23:00 to 05:00 (`nightTime` exists) | a nightcap and more yawns | fun |
+  | 14 | battery under 15% or 5% (`/sys/class/power_supply`) | sleepy, then pleading; joy when plugged in | helpful, laptops only (none on this desktop) |
+  | 15 | weather (exists) | frost or warm tips; an umbrella when it rains | fun |
+  | 16 | birthday or holiday from the calendar | a party hat, rarely | fun |
 - It reacts with a mood, a caption and a short local quip. It speaks only for
   categories the user marked as spoken (default: meetings only).
 - It stays quiet while:
@@ -78,7 +144,13 @@ Today:
   - a fullscreen window has focus
 
   One shared interruption budget, with deduplication and burst merging, keeps it
-  from nagging. A meeting warning outranks everything else.
+  from nagging. A meeting warning outranks everything else. Nudges with no
+  deadline (breaks, load, tips) wait for a natural pause: an unlock, a
+  workspace switch, or the end of a command. They do not land in the middle of
+  typing. The research behind this is in the PR. Clippy failed on badly timed
+  triggers. Studies of proactive assistants find that the same help is accepted
+  about three times more often at a task boundary, and that users want to set
+  the frequency themselves.
 
 ## Affected users and systems
 
@@ -124,7 +196,15 @@ Today:
 - No new flake input. Nothing changes for users who leave it off. No transcript
   and no stored notification history.
 - Cheap: no `/proc` scanning every second, and no polling faster than what is
-  being watched changes.
+  being watched changes. Read files (`/proc`, `/sys`, the Meeting Mode file)
+  in-process; do not fork `hyprctl`, `playerctl` or `upower` each tick. Use the
+  Hyprland socket for window events.
+- The page already repaints every frame, and WebKit drops to low effects when a
+  frame takes more than 32 ms (`lowFx`). Looks are flat paths moved by the
+  existing springs. No new SVG blur filters, and no new timers or continuous
+  animations per signal.
+- Looks use the window class only. A window title is never read, stored or
+  sent.
 
 ## Pushed back on (dropped unless the approver wants them back)
 
@@ -151,8 +231,16 @@ Today:
    (proposed), or never?
 4. **Shell hook for long commands:** ship it in the HM module behind its own
    option (proposed), or leave it out and rely on apps that already notify?
-5. **Delivery:** one PR for everything, or in phases (proposed): (a) the shell
-   lease and feed, the notification takeover, quiet rules and meetings; (b) load,
-   breaks and downloads; (c) the shell hook and quips.
-6. **Popups already on screen when the snowflake appears:** let them finish
-   their few seconds (proposed), or hand them over at once?
+5. **Delivery:** one PR for everything, or in phases (proposed):
+   (a) the speech-without-microphone fix, the shell lease and feed, the arrival
+   animation, the look layer with the tie and headphones, and meetings;
+   (b) load, fullscreen shades, breaks, the welcome back, and downloads (rows 4 to 9);
+   (c) the fun looks (rows 11 to 16), the shell hook and quips.
+6. **Sunglasses in meetings:** tie only (proposed, because sunglasses hide the
+   eyes), or sunglasses as an alternative the user can pick?
+7. **Sounds:** a short sound per notification category, on by default when not
+   muted (proposed), or silent arrivals unless the user turns sounds on?
+
+Resolved by the user (2026-10-30): popups already on screen when the snowflake
+appears finish their few seconds. Speaking must never open the follow-up
+listening window.
