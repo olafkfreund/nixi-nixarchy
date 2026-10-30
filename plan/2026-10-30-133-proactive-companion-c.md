@@ -163,6 +163,17 @@ No nixarchy change.
      - "Party hat on special days" (birthdays need the calendar)
      - "Little jokes"
 
+   Deviations (snowflake `a843e4d`):
+   - The party hat and umbrella in his pupil blue vanished against his blue
+     arms. The hat is now pink with white stripes and a yellow pom-pom, drawn
+     1.2× in an inner group (`frame()` owns the outer transform). The umbrella
+     is rain-coat yellow. Both were checked in a headless render with the
+     headphones and tie on.
+   - The top-zone parts are drawn before the headphones, so the band passes in
+     front of the hat brims.
+   - Snow gets no frost tips beyond what the existing weather look already
+     draws.
+
 ### nixi
 
 6. **Shell hook option** (`nix/hm-module.nix`)
