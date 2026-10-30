@@ -137,6 +137,10 @@ Do not switch the existing checkouts.
      `save_config` writes) has the value after a restart.
    - A bad `notify_speak` value posted to `/api/settings` is refused.
 
+   Deviation (snowflake `a1d7579`): a bad `notify_speak` is ignored and the
+   old value kept, as every other setting in that handler does. No unit test:
+   the handler lives inside `do_POST`, which no test reaches.
+
 ### nixarchy
 
 4. **Shell patch `pkgs/omarchy/903-notification-delegate.patch`**
