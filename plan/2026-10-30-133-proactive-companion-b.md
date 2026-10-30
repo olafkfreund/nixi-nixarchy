@@ -204,6 +204,15 @@ No nixarchy change.
    - `node` parse check
    - unit tests
 
+   Deviations (snowflake `c63ce16`):
+   - Eye centres are ±27.5, not ±25.5 (`EYE.cx`).
+   - The first shades were 34×22 dark lenses, which disappeared on his near-black
+     face and covered only a sliver of his 47×81 eyes. They are now wayfarers
+     over the top two thirds of each eye, with an accent rim, a solid top bar and
+     a bright glint. A headless render was checked with the tie and headphones on.
+   - A spoken nudge shows its words through `sayAside` only, because `say()`
+     clears the caption. Silent nudges use a caption span.
+
    Traps: eye looks must lift while talking, or his eyes vanish. Use flat paths
    only; no `<filter>`.
 
