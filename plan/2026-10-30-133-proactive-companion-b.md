@@ -247,6 +247,42 @@ No nixarchy change.
        stretch, `sayAside`), so there is no test-only override in the code.
    - Then the snowflake PR and the nixi PR, linked.
 
+## Review fixes (step 7)
+
+A fresh Opus review found the following; all fixed in snowflake `880f3e0`:
+- Fullscreen went stale after a workspace switch. Hyprland sends no
+  `fullscreen>>0` then, so `Desk` now asks `j/activewindow` on workspace and
+  focus events.
+- A lock query with no answer looked like an unlock, which split long locks and
+  could deliver a nudge while away. `locked()` now returns `None`, and `sense`
+  keeps the previous state.
+- The page could speak two queued nudges back to back. It keeps its own
+  10-minute speech budget, and queued nudges expire after 10 minutes.
+- An edge-triggered load nudge dropped by its cooldown is re-armed.
+- The event reader notices an opt-out within 5 s (socket timeout).
+- No events seen is not a breakpoint.
+- The fullscreen hand-back is described under the takeover switch, not the
+  shades. README fixed in nixi `a531f7c`.
+
+## Live check on p620 (2026-10-30)
+
+The worktree's own package was built and its launcher run directly. The
+installed launcher pins its app, which is intended. No system switch.
+
+| Check | Result |
+|---|---|
+| Settings | all four switches save and read back |
+| Lock query | real `j/monitors` carries `solitaryBlockedBy` per monitor; unlocked shows no `LOCK` |
+| Fullscreen set, then unset | `situation` went `fullscreen: true`, then `false` |
+| Shades | on live, as wayfarers over the top of the eyes |
+
+Not run live, by choice:
+- CPU stress: it would load every core for over a minute.
+- The 30-minute lock for welcome back: it would lock the user's screen.
+
+`tests/test_situation.py` and `tests/test_nudge.py` cover both with fake clocks
+and fake `/proc` files.
+
 ## Implementers
 
 - Steps 1-5 go to the `coder` agent (Sonnet), step by step through
