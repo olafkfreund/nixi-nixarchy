@@ -410,6 +410,14 @@ Do not switch the existing checkouts.
      running a real call. Use a scratch `XDG_STATE_HOME` for the test if
      Meeting Mode is installed.
 
+   Deviations (snowflake `bdae9d8`):
+   - The tie sways on its own spring, `G.sitW`, with the same input as the skins'
+     `G.wob`. Stepping `G.wob` twice per frame would double its speed.
+   - No `body.hover` rule exists for the acc groups, so the sit groups have
+     none either.
+   - A look whose setting is switched off still takes up to 8 s to leave, the
+     same hysteresis as the signal.
+
 ### nixi
 
 9. **Docs** (`README.md`): a short section under the companion:
