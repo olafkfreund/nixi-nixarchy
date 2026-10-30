@@ -158,6 +158,8 @@ A long command can tell you it finished, when you are looking elsewhere:
 It sends "Done in 42s" (or "Failed after 42s (exit 1)") with only the command's
 first word, as an ordinary notification, so he shows it with a proud face.
 `commandDone.seconds` sets the threshold (default 30).
+Inside herdr, tmux or zellij it cannot tell whether you are watching that
+pane, so it notifies there even when you are.
 
 Notification text stays on your machine. He never logs it, never writes it to
 disk, and never gives it to the agent. Critical alerts and anything carrying a

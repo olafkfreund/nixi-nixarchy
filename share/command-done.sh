@@ -2,7 +2,8 @@
 # Only the command's FIRST WORD (its basename, after any NAME=value) and its duration are sent, never the line.
 # Sourced by interactive bash and zsh (services.nixi.companion.commandDone in nix/hm-module.nix).
 # NIXI_JOB_SECONDS: the shortest command that counts (default 30).
-# Inside tmux or zellij it cannot tell whether you are watching, so it always notifies there.
+# Inside a multiplexer (herdr, tmux, zellij) the shell runs under its server, not the window: it cannot tell
+# whether you are watching, so it always notifies there.
 __nixi_job_min=${NIXI_JOB_SECONDS:-30}
 __nixi_job_start=
 __nixi_job_cmd=

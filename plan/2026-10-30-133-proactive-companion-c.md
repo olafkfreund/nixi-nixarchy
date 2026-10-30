@@ -259,6 +259,36 @@ were reproduced, then fixed in nixi (`share/command-done.sh`,
   NixOS's `/etc/zshenv` resets `PATH`. It was also checked by hand under a pty,
   and with the user's real bash-preexec 0.7.0 loaded before and after.
 
+## Live check on p620 (2026-10-30)
+
+The worktree package was built and its launcher run directly (no system
+switch).
+
+| Check | Result |
+|---|---|
+| A minute in the herdr terminal | round glasses on, live |
+| Hook in a real interactive bash, `sleep 3` with a 2 s threshold | `Done in 3s` and `sleep`, through the real path |
+
+The live check found three things, all fixed in the snowflake:
+- `ebdaf25`: herdr (`org.omarchy.herdr`), this desktop's main terminal, was
+  missing from the coder list.
+- `9e67285`: a terminal already focused when `Desk` connects never started the
+  coding clock. The class is now seeded from the same `j/activewindow` reply.
+- `1f9e0ee`: Hyprland's fullscreen state is a bitmask (1 maximized, 2
+  fullscreen), and Omarchy maximizes windows all the time. He wore shades for
+  an ordinary terminal. Only bit 2 counts now, and every `fullscreen>>` event
+  re-asks the mode.
+
+Not fixed, documented in the hook and README: herdr is a multiplexer (the
+shell's parents are the herdr server under systemd, not the kitty window), so
+the focus check cannot see that you are watching. Inside herdr, tmux and
+zellij it always notifies. Asking herdr which pane is visible is a possible
+follow-up.
+
+The snowflake "done" arrival needs nixarchy's patch 903 on the running shell,
+which this machine does not have until it updates. It is covered by the unit
+tests and the headless render.
+
 ## Implementers
 
 - Steps 1-5 go to the `coder` agent (Sonnet), through `SendMessage`.
