@@ -135,7 +135,14 @@ Voice models download to `~/.cache` the first time you talk to it. Its own setti
 | Say out loud | Which kinds he speaks: meetings only by default |
 | Tie in meetings | He wears a tie while Meeting Mode is on, or when a calendar item is a minute away |
 | Headphones for music | He wears headphones while a player is playing |
+| Shades in fullscreen | He wears shades while a window is fullscreen, and leaves your notifications to the shell until it ends |
+| Notice a busy machine | A sweat drop when the CPU works hard for a while; a word when memory runs low |
+| Remind me to move | After an hour unlocked he suggests a stretch. A lock of five minutes or more counts as a break |
+| Welcome me back | After half an hour away: how many notifications came in, and your next meeting if the calendar is on |
 
+Nothing watches your keyboard: "active" means unlocked, and the idle lock
+counts as a break. Nudges wait for a pause (an unlock, a workspace switch, or
+a quiet moment), and he speaks at most one of them every ten minutes.
 Notification text stays on your machine. He never logs it, never writes it to
 disk, and never gives it to the agent. Critical alerts and anything carrying a
 code (2FA, one-time passwords) keep the shell's own popup, and he never reads a
