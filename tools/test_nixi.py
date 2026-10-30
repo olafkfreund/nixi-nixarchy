@@ -1075,6 +1075,58 @@ def test_local_components_are_packaged():
     print("  ok  every local QML component the card uses is installed and checked")
 
 
+def test_command_done_hook():
+    """The shell hook behind services.nixi.companion.commandDone (#133): it parses
+    in bash and zsh, is packaged and wired by the module, and what reaches
+    notify-send is the command's first word and its duration, never the line."""
+    snippet = os.path.join(ROOT, "share", "command-done.sh")
+    assert "command-done.sh" in open(os.path.join(ROOT, "nix", "package.nix")).read(), "the hook is not packaged"
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    assert "programs.bash.initExtra" in mod and "programs.zsh.initContent" in mod and "command-done.sh" in mod
+    shells = {"bash": shutil.which("bash"), "zsh": shutil.which("zsh")}
+    for name, exe in shells.items():
+        if exe:
+            r = subprocess.run([exe, "-n", snippet], capture_output=True, text=True)
+            assert r.returncode == 0, "%s -n: %s" % (name, r.stderr)
+    tmp = tempfile.mkdtemp(prefix="nixi-hook-")
+    try:
+        fake = os.path.join(tmp, "bin")
+        os.mkdir(fake)
+        log = os.path.join(tmp, "sent")
+        with open(os.path.join(fake, "notify-send"), "w") as f:
+            f.write('#!/bin/sh\nprintf "%s|" "$@" >> ' + log + '\necho >> ' + log + '\n')
+        os.chmod(os.path.join(fake, "notify-send"), 0o755)
+        env = dict(os.environ, PATH=fake + os.pathsep + os.environ["PATH"], NIXI_JOB_SECONDS="1")
+        env.pop("HYPRLAND_INSTANCE_SIGNATURE", None)
+        harness = {
+            # bash: the DEBUG trap sees the command; the prompt hook reports it
+            "bash": '. "%s"\n__nixi_job_post\nsleep 2 # secret-arg\n__nixi_job_post\n' % snippet,
+            # zsh fires preexec/precmd only interactively: call them as the shell would
+            "zsh": '. "%s"\n__nixi_job_preexec "sleep 2 # secret-arg"\nsleep 2\n__nixi_job_precmd\n' % snippet,
+        }
+        for name, script in harness.items():
+            if not shells[name]:
+                continue
+            open(log, "w").close()
+            r = subprocess.run([shells[name], "-c", script], env=env, capture_output=True, text=True, timeout=30)
+            assert r.returncode == 0, "%s: %s" % (name, r.stderr)
+            sent = open(log).read()
+            assert re.fullmatch(r"-a\|nixi-job\|--\|Done in [2-3]s\|sleep\|\n", sent), "%s sent %r" % (name, sent)
+            assert "secret" not in sent
+        # below the threshold nothing is sent; a failure names its first word too
+        open(log, "w").close()
+        env["NIXI_JOB_SECONDS"] = "30"
+        subprocess.run([shells["bash"], "-c", '. "%s"\n__nixi_job_post\nsleep 1\n__nixi_job_post\n' % snippet], env=env, timeout=30)
+        assert open(log).read() == "", "a short command was reported"
+        env["NIXI_JOB_SECONDS"] = "1"
+        subprocess.run([shells["bash"], "-c", '. "%s"\n__nixi_job_post\nsleep 2; false\n__nixi_job_post\n' % snippet], env=env, timeout=30)
+        sent = open(log).read()
+        assert re.fullmatch(r"-a\|nixi-job\|--\|Failed after [2-3]s \(exit 1\)\|sleep\|\n", sent), repr(sent)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("  ok  the command-done hook parses, is packaged, and sends only the first word and the duration")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
