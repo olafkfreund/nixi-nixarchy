@@ -341,6 +341,17 @@ Do not switch the existing checkouts.
      the caption grows, or the click region will not cover it (see how
      `attention` calls it).
 
+   Deviations (snowflake `96be525`):
+   - Video uses `t_excited` (big pupils), not `excited` with star pupils.
+     `excited` fires a strong burst, shock and flash in `onMood`.
+   - Chat is `curious` plus a tilt; there is no separate double glance or
+     caption glance.
+   - Queued rows drain from the frame loop, one per 5 s, next to `capTick`. That
+     replaces separate hooks on `spk_done`, approvals and the end of a turn.
+     Rows also wait while he is hidden or in hover mode.
+   - Only `#cap` is clickable, because `#chip` keeps its attention click. The row
+     clears after 5 s even when hovered.
+
 8. **Look layer, tie and headphones** (`app/static/index.html`, `app/server.py`)
    - Page:
      - Add `<g id="sitBack"></g>` right after `#accBack` and `<g id="sitFront"></g>`
