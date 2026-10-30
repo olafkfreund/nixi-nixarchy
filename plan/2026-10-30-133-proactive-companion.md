@@ -449,6 +449,46 @@ Do not switch the existing checkouts.
       the snowflake works without it, because a `delegate` call that answers
       `SKIP` means no lease and normal popups.
 
+## Review fixes (step 10)
+
+A fresh Opus review of the three diffs found these. Each was checked against the
+code and fixed.
+
+**nixarchy `72df306`:**
+- Only rows with no card, and not held or scheduled, are handed over. An update
+  to a card on screen was showing both a card and a companion row.
+- Queued `summary`/`body` are cut to 200 characters. One huge body could push
+  the `delegate` reply past the companion's 64 KiB cap and lose every row in it.
+- A handed-over row expires 12 s after the companion *takes* it, not after it
+  arrives. Before, a row clicked late answered `none`.
+- New IPC `showKey <key>`: a row the companion could not show becomes the
+  shell's own popup. It is not stored again when the companion already recorded
+  it, so history stays single. The session test covers it.
+
+**snowflake `c291828`:**
+- The stall guard is replaced by per-row give-back. The page confirms a row
+  (`/api/notify/seen`) only when it shows it. Any row unconfirmed after 5 s is
+  passed to `showKey`, and the page drops queued rows older than 4 s.
+  Notifications are no longer lost to a full page queue, a frozen page, or a
+  reload.
+- Notification speech goes through `enqueue` (`say` wiped the row).
+- `sayAside` shows the words without speaking in a meeting, which covers the
+  browser voice path that never reaches `/api/say`.
+- Meeting rules apply only with `proactive` on.
+- `/api/sleep` makes no socket call. The Inbox thread lets go within 1 s.
+- `unseen` is iterated over a copy.
+- The OTP filter is wider.
+- The look writes stop while both looks are off.
+
+**nixi `8a30b28`:** the README states the meeting quiet and the sound default
+correctly.
+
+Accepted, not fixed:
+- A handed-over row updated *after* the lease lapsed may appear in history
+  twice.
+- Any `/api/events` listener counts as the page for `want()`. Rows it never
+  shows are given back after 5 s, so nothing is lost.
+
 ## Implementers
 
 - Steps 1-8 go to one `coder` agent (Sonnet), step by step through
