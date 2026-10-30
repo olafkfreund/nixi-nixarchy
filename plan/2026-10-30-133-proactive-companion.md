@@ -484,8 +484,8 @@ code and fixed.
 correctly.
 
 Accepted, not fixed:
-- A handed-over row updated *after* the lease lapsed may appear in history
-  twice.
+- ~~A handed-over row updated *after* the lease lapsed may appear in history
+  twice.~~ Fixed in nixarchy#1530 (below).
 - Any `/api/events` listener counts as the page for `want()`. Rows it never
   shows are given back after 5 s, so nothing is lost.
 
@@ -515,6 +515,26 @@ Fixed from the live check (snowflake):
   cups sit outside the sides, and the tie is larger and red.
 - `93e02a0`: app names are shown as people say them ("Teams", not
   `teams-for-linux`).
+
+## Second review before deploy (nixarchy#1530)
+
+Codex and agy reviewed patch 903 before `edge` took it. Fixed with one
+`undelegate(key)`, called from `releaseLive`, `showDelegated` and the normal
+path:
+- A row withdrawn by its sender before the poll was still handed over.
+- A `replaces_id` update queued a second snapshot. The queue now keeps one per key.
+- An update that can no longer be delegated popped up but stayed queued or
+  expiring, and was recorded twice.
+- `showKey` left a re-queued row in the queue.
+
+The session test changed too:
+- The expiry probe used `activateKey`, which closes the row itself. It now
+  probes once, after the deadline.
+- The lapse test now proves the row was queued first.
+- New checks cover an update and a withdrawal.
+
+Evidence: the branch passes. With expiry off, the run fails with "never
+expired". With the old patch, it fails with `["upd-133-old","upd-133-new","gone-133"]`.
 
 ## Implementers
 
