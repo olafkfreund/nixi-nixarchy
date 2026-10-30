@@ -104,6 +104,13 @@ No nixarchy change.
 
    Verify: `python3 -m unittest discover -s tests` passes.
 
+   Deviations (snowflake `21ba691`):
+   - `Desk` reads the event socket only while `proactive` is on, and stops when
+     it is switched off. Someone who never opted in never has their events
+     read.
+   - On connect it asks `j/activewindow` once, so a window that is already
+     fullscreen is known before any event arrives.
+
    Traps:
    - `.socket2.sock` closes on a Hyprland restart, so reconnect and do not
      crash.
