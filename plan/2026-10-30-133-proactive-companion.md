@@ -235,6 +235,15 @@ Do not switch the existing checkouts.
 
    Verify: `nix build .#checks.x86_64-linux.session -L` passes.
 
+   Deviation, found by the first run:
+   - A row that popped up after a lapse was never stored (`storePut`), so
+     `live.json` did not have it. `showDelegated` now stores it.
+   - To keep history single, 903 writes history when the companion *takes* a
+     row (`delegate`, once per key through `reservation.recorded`), not when the
+     row arrives.
+   - The test checks `live.json`/`history.json`, where the #1032 block shows the
+     shell writes, rather than per-file globs.
+
 ### Snowflake (continued)
 
 6. **`class Inbox`** (`app/server.py`, after `class Ambient`, before line 1110)
