@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 133
 spec: spec/2026-10-30-133-proactive-companion.md
 previous: plan/2026-10-30-133-proactive-companion-b.md
