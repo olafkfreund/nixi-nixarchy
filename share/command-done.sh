@@ -1,15 +1,24 @@
 # Nixi (#133): a "done" notification when a long command ends in a terminal you are not looking at.
-# Only the command's FIRST WORD and its duration are sent, never the command line.
+# Only the command's FIRST WORD (its basename, after any NAME=value) and its duration are sent, never the line.
 # Sourced by interactive bash and zsh (services.nixi.companion.commandDone in nix/hm-module.nix).
 # NIXI_JOB_SECONDS: the shortest command that counts (default 30).
+# Inside tmux or zellij it cannot tell whether you are watching, so it always notifies there.
 __nixi_job_min=${NIXI_JOB_SECONDS:-30}
 __nixi_job_start=
 __nixi_job_cmd=
 
-__nixi_job_first() {            # the first word of a command line, and nothing else
-  __nixi_job_cmd=$1
-  __nixi_job_cmd=${__nixi_job_cmd#"${__nixi_job_cmd%%[![:space:]]*}"}
-  __nixi_job_cmd=${__nixi_job_cmd%%[[:space:]]*}
+__nixi_job_first() {            # the command's first word: no NAME=value, no path, nothing after it
+  local line=$1 w
+  while :; do
+    line=${line#"${line%%[![:space:](\{!]*}"}                # leading blanks, a subshell "(", a group "{", "!"
+    w=${line%%[[:space:];|&)]*}
+    case $w in
+      [A-Za-z_]*=*) line=${line#"$w"} ;;   # an assignment before the command: skip it, never send it
+      *) break ;;
+    esac
+  done
+  case $w in *=*) w= ;; esac
+  __nixi_job_cmd=${w##*/}
 }
 
 __nixi_job_focused() {          # is this terminal the focused Hyprland window? Forks only after a long command.
@@ -48,28 +57,27 @@ __nixi_job_end() {              # exit-status: called when the prompt comes back
 }
 
 if [ -n "${BASH_VERSION:-}" ]; then
-  # DEBUG fires for every simple command: only the first of a command line counts, so a pipeline is one.
-  __nixi_job_pre() { if [ -z "$__nixi_job_start" ]; then __nixi_job_start=$SECONDS; __nixi_job_first "$BASH_COMMAND"; fi; }
-  __nixi_job_fresh=1            # the rest of the startup file runs under the trap: the first prompt only starts the count
+  # No DEBUG trap (it hides other tools' traps from functions and clobbers $_): PS0 is expanded once, in this
+  # shell, right before a command line runs and never for an empty one. The subscript assigns the start time
+  # and the empty element prints nothing.
+  __nixi_job_ps0='${__nixi_job_nil[__nixi_job_start=SECONDS,0]}'
+  __nixi_job_hc=$HISTCMD
   __nixi_job_post() {
     local rc=$?
-    if [ -n "$__nixi_job_fresh" ]; then __nixi_job_fresh=; __nixi_job_start=; __nixi_job_cmd=; return "$rc"; fi
+    [ -n "${__bp_last_ret_value+x}" ] && rc=$__bp_last_ret_value      # bash-preexec keeps the command's status
+    case $PS0 in *__nixi_job_start*) ;; *) PS0+=$__nixi_job_ps0 ;; esac   # a later tool may have replaced PS0
+    if [ -n "$__nixi_job_start" ] && [ $((SECONDS - __nixi_job_start)) -ge "$__nixi_job_min" ] \
+       && [ "$HISTCMD" != "$__nixi_job_hc" ]; then                    # (only after a long command: this forks)
+      __nixi_job_first "$(HISTTIMEFORMAT= history 1 2>/dev/null | { read -r _ l; printf '%s' "$l"; })"   # the line just run
+    fi
+    __nixi_job_hc=$HISTCMD
     __nixi_job_end "$rc"
   }
-  __nixi_job_chain() {          # keep a DEBUG trap somebody else already set
-    local cur
-    cur=$(trap -p DEBUG)
-    case $cur in
-      *__nixi_job_pre*) ;;
-      '') trap '__nixi_job_pre' DEBUG ;;
-      *) eval "set -- $cur"; trap "__nixi_job_pre; $3" DEBUG ;;
-    esac
-  }
-  __nixi_job_chain
+  PS0+=$__nixi_job_ps0
   case "$(declare -p PROMPT_COMMAND 2>/dev/null)" in
     *__nixi_job_post*) ;;
-    "declare -a"*) PROMPT_COMMAND+=(__nixi_job_post) ;;
-    *) PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND; }__nixi_job_post" ;;
+    "declare -a"*) PROMPT_COMMAND=(__nixi_job_post "${PROMPT_COMMAND[@]}") ;;   # first: $? is still the command's
+    *) PROMPT_COMMAND="__nixi_job_post${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
   esac
 elif [ -n "${ZSH_VERSION:-}" ]; then
   __nixi_job_preexec() { __nixi_job_start=$SECONDS; __nixi_job_first "$1"; }

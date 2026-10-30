@@ -225,6 +225,40 @@ No nixarchy change.
        covers only the looks that real signals can trigger now.
    - Then the two PRs, linked; merge when green.
 
+## Review fixes (step 8)
+
+A fresh Opus review found three blocking bugs in the bash half of the hook. All
+were reproduced, then fixed in nixi (`share/command-done.sh`,
+`tools/test_nixi.py`) by the session model:
+- **A DEBUG trap replaced other tools' traps.** `trap -p` inside a function
+  sees none. It also clobbered `$_` (`mkdir x && cd $_`). Now there is no DEBUG
+  trap at all: `PS0` stamps the start once per command line, in this shell,
+  never for an empty line. It uses `${__nixi_job_nil[__nixi_job_start=SECONDS,0]}`,
+  which expands to nothing. `PS0` is re-appended at each prompt if another tool
+  replaced it.
+- **Idle time counted, and internal names reported.** With a hook appended
+  after ours, or bash-preexec (the user's `.bashrc` loads it), the clock started
+  at the prompt and the body read `__bp_interactive_mode`. Now the start comes
+  only from `PS0`. The name comes from `history 1`, only when `HISTCMD`
+  advanced and only after a command over the threshold, so there is no fork per
+  prompt. The exit status honours bash-preexec's `__bp_last_ret_value`, and our
+  function goes first in `PROMPT_COMMAND`.
+- **More than the first word leaked.** The first word now:
+  - skips leading `NAME=value` words
+  - drops any word that still holds `=`
+  - strips a leading `(`, `{` or `!`
+  - keeps the basename only
+
+  This applies in both bash and zsh.
+- Under tmux/zellij the focus check cannot see the terminal, so it always
+  notifies there. This is documented in the hook.
+- The test now drives a real interactive `bash --norc -i` and covers: the plain
+  case, `NAME=value`, a path, a subshell, idle time with a later hook, an
+  existing DEBUG trap kept, `$_` intact, below threshold and failure. zsh is
+  checked through its hook functions, with the fake as a function, because
+  NixOS's `/etc/zshenv` resets `PATH`. It was also checked by hand under a pty,
+  and with the user's real bash-preexec 0.7.0 loaded before and after.
+
 ## Implementers
 
 - Steps 1-5 go to the `coder` agent (Sonnet), through `SendMessage`.
