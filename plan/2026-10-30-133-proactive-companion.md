@@ -108,6 +108,13 @@ Do not switch the existing checkouts.
    Traps: the page posts sentence by sentence, so every sentence of an aside
    must carry the flag.
 
+   Deviation (snowflake `19f75e4`): when the voice plays in the browser
+   (`voice_native` off), the end of speech is reported through `/api/speaking`,
+   and the server called `talking_until(now + 0.8)`, which opened the window
+   anyway. The page now remembers whether the last queued sentence was an aside
+   (`lastFollow`) and sends `follow` with `/api/speaking`. The server passes it
+   to `talking_until`. The unasked "memory is full" line also uses `sayAside`.
+
 3. **Settings keys** (`app/server.py`, `app/static/index.html`)
    - Add to the defaults (near line 194): `"proactive": False,
      "notifications_takeover": False, "notify_details": False, "notify_speak":
