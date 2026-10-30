@@ -124,12 +124,12 @@ from Nixi's own directory, and Nixi keeps its own learned facts. Its little
 terminal shows each step's title but not its output.
 Voice models download to `~/.cache` the first time you talk to it. Its own settings live in `~/.config/nixi-companion`.
 
-**On the desktop** (Settings → Desktop, all off until you turn them on):
+**On the desktop** (Settings → Desktop; nothing happens until you turn on the first two):
 
 | Switch | What it does |
 |---|---|
 | Desktop companion | The master switch for everything below |
-| Show notifications through him | While he is visible, he shows your notifications instead of the shell's popups, each with its own little reaction, and a click opens them. Hide him, turn this off, or let him crash, and the normal popups are back within seconds |
+| Show notifications through him | While he is visible, he shows your notifications instead of the shell's popups, each with its own little reaction, and a click opens them. One he cannot show within a few seconds (he is busy answering you, say) pops up as usual. Hide him, turn this off, or let him crash, and the normal popups are back within seconds |
 | Show the notification text | Without it he shows only the kind and the app ("New message in Teams") |
 | Notification sounds | A short sound per kind (on by default once the takeover is on) |
 | Say out loud | Which kinds he speaks: meetings only by default |
@@ -140,7 +140,8 @@ Notification text stays on your machine. He never logs it, never writes it to
 disk, and never gives it to the agent. Critical alerts and anything carrying a
 code (2FA, one-time passwords) keep the shell's own popup, and he never reads a
 code aloud. Nothing he says on his own opens the microphone. In a meeting he
-says nothing at all, and "hey Nixi" is paused.
+says nothing unasked; he still answers when you ask him something, and
+"hey Nixi" is paused.
 The takeover needs nixarchy's notification patch (903). On a shell without it,
 the popups stay as they are. The design is in
 [intent](intent/2026-10-30-133-proactive-companion.md),
