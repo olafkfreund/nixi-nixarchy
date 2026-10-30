@@ -1075,6 +1075,75 @@ def test_local_components_are_packaged():
     print("  ok  every local QML component the card uses is installed and checked")
 
 
+def test_command_done_hook():
+    """The shell hook behind services.nixi.companion.commandDone (#133): it parses
+    in bash and zsh, is packaged and wired by the module, and what reaches
+    notify-send is the command's first word and its duration, never the line."""
+    snippet = os.path.join(ROOT, "share", "command-done.sh")
+    assert "command-done.sh" in open(os.path.join(ROOT, "nix", "package.nix")).read(), "the hook is not packaged"
+    mod = open(os.path.join(ROOT, "nix", "hm-module.nix")).read()
+    assert "programs.bash.initExtra" in mod and "programs.zsh.initContent" in mod and "command-done.sh" in mod
+    shells = {"bash": shutil.which("bash"), "zsh": shutil.which("zsh")}
+    for name, exe in shells.items():
+        if exe:
+            r = subprocess.run([exe, "-n", snippet], capture_output=True, text=True)
+            assert r.returncode == 0, "%s -n: %s" % (name, r.stderr)
+    tmp = tempfile.mkdtemp(prefix="nixi-hook-")
+    try:
+        fake = os.path.join(tmp, "bin")
+        os.mkdir(fake)
+        log = os.path.join(tmp, "sent")
+        with open(os.path.join(fake, "notify-send"), "w") as f:
+            f.write('#!/bin/sh\nprintf "%s|" "$@" >> ' + log + '\necho >> ' + log + '\n')
+        os.chmod(os.path.join(fake, "notify-send"), 0o755)
+        env = {"HOME": tmp, "PATH": fake + os.pathsep + os.environ["PATH"], "TERM": "dumb",
+               "NIXI_JOB_SECONDS": "2", "HISTFILE": os.path.join(tmp, "hist")}
+
+        def bash(*lines):
+            # A real interactive bash (PS0 and PROMPT_COMMAND only run interactively), fed line by line.
+            open(log, "w").close()
+            subprocess.run([shells["bash"], "--norc", "-i"], input="\n".join(lines) + "\n", env=env,
+                           capture_output=True, text=True, timeout=60)
+            return open(log).read()
+
+        src = '. "%s"' % snippet
+        done = r"-a\|nixi-job\|--\|Done in [3-4]s\|%s\|\n"
+        # the command's first word, never the rest of the line
+        assert re.fullmatch(done % "sleep", bash(src, "sleep 3 # secret-arg", "true")), "plain command"
+        # an assignment before it and a path are never sent: the basename only
+        sent = bash(src, "TOKEN=hunter2 sleep 3", "true", "FOO=1 ./secret-dir/run-it 2>/dev/null; sleep 3", "true")
+        assert "hunter2" not in sent and "secret-dir" not in sent and "TOKEN" not in sent, sent
+        assert re.fullmatch((done % "sleep") + (done % "run-it"), sent), sent
+        # a subshell is a command too
+        assert re.fullmatch(done % "sleep", bash(src, "( sleep 3 )", "true")), "subshell"
+        # idle time at the prompt is not counted (SECONDS is whole seconds: 0.3 s stays under a 2 s threshold), even with another prompt hook after this one
+        assert bash("z(){ :; }", src, 'PROMPT_COMMAND+="; z"', "sleep 0.3", "true") == "", "idle time was counted"
+        # another tool's DEBUG trap stays, and $_ is untouched by the hook
+        tdir = os.path.join(tmp, "t")
+        bash("trap ': mine' DEBUG", src, "trap -p DEBUG > %s/trap" % tmp, 'mkdir -p %s && echo "$_" > %s/u' % (tdir, tmp))
+        assert ": mine" in open(os.path.join(tmp, "trap")).read(), "an existing DEBUG trap was replaced"
+        bash(src, 'mkdir -p %s && echo "$_" > %s/u' % (tdir, tmp))
+        assert open(os.path.join(tmp, "u")).read().strip() == tdir, "$_ was clobbered"
+        # below the threshold nothing; a failure names its first word too
+        env["NIXI_JOB_SECONDS"] = "30"
+        assert bash(src, "sleep 1", "true") == "", "a short command was reported"   # (30 s threshold)
+        env["NIXI_JOB_SECONDS"] = "2"
+        sent = bash(src, "sleep 3; false", "true")
+        assert re.fullmatch(r"-a\|nixi-job\|--\|Failed after [3-4]s \(exit 1\)\|sleep\|\n", sent), repr(sent)
+        # zsh fires preexec/precmd around each prompt; call them as the shell would (no prompt without a tty)
+        if shells["zsh"]:
+            open(log, "w").close()
+            subprocess.run([shells["zsh"], "-f", "-c",
+                            'notify-send(){ print -r -- "${(j:|:)@}|" >> %s; }\n'   # (NixOS's /etc/zshenv resets PATH: a function, not the fake)
+                            '. "%s"\n__nixi_job_preexec "TOKEN=x sleep 3 # secret"\nsleep 3\n__nixi_job_precmd\n' % (log, snippet)],
+                           env=env, capture_output=True, text=True, timeout=30)
+            sent = open(log).read()
+            assert re.fullmatch(done % "sleep", sent) and "secret" not in sent, "zsh sent %r" % sent
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("  ok  the command-done hook parses, is packaged, and sends only the first word and the duration")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

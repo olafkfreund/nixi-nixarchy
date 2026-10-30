@@ -129,6 +129,21 @@ in
           off in this build.
         '';
       };
+
+      commandDone = {
+        enable = lib.mkEnableOption ''
+          a "done" notification when a long shell command finishes in a terminal
+          you are not looking at. It reaches the desktop as an ordinary
+          notification (app `nixi-job`), so the shell, the companion's takeover
+          and its give-back apply unchanged. Only the command's first word and
+          its duration are sent, never the command line. Needs
+          `programs.bash.enable` and/or `programs.zsh.enable`'';
+        seconds = lib.mkOption {
+          type = lib.types.ints.positive;
+          default = 30;
+          description = "The shortest command, in seconds, that earns a notification.";
+        };
+      };
     };
 
     autoEnable = lib.mkOption {
@@ -307,6 +322,20 @@ in
           fi
         '');
     })
+
+    # Hooks every interactive bash and zsh (HM appends these only when the shell program is enabled).
+    (lib.mkIf cfg.companion.commandDone.enable (
+      let
+        hook = ''
+          NIXI_JOB_SECONDS=${toString cfg.companion.commandDone.seconds}
+          . ${share}/command-done.sh
+        '';
+      in
+      {
+        programs.bash.initExtra = lib.mkAfter hook;
+        programs.zsh.initContent = lib.mkAfter hook;
+      }
+    ))
 
     (lib.mkIf cfg.skill.enable {
       home.file.".claude/skills/nixi/SKILL.md".source = "${share}/skills/SKILL.md";

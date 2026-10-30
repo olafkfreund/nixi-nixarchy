@@ -139,10 +139,27 @@ Voice models download to `~/.cache` the first time you talk to it. Its own setti
 | Notice a busy machine | A sweat drop when the CPU works hard for a while; a word when memory runs low |
 | Remind me to move | After an hour unlocked he suggests a stretch. A lock of five minutes or more counts as a break |
 | Welcome me back | After half an hour away: how many notifications came in, and your next meeting if the calendar is on |
+| Glasses while coding | After a minute in a terminal or editor. Only the kind of window is checked, never its title |
+| Nightcap at night | Between 23:00 and 05:00 |
+| Dress for the weather | An umbrella in the rain, and he loves snow (needs the weather look) |
+| Party hat on special days | New Year, Christmas, and birthdays in your calendar (needs the calendar) |
+| Little jokes | Now and then a short line about the weather, the hour or a long session; never spoken. Edit them in the companion's `app/quips.json` |
 
 Nothing watches your keyboard: "active" means unlocked, and the idle lock
 counts as a break. Nudges wait for a pause (an unlock, a workspace switch, or
 a quiet moment), and he speaks at most one of them every ten minutes.
+
+A long command can tell you it finished, when you are looking elsewhere:
+
+```nix
+{ services.nixi.companion.commandDone.enable = true; }   # bash and/or zsh via Home Manager
+```
+
+It sends "Done in 42s" (or "Failed after 42s (exit 1)") with only the command's
+first word, as an ordinary notification, so he shows it with a proud face.
+`commandDone.seconds` sets the threshold (default 30).
+Inside herdr, tmux or zellij it cannot tell whether you are watching that
+pane, so it notifies there even when you are.
 
 Notification text stays on your machine. He never logs it, never writes it to
 disk, and never gives it to the agent. Critical alerts and anything carrying a

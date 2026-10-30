@@ -144,6 +144,7 @@ stdenvNoCC.mkDerivation {
     install -Dm644 share/KNOWLEDGE.md $out/share/nixi/KNOWLEDGE.md
     install -Dm644 share/CLAUDE.md    $out/share/nixi/CLAUDE.md
     install -Dm644 share/AGENTS.md    $out/share/nixi/AGENTS.md
+    install -Dm644 share/command-done.sh $out/share/nixi/command-done.sh
 
     install -Dm644 skills/nixi/SKILL.md $out/share/nixi/skills/SKILL.md
 
