@@ -489,6 +489,33 @@ Accepted, not fixed:
 - Any `/api/events` listener counts as the page for `want()`. Rows it never
   shows are given back after 5 s, so nothing is lost.
 
+## Live check on p620 (2026-10-30)
+
+How it was run:
+- A temporary `switch-to-configuration test` of the locked edge nixarchy with
+  the three nixarchy commits cherry-picked on top, plus the snowflake worktree.
+- Afterwards, switched back to the original generation.
+- DND was on at first and silenced everything. That is correct, and the test
+  was rerun with DND off.
+
+| Check | Result |
+|---|---|
+| Teams notification | no shell popup; snowflake row `chat`, text hidden; curious face, sparks, caption |
+| Mail (thunderbird) | taken over as `mail` |
+| Critical alert | shell popup, not handed over |
+| 2FA code | shell popup, not handed over |
+| Snowflake hidden | shell popup |
+| Snowflake killed while holding the lease | queued row popped up after 6 s |
+| Meeting Mode flag | red tie on |
+| Music playing | headphones on |
+
+Fixed from the live check (snowflake):
+- `e7e1aff`: the headphones band was drawn behind the arms, and the tie was
+  small and blue. They are redrawn: the band arches over the head in front, the
+  cups sit outside the sides, and the tie is larger and red.
+- `93e02a0`: app names are shown as people say them ("Teams", not
+  `teams-for-linux`).
+
 ## Implementers
 
 - Steps 1-8 go to one `coder` agent (Sonnet), step by step through
