@@ -55,6 +55,20 @@ Today:
 - Each category has its own on/off switch in the companion's settings, and one
   master switch turns all of them off. Everything is **off by default**. A
   user who turns nothing on sees no change.
+- **While the snowflake is visible, it shows notifications, not omarchy-shell.**
+  There is one thing on screen reacting, not two. The shell still receives every
+  notification, cleans it, keeps it in history, and runs its click action. It
+  only stops drawing its own popup, and only while the companion holds a
+  short lease that it renews while visible. When the companion is hidden,
+  turned off or crashes, the lease lapses within seconds and the normal
+  popups return by themselves. Do Not Disturb is never touched.
+  The shell keeps its own popup for:
+  - critical notifications
+  - anything carrying a code (2FA, OTP)
+  - Omarchy's own action messages
+
+  Clicking a notification on the snowflake asks the shell to do what clicking
+  its popup would do.
 - It reacts with a mood, a caption and a short local quip. It speaks only for
   categories the user marked as spoken (default: meetings only).
 - It stays quiet while:
@@ -71,6 +85,11 @@ Today:
 - nixoarchy-snowflake: `app/server.py` (a notification listener, new `Ambient`
   sources, a shared quiet/budget policy, quips), `app/static/index.html`
   (settings toggles, reactions). Its issues are disabled; #133 tracks the work.
+- nixarchy: a patch to the shell's notification service
+  (`share/omarchy/shell/plugins/notifications/Service.qml`), next to the existing
+  `pkgs/omarchy/902-notification-sender-close.patch`. It adds the lease, a feed
+  of cleaned notifications, and click/dismiss by notification key over IPC.
+  Offered upstream to Omarchy afterwards.
 - nixi: `nix/hm-module.nix` (an optional shell hook for long commands, and any
   new package the companion needs at runtime), README/docs.
 - `bin/nixi-watch` is unchanged unless the spec puts the active-time break
@@ -92,6 +111,14 @@ Today:
   (`docs/architecture.md` invariant 1).
 - **No screen reading.** No accessibility-tree or screenshot polling of Teams,
   Gmail or other apps.
+- **The takeover must fail safe.** No state that outlives the companion: no Do
+  Not Disturb toggling, which is saved to disk and would leave the desktop silent
+  after a crash. No taking over the `org.freedesktop.Notifications` bus name,
+  which would cost history, click actions and code copy. A crash, a hide or a
+  shell reload brings the shell's popups back.
+- Speaking a notification must not open the companion's follow-up listening
+  window (`Wake.talking_until`, `app/server.py:1559`). Otherwise the user's next
+  sentence would go to the agent.
 - The companion ignores its own notifications and nixi's, so it cannot react to
   itself in a loop.
 - No new flake input. Nothing changes for users who leave it off. No transcript
@@ -124,6 +151,8 @@ Today:
    (proposed), or never?
 4. **Shell hook for long commands:** ship it in the HM module behind its own
    option (proposed), or leave it out and rely on apps that already notify?
-5. **Delivery:** one PR for everything, or in phases (proposed): (a) the
-   notification listener, quiet rules and meetings; (b) load, breaks and
-   downloads; (c) the shell hook and quips.
+5. **Delivery:** one PR for everything, or in phases (proposed): (a) the shell
+   lease and feed, the notification takeover, quiet rules and meetings; (b) load,
+   breaks and downloads; (c) the shell hook and quips.
+6. **Popups already on screen when the snowflake appears:** let them finish
+   their few seconds (proposed), or hand them over at once?
