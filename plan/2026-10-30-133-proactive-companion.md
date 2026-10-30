@@ -202,6 +202,19 @@ Do not switch the existing checkouts.
    - `closeToast` on a key with no popup already goes through `finishClose`
      (lines 748-756). Do not add a second path.
 
+   Deviation (nixarchy `45aadb1`), found in review:
+   - A delegated row has no card, so nothing expired it. It held one of the
+     shell's 100 live slots (`maxLiveNotifications`) until its sender closed it.
+     After 100 such rows, new notifications would have been dropped silently.
+   - Each delegated row now gets `delegatedExpiry[key] = now + max(duration, 8 s)`.
+     The 1 s timer, which now also runs while any expiry is pending, releases
+     expired rows the way an expired card is released
+     (`releaseLive` + `release(key, "expired")`).
+   - Rows shown through `lapse` or the overflow (`showDelegated`) leave that map
+     and expire as cards.
+   - An update to a delegated row (`replaces_id`) no longer writes history a
+     second time.
+
 5. **Session test** (`tests/session.nix`, after the #1032 block, line ~820)
    1. Assert DND is off, then run `dismissAll`.
    2. Send `omarchy-shell notifications delegate 8000` and expect `[]`.
