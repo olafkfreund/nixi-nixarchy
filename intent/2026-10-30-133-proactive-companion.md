@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 133
 author: olafkfreund
 ---
@@ -244,3 +244,12 @@ Today:
 Resolved by the user (2026-10-30): popups already on screen when the snowflake
 appears finish their few seconds. Speaking must never open the follow-up
 listening window.
+
+Resolved at approval (2026-10-30): the approver accepted every proposed answer.
+1. Notifications only, no `gog gmail` polling.
+2. Meetings are the only category spoken by default.
+3. Sender or title on screen is a separate opt-in, never spoken.
+4. The shell hook ships behind its own option.
+5. Delivery in three phases (a), (b), (c).
+6. Tie only in meetings; no sunglasses.
+7. A short sound per category, on by default unless muted.
