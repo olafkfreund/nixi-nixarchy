@@ -202,6 +202,12 @@ A7.
 Traps: don't touch `#face`. The chip's click handler (`:1756`) already reads
 `chip.dataset.from`.
 
+**Deviations (A5, 2026-11-02).**
+- `Spring.x` is the value and `.v` is the velocity. Wherever this plan says
+  `G.<spring>.v > .002` (here and in B4–B7), read it as `.x`.
+- `agentMark` ignores a `done` while an `ask` mark is still showing.
+- The chip gets `act` after `tick()`, because `tick` resets its class.
+
 **A6. `docs/GUIDE.md` and this machine's hooks** → verify by one real alert
 per agent.
 - Add a section "Agent alerts" with the three hook lines from the spec. Note
