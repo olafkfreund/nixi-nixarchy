@@ -526,3 +526,21 @@ notify-send -a Slack "Alice" "are we still on for 3?"    # bubble
   which runs with `--ignore-gpu-blocklist --enable-gpu-rasterization`.
   Previews now run only in headless Chromium with `--disable-gpu` and
   SwiftShader (0 `/dev/dri` handles).
+
+## Follow-up: mail and chat the shell misses (2026-11-02, approved by the user)
+
+The shell's notification history showed:
+- the user's Outlook arrives as `Omamail`/`Omamail`;
+- WhatsApp Web arrives as `Google Chrome`/`web.whatsapp.com`.
+
+Both were filed as `other`. `Inbox.rows()` (`server.py`) now relabels an
+`other` row by its source and app:
+- `MAIL` (`omamail`, `outlook`) → `mail`;
+- `CHAT` (`web.whatsapp.com`, `whatsapp`, `messenger.com`) → `chat`;
+- otherwise the B2 `FEED` rule → `video`.
+
+The shell's own `meeting` and `mail` decisions are left alone. `APP_NAMES`
+shows WhatsApp and Messenger by name.
+
+Test: `test_mail_and_chat_the_shell_misses` in `tests/test_inbox.py`. Live
+check: `notify-send` as Omamail and as WhatsApp.
