@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 142
 author: olafkfreund
 follows: intent/2026-11-02-138-nixi-alerts-and-props.md
