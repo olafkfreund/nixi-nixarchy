@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 146
 spec: spec/2026-11-02-146-bridge-follows-trust.md
 ---
