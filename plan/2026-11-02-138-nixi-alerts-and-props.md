@@ -404,6 +404,13 @@ showing in notch mode.
 - Add `#micBars` to the `body.bar` (`:74`) and `body.calm` (`:330`) hide
   lists.
 
+**Deviation (B6 visual check, 2026-11-02).** Behind the body (after
+`#shadow`), the bars were half-hidden by the bottom arms. `#micBars` is now
+the last child of `#cam` (after `#fx`), in front of everything. The bars are
+7 px wide with 6 px gaps (centres −26/−13/0/13/26), centred at y 130, with a
+height of `3+20*micLvl*w[i]` plus `2.5*micLvl*sin(…)` and a fall of
+`dt*100`.
+
 **B7. Mail, chat and feed props** → verify by `notify-send -a Thunderbird`,
 `-a Slack` and `-a firefox` (with a youtube.com body) while the takeover is
 on, plus screenshots.
