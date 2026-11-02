@@ -1,7 +1,7 @@
 ---
 status: approved
 issue: 144
-amendment-1: draft
+amendment-1: approved
 spec: spec/2026-11-02-144-answer-stages.md
 reviewers:
   - codex   # the user asked for Codex and agy on this design; the trust path and parsing need a second read
@@ -439,7 +439,7 @@ fresh Opus review of each slice's diff, then Codex and agy (`reviewers:`).
 
 **15. Slice 3 review, PR, deploy** (as step 9). Close #144 after slice 4.
 
-### Slice 4: the day desk (PR 4) — Amendment 1, status: draft
+### Slice 4: the day desk (PR 4) — Amendment 1, status: approved
 
 Decisions copied from spec Amendment 1:
 - **Triggers:**
