@@ -242,6 +242,28 @@ linking the intent, spec and plan, with the screenshots attached.
 - The agent mark is 1.35× bigger and sits at `translate(8 -108)`, below the
   chip, so the chip no longer covers it.
 
+**Deviations (A7 review fixes, 2026-11-02; from the Opus, Codex and agy reviews).**
+- **Launcher:**
+  - stdin is read with a 2 s limit, stopping at the first complete JSON;
+  - a bad JSON last argument is dropped, not sent as text;
+  - strings are cut at the last space before 300 characters.
+- **Server:**
+  - the secret scrub runs on the whole first line before the 90-character
+    cut;
+  - agy has an explicit branch;
+  - any other agent with a hook gives `ask` with `message`/`title`, or
+    `None`.
+- **Page:**
+  - a `done` that arrives while a question is pending only chimes;
+  - the mark is clickable during an `ask` (it jumps to the agent, like the
+    old `!`);
+  - the spring is reset when the mark clears;
+  - mark elements are cached, and only the active parts are written each
+    frame;
+  - the mark is off in notch mode.
+- **Tests:** `tests/test_attention_launcher.py` runs the launcher as a real
+  process.
+
 ## Steps — PR B: looks, mic bar, notification props, beat
 
 Worktree: `git worktree add ../snowflake-138b -b feat/138-props origin/main`,
