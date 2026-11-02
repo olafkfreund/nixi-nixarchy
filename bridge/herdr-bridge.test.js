@@ -22,6 +22,7 @@ test("Mechanic: a herdr write gets a click-only card without allow_always (#95)"
   assert.equal(card.confirm, "click");
   assert.ok(!card.options.some((o) => o.kind === "allow_always"));
   assert.ok(card.options.some((o) => o.kind === "allow_once"));
+  assert.equal(card.command, 'herdr agent prompt 1-2 "run the tests"');  // the exact bytes, for the companion's check (#144)
 });
 
 test("YOLO still shows the card (#95)", async () => {

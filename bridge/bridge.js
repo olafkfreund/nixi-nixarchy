@@ -480,7 +480,9 @@ const client = {
       const summary = params.toolCall?.rawInput?.description;  // plain words for the companion's question (S26)
       emit({ type: "permission", id: requestId, title, options, detail, omitted,
         ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
-        ...(herdrWrite ? { confirm: "click" } : {}) });
+        ...(herdrWrite ? { confirm: "click" } : {}),
+        // the exact command, so a client can check it is the one it asked for (companion stages, #144)
+        ...(typeof params.toolCall?.rawInput?.command === "string" ? { command: params.toolCall.rawInput.command } : {}) });
       return new Promise((resolve) => {
         pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
         armStall();
