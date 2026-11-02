@@ -463,6 +463,23 @@ a bigger HTML/CSS envelope (about 170×120 px) and opens:
   Chat and feed are unchanged.
 - **Risk:** the window resizes for each mail, as it already does for
   approval cards. Checked live on NVIDIA in B8.
+- **As built:**
+  - No reduced-motion fallback after all: this desktop has GTK animations
+    off (`enable-animations false`), so the browser reports reduced motion
+    and the fallback hid the very animation the user asked for. Nixi's other
+    animations never followed that setting either.
+  - The layers are flat (no `preserve-3d`), so the open flap shows above the
+    envelope behind the letter.
+  - The pop-out uses `popWant=[260,0]`.
+- **Review fixes (B8):**
+  - `Beat.want()` also needs `proactive` and `not Ambient.locked`;
+  - `pw-record` uses `-P "{ stream.capture.sink=true }" … --raw`;
+  - the beat level is sent only when it changes;
+  - `\btuba\b` / `\btokodon\b`;
+  - the chat ×N counts the chats per bubble (`propOn.n`);
+  - a second feed replays the TV's hop.
+  - The coder agent stalled after B7, so I did the review fixes and the
+    pop-out myself.
 
 **B8. Live check and PR B** → verify by:
 - the full test suite green;
