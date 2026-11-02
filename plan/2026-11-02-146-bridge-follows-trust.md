@@ -111,3 +111,24 @@ below the managed handoff threshold.
 Revert the merge in nixi-nixarchy, bump `nixi` in nixos_config, deploy p620,
 and run `nixi-companion restart`. Bridges then read trust at start only, as
 before. That's safe, just stale.
+
+## Deviations (step 3 review, 2026-11-02)
+
+- **One follow at a time, with a generation counter.** A fresh Opus review
+  found that a slow mode change to Mechanic could finish after a newer switch
+  to Guide and put the older, looser reading back (YOLO at Mechanic while the
+  file said Guide).
+  - Every file event and stdin switch now bumps `followGen`.
+  - A follow that awaited and sees a newer generation gives up and reads
+    again, and reverts the session mode it had just applied.
+  - Guide is always committed.
+- **Codex follow exits through `shutdown()`**, not a bare `process.exit`, so
+  the session and the child are closed.
+- **Watcher errors emit a `diagnostic`.**
+- **The follow timer is cleared in `shutdown()`.** The watcher itself is not
+  closed (it's `unref`'d, so it never keeps the bridge alive).
+- **`bridge/testing/fake-agent.js` gains `FAKE_AGENT_SLOW_MODE=<ms>`**, so
+  tests can hold a mode change open.
+- **Three more tests:** overlapping follows (it fails on the pre-fix code),
+  a mode change that fails while following Guide, and a file change during a
+  stdin switch.

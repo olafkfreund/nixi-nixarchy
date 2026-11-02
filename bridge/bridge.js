@@ -109,16 +109,20 @@ let stdinSwitching = 0;       // a trust/permission_mode switch from stdin is in
 let followPending = false;
 let followBroken = false;     // one diagnostic per bad spell, not per event
 let followTimer = null;
+let followGen = 0;            // bumped by every file event and stdin switch: a follow that awaited is stale if it moved
+let following = false;        // one follow at a time; a request meanwhile reruns it after
+function followAgain() { followPending = false; followSettings().catch(() => {}); }
 function watchSettings() {
   try {
     mkdirSync(settingsDir, { recursive: true });
     // The folder, not the file: saves rename a new file over the old one (#103), which ends a file watch.
     const watcher = watch(settingsDir, (_event, name) => {
       if (name && name !== "nixi.json") return;
+      followGen++;
       clearTimeout(followTimer);
       followTimer = setTimeout(() => { followSettings().catch(() => {}); }, 150);
     });
-    watcher.on("error", () => {});
+    watcher.on("error", (error) => emit({ type: "diagnostic", text: `Stopped following ${settingsPath}: ${error.message}` }));
     watcher.unref();              // never keeps the bridge alive on its own
   } catch (error) {
     emit({ type: "diagnostic", text: `Not following ${settingsPath}: ${error.message}` });
@@ -126,10 +130,20 @@ function watchSettings() {
 }
 function switchSettled() {
   stdinSwitching--;
-  if (stdinSwitching === 0 && followPending) { followPending = false; followSettings().catch(() => {}); }
+  if (stdinSwitching === 0 && followPending && !following) followAgain();
 }
 async function followSettings() {
-  if (stdinSwitching > 0) { followPending = true; return; }
+  if (stdinSwitching > 0 || following || shuttingDown) { followPending = true; return; }
+  following = true;
+  try { await followOnce(); } finally {
+    following = false;
+    if (followPending && stdinSwitching === 0 && !shuttingDown) followAgain();
+  }
+}
+async function followOnce() {
+  const gen = followGen;
+  // After any await, a newer file event or stdin switch makes this reading stale: stop, read again.
+  const stale = () => { if (gen !== followGen || stdinSwitching > 0) { followPending = true; return true; } return false; };
   let settings;
   try {
     settings = JSON.parse(await readFile(settingsPath, "utf8"));
@@ -143,14 +157,14 @@ async function followSettings() {
     }
   }
   followBroken = false;
-  if (stdinSwitching > 0) { followPending = true; return; }   // a switch began while we read
+  if (stale()) return;
   const nextTrust = resolveTrust(settings.trust);
   const nextMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
   const before = `${trust}/${permissionMode}`;
   if (nextTrust !== trust) {
     if (agentName === "codex") {
       emit({ type: "fatal", message: `Trust changed to ${nextTrust === "guide" ? "Guide" : "Mechanic"} — start a new conversation` });
-      process.exit(0);
+      return shutdown().finally(() => process.exit(0));
     }
     if (nextTrust === "guide") {
       leavingMechanic++;                       // bites on receipt, as a switch from the card does (#106)
@@ -167,6 +181,10 @@ async function followSettings() {
     } else {
       try {
         if (connection && sessionId) await applyTrustMode("mechanic");
+        if (stale()) {                         // a newer change came in while the agent answered: don't loosen on old news
+          if (connection && sessionId) await applyTrustMode(trust).catch(() => {});
+          return;
+        }
         trust = "mechanic";
       } catch (error) {
         emit({ type: "diagnostic", text: `Could not move the session to Mechanic: ${error.message}` });
@@ -174,6 +192,7 @@ async function followSettings() {
     }
   }
   if (nextMode === "permission") permissionMode = "permission";
+  else if (stale()) return;
   else if (effectiveTrust() === "mechanic" && permissionMode !== "yolo") {
     permissionMode = "yolo";                   // YOLO only at Mechanic, as the card's own switch
     allowAllPendingPermissions().catch(() => {});
@@ -894,6 +913,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   clearTimeout(stallTimer);
+  clearTimeout(followTimer);
   cancelAllPendingPermissions();
   // Bound graceful ACP close before signalling the child. Remain alive long
   // enough to reap it; a detached kill timer cannot help after bridge exit.
@@ -929,7 +949,7 @@ input.on("line", (line) => {
     if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
     else if (message.type === "trust") {
       if (resolveTrust(message.trust) === "guide") return ack("trust", true, { trust: "guide" });
-      stdinSwitching++;                        // this switch exits on its own message; the watch must not race it
+      stdinSwitching++; followGen++;           // this switch exits on its own message; the watch must not race it
       mergeSettings({ trust: "mechanic" }).then(() => {
         ack("trust", true, { trust: "mechanic" });
         emit({ type: "fatal", message: "Trust set to Mechanic — start a new conversation to use Codex" });
@@ -961,7 +981,7 @@ input.on("line", (line) => {
   } else if (message.type === "permission") {
     answerPermission(message);
   } else if (message.type === "trust") {
-    stdinSwitching++;
+    stdinSwitching++; followGen++;
     const next = resolveTrust(message.trust);
     // Apply the ACP mode FIRST, then persist and publish. The old order set
     // `trust` before the mode call, so a failure reported the level the session
@@ -995,7 +1015,7 @@ input.on("line", (line) => {
       switchSettled();
     });
   } else if (message.type === "permission_mode") {
-    stdinSwitching++;
+    stdinSwitching++; followGen++;
     savePermissionMode(message.mode).then(() => {
       if (permissionMode === "yolo") allowAllPendingPermissions().catch(() => {});
       ack("permission_mode", true, { mode: permissionMode });

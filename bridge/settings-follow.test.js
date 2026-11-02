@@ -90,3 +90,37 @@ test("Codex: a trust change in the file ends the session", async () => {
     }] });
   assert.ok(run.events.some((e) => e.type === "fatal" && /start a new conversation/.test(e.message)));
 });
+
+// Review (#146): the races that could loosen a bridge. A slow agent keeps a follow waiting on its mode call.
+const putNow = (settings) => ({ home }) => {
+  mkdirSync(join(home, ".config", "omarchy"), { recursive: true });
+  writeFileSync(file(home), JSON.stringify(settings));
+};
+const wait = (ms) => async () => new Promise((r) => setTimeout(r, ms));
+
+test("a slow follow to Mechanic+YOLO never overrides a newer Guide", async () => {
+  const run = await runBridge({ settings: { trust: "guide" }, env: { FAKE_AGENT_SLOW_MODE: "1200" },
+    messages: [putNow({ trust: "mechanic", permissionMode: "yolo" }), wait(400),
+      putNow({ trust: "guide", permissionMode: "yolo" }), wait(2600), write], onPermission: reject });
+  assert.deepEqual(outcomes(run), [{ outcome: "cancelled" }]);
+  assert.ok(!settingsEvents(run).some((e) => e.trust === "mechanic"));
+});
+
+test("a mode change that fails while following Guide still leaves the bridge at Guide", async () => {
+  const run = await runBridge({ settings: { trust: "mechanic", permissionMode: "yolo" },
+    env: { FAKE_AGENT_HANG: "mode", NIXI_MODE_TIMEOUT_MS: "400" },
+    messages: [put({ trust: "guide" }), wait(900), write], onPermission: reject });
+  assert.deepEqual(outcomes(run), [{ outcome: "cancelled" }]);
+});
+
+test("a file change during a stdin switch is read after the switch, and cannot loosen it", async () => {
+  const run = await runBridge({ settings: { trust: "mechanic" }, env: { FAKE_AGENT_SLOW_MODE: "1000" },
+    messages: [async (ctx) => {
+      ctx.send({ type: "trust", trust: "guide" });
+      await new Promise((r) => setTimeout(r, 200));
+      putNow({ trust: "mechanic", permissionMode: "yolo" })(ctx);       // lands while the switch is applying
+      await ctx.until((e) => e.type === "ack" && e.of === "trust", "trust ack");
+      await new Promise((r) => setTimeout(r, 800));
+    }, write], onPermission: reject });
+  assert.deepEqual(outcomes(run), [{ outcome: "cancelled" }]);
+});
