@@ -1,6 +1,7 @@
 ---
 status: approved
 issue: 144
+amendment-1: draft
 spec: spec/2026-11-02-144-answer-stages.md
 reviewers:
   - codex   # the user asked for Codex and agy on this design; the trust path and parsing need a second read
@@ -436,7 +437,117 @@ fresh Opus review of each slice's diff, then Codex and agy (`reviewers:`).
 - **Verify:** unit tests with fixtures; live: "what's on tomorrow?" and "how
   are my sessions?".
 
-**15. Slice 3 review, PR, deploy** (as step 9), then close #144.
+**15. Slice 3 review, PR, deploy** (as step 9). Close #144 after slice 4.
+
+### Slice 4: the day desk (PR 4) — Amendment 1, status: draft
+
+Decisions copied from spec Amendment 1:
+- **Triggers:**
+  - "how does my day look?", "what's next today?", "what's on today?" →
+    `{"v":1,"kind":"day"}`, so the server builds the stage;
+  - the exact "what's next?" goes through Nixi's phrase list, with no agent
+    turn.
+- **Layout (the `desk` set):**
+  - a date tab;
+  - a **Next** card: time, title, "in N min", and **Join** when it has a
+    meeting link;
+  - rows **Today**, **Tasks** (overdue in red) and **GitHub**, each with a count
+    and at most two titles;
+  - clicking a row opens a detail view of up to 8 items in the same frame;
+  - clicking an item opens it in the browser through a server URL token.
+- **Data:**
+  - calendar: `gog --readonly --json calendar events <Ambient's ids> --from
+    <local 00:00> --to <next 00:00>`, including all-day events;
+  - tasks: every list from `gog --readonly --json tasks lists`, up to 3, then
+    `gog --readonly --json tasks list <id> --due-max <next 00:00>`, not
+    completed;
+  - GitHub: `gh search issues --assignee=@me --state=open --json
+    repository,number,title,url -L 8` and the same for `gh search prs
+    --review-requested=@me`, only when `gh auth status` succeeds.
+- **Fetching and failure:**
+  - each source has an 8 s timeout and a 5 min cache;
+  - a source that fails or isn't set up shows its row as "not set up" or
+    "couldn't refresh · HH:MM", with the last good data marked stale;
+  - yesterday's data is never shown as today's.
+- **Voice:**
+  - the exact "what's next?" is answered locally and speaks only the next item;
+  - any other question while the desk is open goes to the agent with a summary
+    of about 150 tokens (counts plus the top two titles per row);
+  - no voice-numbered opening in v1.
+- **Privacy:** titles stay out of logs, notifications and history; the snapshot
+  lives in memory only.
+- **Nixi:** a pocket watch; a single page flip of the date tab is the
+  flourish.
+
+**16. `app/day.py` (new): the snapshot**
+- **`snapshot(now)`:** runs the three sources concurrently. Each runs as an
+  argv list with an 8 s timeout and a 5 min per-source cache.
+- **It returns** `{next, today[], tasks[], github[], status:{cal,tasks,gh}}`,
+  where each status is `ok`, `off` or `stale@HH:MM`.
+- **Parsing:**
+  - **Calendar:** all-day events take the form `{"allDay":true}`. The meeting
+    link comes only from `hangoutLink` or `conferenceData` URLs.
+  - **Tasks:** tasks due before today are marked `overdue`.
+  - **GitHub:** each issue or pull request becomes `{repo, number, title,
+    url}`.
+- **`whats_next(snap)`:** the one spoken line, for example "Stand-up in 40
+  minutes."
+- **`summary(snap)`:** the ~150-token context for agent questions.
+- **Tests:** `tests/test_day.py`, with JSON fixtures from gog and gh in
+  `tests/fixtures/day/`.
+  - **What it covers:**
+    - the local-day window, including an all-day event;
+    - overdue tasks;
+    - gh signed out → `off`;
+    - a failure after a success → `stale`, keeping the old data;
+    - no `shell=True`;
+    - `whats_next` and `summary` output.
+  - **How to make the fixtures:** run the real commands once on p620 and
+    replace every title with a made-up one.
+- **Traps:**
+  - **The cache key includes the date,** so yesterday's cache can't serve
+    today.
+  - **`gog` may print to stderr while still succeeding.** Judge success by the
+    exit code and valid JSON.
+
+**17. `app/stages.py` and `app/server.py`: the `day` kind**
+- **`validate`:** accepts `{"v":1,"kind":"day"}`.
+- **`Store.put`:** for `day`, makes an `open` token for each item URL. URLs
+  pass through `day.py`'s check: https only, and only `github.com`,
+  `calendar.google.com` and `meet.google.com`.
+- **`/api/stage/act open`:** this step implements it for `day` URLs, using
+  `xdg-open` as an argv list. Slice 2 reuses it.
+- **Fast path:** the exact "what's next?" → `whats_next()`, with no turn.
+- **Questions while the desk is current:** `run_bridge`'s prompt gets
+  `summary()` appended as context, marked "(today, from Nixi's desk)".
+- **Verify:** unit tests for the URL allowlist (a `javascript:` or other-host
+  URL is refused), the fast path, and the summary appearing only while the day
+  stage is current.
+
+**18. `app/static/index.html`: the day desk**
+- **What it adds:**
+  - the `desk` set's day layout: date tab, Next card, three rows, detail view
+    with ← back;
+  - **Join** and **Open** buttons that call `act open` with their token;
+  - a status line per row;
+  - Nixi's pocket watch.
+- **Rendering rules:** everything goes through `textContent`, and only static
+  gradients are used.
+- **Verify:**
+  - `node --check`;
+  - `tests/stages_fit.mjs` with day fixtures for empty, full and stale data,
+    fitting in 2560×1440 with no overflow;
+  - a title of `<b>x</b>` shows as text.
+- **Traps:** the page traps above (no mid-line `//`; GPU-free previews only).
+
+**19. Slice 4 review, live check, PR, deploy, close #144**
+- **Reviews:** Opus, Codex and agy.
+- **Live on p620:**
+  - "how does my day look?" shows the real calendar, tasks and GitHub;
+  - "what's next?" answers instantly;
+  - clicking an issue opens the browser;
+  - with gh signed out (simulate it with `GH_CONFIG_DIR` pointing at an empty
+    directory in a sandbox server), the GitHub row says "not set up".
 
 ## Deviations
 
