@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 146
 intent: intent/2026-11-02-146-bridge-follows-trust.md
 ---
