@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 142
 spec: spec/2026-11-02-142-notification-app-icons.md
 reviewers:     # the user asked for Codex and agy on Nixi work (2026-11-02); read-only, after the Opus review
