@@ -148,3 +148,26 @@ node tests/accessories_fit.mjs <cdp-port> <url>   # in the GPU-free headless Chr
 
 `git revert -m 1 <merge sha>`. Without a revert, rows simply carry no
 `icon`, and the page looks as before.
+
+## As built (2026-11-02)
+
+- **Steps 1–3** were written by the `coder` agent. Against the real machine,
+  Gmail and Outlook (Quick Web Apps), WhatsApp, Omamail, Slack, Teams and
+  claude.ai's Chrome web app all resolve; Herdr has no icon.
+- **Step 4** (coder), with one fix of mine: the caption badge goes *inside*
+  the text span, because `#him` is a flex column and the badge sat on its
+  own line otherwise.
+- **Step 5:** GPU-free headless Chromium with real icons (Gmail, Slack,
+  Claude). Mail, chat, feed and "other" all show their icon. A missing id
+  leaves no broken image, and the prop icon hides. Unknown ids and `../`
+  get 404. `accessories_fit` ends in "all fit".
+- **Review fixes** (Opus, Codex `gpt-6-sol`, agy):
+  - the SVG response has `X-Content-Type-Options: nosniff` and a
+    `sandbox` CSP;
+  - the read is bounded (at most 512 KiB + 1) and `OSError` → 404;
+  - the prop `<image>` gets `onerror` → hidden;
+  - `XDG_DATA_HOME` is honoured, and `512x512` is searched;
+  - site patterns are `(.*\.)?youtube|reddit|messenger.com`;
+  - a `//` comment had swallowed `noteIcon`'s cleanup; fixed.
+- **Not taken:** agy's "fall back to the browser's own icon". The spec says
+  "nothing found → no icon".
