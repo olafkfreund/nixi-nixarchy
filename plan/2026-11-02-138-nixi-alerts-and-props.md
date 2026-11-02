@@ -124,6 +124,15 @@ from that schema.
 Traps: keep `attention_target` and the `_ATTN_TARGET` update before the rate
 limit, unchanged.
 
+**Deviations (A2, 2026-11-02).**
+- A Codex `type` that is neither `agent-turn-complete` nor contains
+  `approval` returns `None`.
+- A Claude `notification_type` outside the four known values counts as
+  `done`, with no reason.
+- pytest isn't installed in this environment. The test command is
+  `python -m unittest discover -s tests -q`; where this plan says
+  `pytest`, read it as that.
+
 **A3. `bin/nixi-companion:28-48`: `--hook`** → verify with
 `echo '{"notification_type":"idle_prompt","cwd":"/x/y"}' | NIXI_COMPANION_PYTHON=python3 bin/nixi-companion attention --from claude --hook; echo $?`,
 which prints `0` even with no Nixi running.
