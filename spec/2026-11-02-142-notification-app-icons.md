@@ -13,7 +13,7 @@ Code is all in `olafkfreund/nixoarchy-snowflake`. **No shell change.**
 | # | Question | Decision |
 |---|---|---|
 | 1 | Icon source | **B only: Nixi looks the icon up itself.** The shell already records `appIcon`, and in its history (100 rows) it is **empty for every sender except Meeting Mode** (`camera-video`): Chrome web apps, Omamail and Herdr all send none. So passing it on (A) adds nothing worth a `nixarchy` change. |
-| 2 | Badge | A round 22 px icon at the start of the caption for every notification. On the mail envelope, the icon replaces the app line's text. On the chat bubble and the feed TV, a small 14-unit icon sits on the prop's corner. |
+| 2 | Badge | A round 22 px icon at the start of the caption for every notification. On the mail letter, a 20 px icon goes before the app name, and the name stays (as in Design §3). On the chat bubble and the feed TV, a small 14-unit icon sits on the prop's corner. |
 | 3 | Notification images | Not shown. App icons only. |
 
 ## Design

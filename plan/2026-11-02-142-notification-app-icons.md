@@ -146,8 +146,13 @@ node tests/accessories_fit.mjs <cdp-port> <url>   # in the GPU-free headless Chr
 
 ## Rollback
 
-`git revert -m 1 <merge sha>`. Without a revert, rows simply carry no
-`icon`, and the page looks as before.
+Revert the code merge `f65f587` in `olafkfreund/nixoarchy-snowflake`
+(`git revert -m 1 f65f587`). Then bump the `nixi-companion` pin in
+`nixos_config` to that revert, deploy p620 the usual way (after posting on
+the agent bus) and restart Nixi (`nixi-companion restart`).
+
+A missing icon already falls back to today's look, but that isn't a
+rollback: found icons keep showing until the revert is deployed.
 
 ## As built (2026-11-02)
 
@@ -167,7 +172,9 @@ node tests/accessories_fit.mjs <cdp-port> <url>   # in the GPU-free headless Chr
   - the read is bounded (at most 512 KiB + 1) and `OSError` → 404;
   - the prop `<image>` gets `onerror` → hidden;
   - `XDG_DATA_HOME` is honoured, and `512x512` is searched;
-  - site patterns are `(.*\.)?youtube|reddit|messenger.com`;
+  - the site patterns are each anchored with an optional subdomain:
+    `(.*\.)?youtube\.com$`, `(.*\.)?reddit\.com$` and
+    `(.*\.)?messenger\.com$`;
   - a `//` comment had swallowed `noteIcon`'s cleanup; fixed.
 - **Not taken:** agy's "fall back to the browser's own icon". The spec says
   "nothing found → no icon".
