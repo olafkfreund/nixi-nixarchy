@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 138
 author: olafkfreund
 follows: intent/2026-10-30-133-proactive-companion.md
