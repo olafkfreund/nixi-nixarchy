@@ -172,14 +172,33 @@ NixOS 26.11), captured as it happened.</p>
   <figure><img src="media/10-calculator.png" alt="72 F to C converted in the card" loading="lazy"><figcaption>Sums and unit conversions, answered as you type.</figcaption></figure>
 </div>
 
+<section class="scene">
+  <img src="media/companion-approval.png" alt="The snowflake companion with Nixi's approval card asking before a change" loading="lazy">
+  <div>
+    <div class="n">Optional · Companion</div>
+    <h3>The snowflake companion</h3>
+    <p>A small snowflake on your desktop. Say "hey Nixi" and ask out loud; it answers in a caption
+    and by voice. It is optional and off by default.</p>
+    <p>It asks the agent only through nixi's bridge, so it follows the card's trust level. In
+    <strong>Guide</strong> nothing changes. In <strong>Mechanic</strong> it shows the approval card,
+    as above.</p>
+    <p>For running herdr sessions it can tell you how they are doing and open one. Sending
+    something to a session needs a click on the card: voice cannot confirm it.
+    <a href="https://github.com/olafkfreund/nixi-nixarchy#the-snowflake-companion-optional">More in the README.</a></p>
+  </div>
+</section>
+
 <h2>Guide and Mechanic</h2>
+<p>Secret files (keys, credentials, <code>.env</code>) always get a card with Claude, and OpenCode's file read is refused outright. A shell command that names one asks too, though that check is best effort.
+Codex is not offered at Guide, because it can't be kept from reading secrets.</p>
+<p><img src="media/guide-secret-refused.png" alt="Guide refusing to read a secret file" loading="lazy" style="max-width:100%"></p>
 <table>
   <thead><tr><th></th><th>Guide (default)</th><th>Mechanic</th></tr></thead>
   <tbody>
     <tr><td>What it does</td><td>Explains and instructs. Nothing on your machine changes.</td><td>Makes the change, and every step needs your yes.</td></tr>
     <tr><td>How it's enforced</td><td>The bridge cancels every permission request it receives, and the agent runs in its most restrictive mode. Reading and searching are the exception, in both levels: they never produce a request, so Nixi can read your configuration to explain it. Secrets still ask.</td><td>Requests are shown in the card. With Claude, reading and searching files does not ask, except for secrets; set <code>"askBeforeReading": true</code> in <code>~/.config/omarchy/nixi.json</code> to be asked for those too. <strong>YOLO</strong> (auto-approve) can be reached only from Mechanic.</td></tr>
     <tr><td>Claude</td><td><code>plan</code> mode, requests cancelled</td><td><code>default</code> mode, asks</td></tr>
-    <tr><td>Codex</td><td><code>read-only</code>, requests cancelled</td><td><code>read-only</code>, asks before each edit</td></tr>
+    <tr><td>Codex</td><td>not available: Guide can't keep secrets from it</td><td><code>read-only</code>, asks before each edit</td></tr>
     <tr><td>OpenCode</td><td><code>plan</code>, requests cancelled; reading works, secrets are denied and searching asks (so is cancelled)</td><td><code>build</code>, asks</td></tr>
   </tbody>
 </table>

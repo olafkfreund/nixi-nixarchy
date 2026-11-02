@@ -88,6 +88,8 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 
 #### The snowflake companion (optional)
 
+![The snowflake companion answering a question: Nixi pops up, hears "How do I install Firefox?" and answers](docs/media/companion.gif)
+
 A small snowflake that lives on your desktop, listens ("hey Nixi") and talks
 back. It is a fork of [Void](https://github.com/PLAYER99-void/void) and asks
 the agent **only through Nixi's bridge**, so it follows the card's trust level:
@@ -110,11 +112,11 @@ blocked.
 ```
 
 Run `nixi-companion` to show or hide it, or bind it to a key, for example in
-`~/.config/hypr/bindings.conf`:
+`~/.config/hypr/bindings.lua`:
 
-```ini
-bind = SUPER ALT, H, exec, nixi-companion
-bind = SUPER ALT, J, exec, nixi-companion listen
+```lua
+o.bind("SUPER + ALT + S", "Nixi companion: show or hide", "nixi-companion")
+o.bind("SUPER + ALT + SHIFT + S", "Nixi companion: listen", "nixi-companion listen")
 ```
 
 What this build leaves out: Void's own Claude runner and trust modes, its
@@ -241,6 +243,7 @@ never shows that line; the bridge appends the fact to
 ## Trust: what Nixi may change
 
 Two levels, so that neither claims a boundary it cannot enforce.
+([Guide refusing a secret file](docs/media/guide-secret-refused.png).)
 
 - **Guide** *(default)* — explains and instructs. The bridge **cancels every
   permission request it receives**, and puts the agent in its most restrictive
@@ -321,7 +324,8 @@ agent session is doing and can open it in a terminal. It only *reads* herdr
 `herdr agent prompt`, and that is a **herdr write**: Guide never runs it,
 Mechanic always shows a card (even in YOLO) that voice cannot confirm, and each
 decision is logged to `~/.local/share/nixi/sends.log`. See
-[docs/architecture.md](docs/architecture.md).
+[docs/architecture.md](docs/architecture.md). See
+[the snowflake companion](#the-snowflake-companion-optional).
 
 ---
 
