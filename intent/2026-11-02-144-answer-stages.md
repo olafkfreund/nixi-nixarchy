@@ -75,6 +75,11 @@ That fails for answers you need to see or act on:
 - Accessible: keyboard, contrast and reduced motion, following the Omarchy
   theme.
 - Doesn't steal focus or cover the bar, and fits a 2560×1440 monitor.
+- **Fun, but never in the way** (the user's words: "make sure this is not
+  stopping the workflow, this is for fun but it needs to be usable as well").
+  The answer and the command are readable at once, before or without any
+  animation; animation never delays them; a stage never blocks typing or
+  clicking elsewhere and closes with one key or word.
 
 ## Open questions
 
