@@ -1,0 +1,198 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=IM+Fell+English:ital@0;1&family=Fira+Code:wght@400;500&family=Inter:wght@400;600&display=block" rel="stylesheet">
+<style>
+:root{--bg:#1a1b26;--panel:#24283b;--text:#c0caf5;--dim:#7a82a8;--acc:#7aa2f7;--ok:#9ece6a;--warn:#e0af68;--bad:#f7768e}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 700px at 30% 20%,#2a2f4a,#14151f);font-family:Inter,sans-serif;color:var(--text);width:1700px;padding:28px}
+h1{font:600 22px Inter;margin:0 0 4px} p.sub{margin:0 0 22px;color:var(--dim);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(3,540px);gap:26px 26px}
+.cell{position:relative;height:430px;border-radius:14px;background:rgba(255,255,255,.025);outline:1px dashed rgba(255,255,255,.06)}
+.cell .lab{position:absolute;left:12px;bottom:8px;font-size:12px;color:var(--dim)}
+/* Nixi stand-in: a small snowflake with eyes */
+.nixi{position:absolute;left:10px;top:40px;width:120px;height:120px}
+.cap{position:absolute;left:0;top:168px;width:140px;text-align:center;font-size:11px;color:var(--text);opacity:.85}
+/* shared stage frame */
+.stage{position:absolute;left:146px;top:22px;width:390px;min-height:300px;border-radius:12px;padding:14px 16px 14px;
+  box-shadow:0 18px 40px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.06) inset;overflow:hidden}
+.plaque{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.plaque .t{font-weight:600;font-size:13px;letter-spacing:.02em}
+.plaque .x{margin-left:auto;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:13px;opacity:.7;border:1px solid currentColor}
+.btn{display:inline-flex;align-items:center;gap:6px;font:600 12px Inter;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit}
+.btn.p{background:var(--acc);color:#11121a;border-color:transparent}
+.btn.off{opacity:.45}
+.key{font:500 10px 'Fira Code';opacity:.6;margin-left:4px}
+/* 1 blackboard */
+.board{background:
+  radial-gradient(160px 90px at 20% 30%,rgba(255,255,255,.05),transparent 70%),
+  radial-gradient(220px 120px at 80% 70%,rgba(255,255,255,.04),transparent 70%),
+  linear-gradient(160deg,#2c3a33,#1f2a25);color:#eef2ea;border:9px solid #6b4a2e;border-radius:10px;padding-bottom:30px}
+.board::after{content:"";position:absolute;left:-9px;right:-9px;bottom:-9px;height:16px;background:linear-gradient(#7b5636,#5a3d24);box-shadow:0 -2px 4px rgba(0,0,0,.4)}
+.board .chalkh{font:700 28px Caveat;margin:0 0 6px;color:#f4f6ee;text-shadow:0 0 1px rgba(255,255,255,.6)}
+.cmd{display:grid;grid-template-columns:22px 1fr;gap:4px 8px;margin:8px 0 10px}
+.cmd .n{font:700 22px Caveat;color:#e9d98b}
+.cmd .what{font:500 19px Caveat;color:#dfe6da}
+.cmd code{grid-column:2;display:block;font:400 12.5px 'Fira Code';background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:7px 9px;color:#fbfff4;white-space:pre-wrap;word-break:break-word}
+.cmd .acts{grid-column:2;display:flex;gap:6px;margin-top:4px}
+.board .btn{border-color:rgba(255,255,255,.25)}
+.board .btn.p{background:#e9d98b;color:#1f2a25}
+.trust{font:500 11px Inter;color:#cfd8c9;opacity:.8;margin-top:2px}
+.chalk{position:absolute;right:16px;bottom:-2px;width:34px;height:8px;border-radius:3px;background:#f2f2ea;z-index:2}
+/* 2 notebook */
+.note{background:#fbf8ef;color:#2a2a35;background-image:repeating-linear-gradient(#fbf8ef 0 23px,#dfe7f2 23px 24px);border-left:34px solid #f3ead6}
+.note::before{content:"";position:absolute;left:30px;top:0;bottom:0;width:2px;background:#e9a1a1}
+.note h3{font:700 26px Caveat;margin:0 0 2px;color:#2b4a8a}
+.note li{font:400 14px/24px Inter;margin-left:-6px}
+.note .src{font-size:11px;color:#7c7c88;margin-top:6px}
+/* 3 weather */
+.sky{background:linear-gradient(180deg,#5a8fd8,#a9c8ef 70%,#e9eef6);color:#0f1a2e}
+.sky .now{display:flex;align-items:center;gap:14px;margin:4px 0 6px}
+.sky .temp{font:600 52px Inter;letter-spacing:-.03em}
+.sky .desc{font:600 15px Inter}.sky .meta{font-size:12px;opacity:.75}
+.strip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.day{background:rgba(255,255,255,.55);border-radius:10px;padding:7px 4px;text-align:center;font-size:12px}
+.day b{display:block;font-size:14px;margin-top:2px}
+.sky .src{font-size:11px;opacity:.7;margin-top:8px}
+/* 4 cinema */
+.cinema{background:#140d12;color:#f4e9d8;border-top:14px solid #5e1320;padding-top:16px}
+.curt{position:absolute;top:0;bottom:0;width:30px;background:repeating-linear-gradient(90deg,#7d1a2b 0 7px,#5e1320 7px 14px);box-shadow:0 0 18px rgba(0,0,0,.6)}
+.curt.l{left:0;border-radius:0 0 26px 0}.curt.r{right:0;border-radius:0 0 0 26px}
+.screen{margin:0 22px;display:grid;gap:8px}
+.film{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:6px}
+.thumb{height:58px;border-radius:6px;background:linear-gradient(135deg,#3b5ba5,#7aa2f7);position:relative}
+.thumb::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:18px;opacity:.85}
+.thumb.b{background:linear-gradient(135deg,#2e7d6b,#9ece6a)}.thumb.c{background:linear-gradient(135deg,#8a4fbf,#f7768e)}
+.film .tt{font:600 12.5px Inter}.film .mm{font-size:11px;opacity:.65;margin-top:2px}
+.num{font:700 11px 'Fira Code';color:#e0af68;margin-right:4px}
+.cinema .foot{margin:10px 22px 0;display:flex;gap:8px;align-items:center;font-size:11px;opacity:.85}
+/* 5 old map */
+.map{background:
+  radial-gradient(closest-side at 50% 50%,#efe0bb,#e2cb98 75%,#c9a86b);color:#3b2a17;border-radius:6px;
+  box-shadow:0 18px 40px rgba(0,0,0,.45),inset 0 0 40px rgba(110,70,20,.45)}
+.map .t2{font:italic 24px 'IM Fell English';margin:0}
+.map .sub2{font:14px 'IM Fell English';opacity:.8;margin:0 0 4px}
+.map svg{display:block}
+.map .btn{border-color:#8a6a3a;background:rgba(255,255,255,.25)}
+.map .btn.p{background:#6b3f1d;color:#f6e9c8}
+.map .note2{font:italic 12px 'IM Fell English';opacity:.75;margin-top:4px}
+/* 6 calendar */
+.cal{background:var(--panel);}
+.flip{display:flex;gap:14px;align-items:center}
+.page{width:96px;border-radius:10px;overflow:hidden;box-shadow:0 6px 14px rgba(0,0,0,.35);text-align:center;background:#fff;color:#1a1b26}
+.page .m{background:var(--bad);color:#fff;font:600 12px Inter;padding:4px}
+.page .d{font:700 44px Inter;line-height:1.2}.page .w{font-size:11px;padding-bottom:6px;color:#666}
+.ev{font-size:13px;line-height:1.5}.ev b{font-size:15px}
+.ticket{margin-top:12px;display:grid;gap:6px}
+.tk{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.05);border-left:3px solid var(--acc);border-radius:6px;padding:6px 8px;font-size:12.5px}
+.tk .h{font:500 12px 'Fira Code';color:var(--acc);width:44px}
+</style></head><body>
+<h1>Nixi answer stages: mockup for #144</h1>
+<p class="sub">One theatre frame (390 × 300, up to 440 tall) beside Nixi, a set per kind of answer. Static mockup, no animation shown; Nixi is a stand-in.</p>
+<div class="grid">
+
+<!-- 1 commands -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -60 120 120"><g stroke="#cfe3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-2" rx="6" ry="9" fill="#fff"/><ellipse cx="8" cy="-2" rx="6" ry="9" fill="#fff"/><circle cx="-6" cy="0" r="3"/><circle cx="10" cy="0" r="3"/><rect x="40" y="24" width="18" height="5" rx="2" fill="#f2f2ea" transform="rotate(-30 49 26)"/></svg>
+  <div class="cap">"Two ways — they're on the board."</div>
+  <div class="stage board">
+    <div class="plaque"><span class="t">How to install Firefox</span><span class="x">✕</span></div>
+    <div class="cmd"><span class="n">1</span><span class="what">Queue it, then apply</span>
+      <code>nixarchy pkg add firefox &amp;&amp; nixarchy apply</code>
+      <div class="acts"><span class="btn p">▶ Run this<span class="key">1</span></span><span class="btn">⧉ Copy</span></div></div>
+    <div class="cmd"><span class="n">2</span><span class="what">Or try it without installing</span>
+      <code>nix run nixpkgs#firefox</code>
+      <div class="acts"><span class="btn p">▶ Run this<span class="key">2</span></span><span class="btn">⧉ Copy</span></div></div>
+    <div class="trust">Mechanic · you'll see the exact command before it runs</div>
+    <span class="chalk"></span>
+  </div>
+  <span class="lab">1 · Commands: blackboard · Copy / Run this (trust path) · "run the first one"</span>
+</div>
+
+<!-- 2 facts -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -60 120 120"><g stroke="#cfe3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-2" rx="6" ry="9" fill="#fff"/><ellipse cx="8" cy="-2" rx="6" ry="9" fill="#fff"/><circle cx="-4" cy="-4" r="3"/><circle cx="12" cy="-4" r="3"/></svg>
+  <div class="cap">"A flake is a pinned recipe."</div>
+  <div class="stage note">
+    <div class="plaque"><span class="t" style="color:#5a5a6a">Notebook</span><span class="x" style="color:#888">✕</span></div>
+    <h3>What is a flake?</h3>
+    <ul>
+      <li>A folder with a <b>flake.nix</b> that says what it builds</li>
+      <li>Its inputs are pinned in <b>flake.lock</b>, so builds repeat</li>
+      <li>nixarchy's whole system is one flake</li>
+    </ul>
+    <div class="acts" style="display:flex;gap:6px;margin-top:6px"><span class="btn" style="color:#2a2a35;border-color:#bbb">⧉ Copy</span><span class="btn" style="color:#2a2a35;border-color:#bbb">↗ Open in Nixi</span></div>
+    <div class="src">From Nixi's answer · nothing fetched</div>
+  </div>
+  <span class="lab">2 · Facts &amp; explanations (and maths): notebook</span>
+</div>
+
+<!-- 3 weather -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -60 120 120"><g stroke="#e6f3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><g fill="#fff" opacity=".9"><circle cx="0" cy="-50" r="4"/><circle cx="44" cy="-24" r="4"/><circle cx="-44" cy="24" r="4"/></g><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-1" rx="6" ry="6" fill="#fff"/><ellipse cx="8" cy="-1" rx="6" ry="6" fill="#fff"/><circle cx="-6" cy="0" r="3"/><circle cx="10" cy="0" r="3"/></svg>
+  <div class="cap">"3° and clearing — frosty tonight."</div>
+  <div class="stage sky">
+    <div class="plaque"><span class="t">Weather · Edinburgh</span><span class="x">✕</span></div>
+    <div class="now"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="26" cy="26" r="12" fill="#ffd36b"/><path d="M18 44h30a10 10 0 0 0-2-20 14 14 0 0 0-26 6 8 8 0 0 0-2 14z" fill="#fff"/></svg>
+      <div><div class="temp">3°</div><div class="desc">Clearing · feels −1°</div><div class="meta">Wind 14 km/h · rain 10%</div></div></div>
+    <div class="strip">
+      <div class="day">Tue<b>5°</b>⛅</div><div class="day">Wed<b>7°</b>🌧</div><div class="day">Thu<b>4°</b>☁</div><div class="day">Fri<b>2°</b>❄</div><div class="day">Sat<b>6°</b>☀</div></div>
+    <div class="src">omarchy weather · 20:41 · forecast only if the source gives one</div>
+  </div>
+  <span class="lab">3 · Weather: sky window · current + forecast strip when real</span>
+</div>
+
+<!-- 4 directions -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -70 120 130"><g stroke="#cfe3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><path d="M-30-40h60l-8-14h-44z" fill="#8a5a2b"/><ellipse cx="0" cy="-40" rx="38" ry="6" fill="#6b4420"/><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-2" rx="6" ry="9" fill="#fff"/><ellipse cx="8" cy="-2" rx="6" ry="9" fill="#fff"/><circle cx="-4" cy="0" r="3"/><circle cx="12" cy="0" r="3"/></svg>
+  <div class="cap">"Off to the British Museum!"</div>
+  <div class="stage map">
+    <div class="plaque"><span class="t" style="font-family:'IM Fell English';font-style:italic">Trip preview</span><span class="x" style="color:#6b4420">✕</span></div>
+    <p class="t2">The British Museum</p><p class="sub2">Great Russell St, London · on foot</p>
+    <svg width="358" height="140" viewBox="0 0 358 140">
+      <defs><filter id="r"><feTurbulence baseFrequency=".9" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="2"/></filter></defs>
+      <g fill="none" stroke="#7a5a33" stroke-width="1" opacity=".35"><path d="M10 110 C 60 90, 90 120, 140 100 S 240 60, 340 80"/><path d="M20 30 C 80 50, 120 20, 200 40"/><path d="M230 120 c 30 -20 70 -10 110 -30"/></g>
+      <path d="M40 104 C 90 60, 140 120, 190 70 S 280 40, 312 44" fill="none" stroke="#5a2c10" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" filter="url(#r)"/>
+      <g transform="translate(40 104)"><circle r="7" fill="#3b2a17"/><text x="12" y="16" font-family="IM Fell English" font-size="13" fill="#3b2a17">You</text></g>
+      <g transform="translate(312 44)"><path d="M0 0 l-7 -14 a8 8 0 1 1 14 0z" fill="#9b2c1a"/><text x="-50" y="22" font-family="IM Fell English" font-size="13" fill="#3b2a17">✕ marks it</text></g>
+      <g transform="translate(330 112)" fill="#3b2a17"><circle r="16" fill="none" stroke="#3b2a17"/><path d="M0-16 L4 0 L0 16 L-4 0z"/><text y="-20" text-anchor="middle" font-family="IM Fell English" font-size="11">N</text></g>
+    </svg>
+    <div style="display:flex;gap:8px"><span class="btn p">🧭 Open in Google Maps</span><span class="btn">⧉ Copy address</span></div>
+    <div class="note2">A sketch, not the route: Google Maps picks the way and the start.</div>
+  </div>
+  <span class="lab">4 · Directions: old map (schematic) → Google Maps URL, no key, no home sent</span>
+</div>
+
+<!-- 5 video -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -60 120 120"><g stroke="#cfe3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-2" rx="6" ry="9" fill="#fff"/><ellipse cx="8" cy="-2" rx="6" ry="9" fill="#fff"/><circle cx="-4" cy="-5" r="3"/><circle cx="12" cy="-5" r="3"/><path d="M30 26 l20 0 l-4 22 l-12 0z" fill="#d8323a"/><circle cx="36" cy="24" r="5" fill="#fff6d8"/><circle cx="44" cy="22" r="5" fill="#fff6d8"/></svg>
+  <div class="cap">"Three good ones — pick a number."</div>
+  <div class="stage cinema"><span class="curt l"></span><span class="curt r"></span>
+    <div class="plaque" style="margin:0 22px 10px"><span class="t">Now showing · NixOS flakes</span><span class="x">✕</span></div>
+    <div class="screen">
+      <div class="film"><div class="thumb"></div><div><div class="tt"><span class="num">1</span>Nix flakes explained in 12 minutes</div><div class="mm">Vimjoyer · 12:04</div></div></div>
+      <div class="film"><div class="thumb b"></div><div><div class="tt"><span class="num">2</span>Your first flake on NixOS</div><div class="mm">Wil T · 18:40</div></div></div>
+      <div class="film"><div class="thumb c"></div><div><div class="tt"><span class="num">3</span>Flakes vs channels</div><div class="mm">NixCon · 31:12</div></div></div>
+    </div>
+    <div class="foot"><span class="btn p">▶ Play 1 in mpv</span><span>Searched YouTube for you · plays outside Nixi</span></div>
+  </div>
+  <span class="lab">5 · Video: cinema · server search, thumbnails proxied · plays in mpv</span>
+</div>
+
+<!-- 6 calendar -->
+<div class="cell">
+  <svg class="nixi" viewBox="-60 -60 120 120"><g stroke="#cfe3ff" stroke-width="9" stroke-linecap="round"><path d="M0-48V48M-42-24L42 24M-42 24L42-24"/></g><circle r="22" fill="#11131c"/><ellipse cx="-8" cy="-2" rx="6" ry="9" fill="#fff"/><ellipse cx="8" cy="-2" rx="6" ry="9" fill="#fff"/><circle cx="-4" cy="0" r="3"/><circle cx="12" cy="0" r="3"/></svg>
+  <div class="cap">"Next up: stand-up at 9:30."</div>
+  <div class="stage cal">
+    <div class="plaque"><span class="t">Tomorrow</span><span class="x">✕</span></div>
+    <div class="flip"><div class="page"><div class="m">NOV</div><div class="d">3</div><div class="w">Tuesday</div></div>
+      <div class="ev"><b>Team stand-up</b><br>09:30 – 09:45 · Google Meet<br><span style="color:var(--dim)">in 12 h 49 min</span></div></div>
+    <div class="ticket">
+      <div class="tk"><span class="h">11:00</span>Design review · #144 stages</div>
+      <div class="tk"><span class="h">14:30</span>Dentist</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px"><span class="btn p">↗ Open calendar</span><span class="btn">Join 09:30</span></div>
+  </div>
+  <span class="lab">6 · Calendar: flip page + tickets (gog)</span>
+</div>
+
+</div></body></html>
