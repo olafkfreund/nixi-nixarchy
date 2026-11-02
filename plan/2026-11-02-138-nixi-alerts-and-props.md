@@ -347,6 +347,12 @@ that as a deviation.
   other). Add `translate(0 ${-1.5*lvl})` while `isTalk(m)`.
 - The existing `put(SIT_P.gl,…)` at `:1338` keeps the fade and the scale.
 
+**Deviation (B4 visual check, 2026-11-02).** With a half-width of
+`EYE.rx*z+6`, the two lenses overlapped in the middle by about 2 px each.
+Each lens centre is now `side*max(|cx|, hw+6)`, pushed out just enough to
+keep a gap for the bridge. Checked in the sandbox at rest and with big
+(`excited`) eyes. No temples.
+
 **B5. Headphones (`drawSit` `:813-820`, frame `:1337`)** → verify by
 screenshots with big eyes (no overlap) and with `look_beat` on (pulsing).
 - Draw `hb` into `bk` (`#sitBack`). Band path
