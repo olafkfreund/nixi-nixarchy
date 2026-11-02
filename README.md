@@ -94,7 +94,8 @@ A small snowflake that lives on your desktop, listens ("hey Nixi") and talks
 back. It is a fork of [Void](https://github.com/PLAYER99-void/void) and asks
 the agent **only through Nixi's bridge**, so it follows the card's trust level:
 Guide changes nothing, Mechanic asks first and can be undone, secrets stay
-blocked.
+blocked. It reads that level when it starts: after changing it in the card, run
+`nixi-companion restart` ([#146](https://github.com/olafkfreund/nixi-nixarchy/issues/146)).
 
 ```nix
 {

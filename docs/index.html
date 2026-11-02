@@ -179,9 +179,10 @@ NixOS 26.11), captured as it happened.</p>
     <h3>The snowflake companion</h3>
     <p>A small snowflake on your desktop. Say "hey Nixi" and ask out loud; it answers in a caption
     and by voice. It is optional and off by default.</p>
-    <p>It asks the agent only through nixi's bridge, so it follows the card's trust level. In
+    <p>It asks the agent only through nixi's bridge, at the trust level that was set when it started. In
     <strong>Guide</strong> nothing changes. In <strong>Mechanic</strong> it shows the approval card,
-    as above.</p>
+    as above. After changing the level in the card, run <code>nixi-companion restart</code> so the
+    companion picks it up (<a href="https://github.com/olafkfreund/nixi-nixarchy/issues/146">#146</a>).</p>
     <p>For running herdr sessions it can tell you how they are doing and open one. Sending
     something to a session needs a click on the card: voice cannot confirm it.
     <a href="https://github.com/olafkfreund/nixi-nixarchy#the-snowflake-companion-optional">More in the README.</a></p>
@@ -189,7 +190,7 @@ NixOS 26.11), captured as it happened.</p>
 </section>
 
 <h2>Guide and Mechanic</h2>
-<p>Secret files (keys, credentials, <code>.env</code>) always get a card with Claude, and OpenCode's file read is refused outright. A shell command that names one asks too, though that check is best effort.
+<p>Secret files (keys, credentials, <code>.env</code>) are never read without you. At Guide, a request to read one is cancelled like every other request, with no card. At Mechanic, Claude asks with a card even though other reads don't, and OpenCode's file read refuses them outright. A shell command that names one asks too, though that check is best effort.
 Codex is not offered at Guide, because it can't be kept from reading secrets.</p>
 <p><img src="media/guide-secret-refused.png" alt="Guide refusing to read a secret file" loading="lazy" style="max-width:100%"></p>
 <table>
