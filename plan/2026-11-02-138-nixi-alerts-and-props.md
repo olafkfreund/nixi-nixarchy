@@ -216,6 +216,13 @@ per agent.
   `~/.codex/config.toml` and `~/.gemini/config/hooks.json` with the new ones.
   Back each file up to `*.bak-138` first.
 
+**Deviation (A6, 2026-11-02).** The `nixi-companion` on `PATH` is the
+Nix-built 0.1.0 (`/nix/store/…-nixi-companion-0.1.0`), and it doesn't know
+`--hook`: with the new lines it would show "needs you: --hook {…}". So the
+live hook swap on this machine moves to **after PR A is merged and the new
+build is installed**. A7 tests the hooks by running the worktree's launcher
+directly. The `*.bak-138` backups stay until then.
+
 **A7. Live check and PR A** → verify by:
 - `python -m pytest tests/ -q`, all green;
 - running the worktree's server
