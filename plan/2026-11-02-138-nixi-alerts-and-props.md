@@ -509,3 +509,20 @@ notify-send -a Slack "Alice" "are we still on for 3?"    # bubble
   Old hook lines keep working on new code anyway (the legacy path).
 - **The beat capture:** switch `look_beat` off (the default); the capture
   stops within a second.
+
+## Done (2026-11-02)
+
+- **PR A:** olafkfreund/nixoarchy-snowflake#13, deployed with
+  nixos_config#2595.
+- **PR B:** olafkfreund/nixoarchy-snowflake#14, deployed with
+  nixos_config#2603. The companion was restarted on p620.
+- **B8 live check** on the native window:
+  - a real `notify-send -a Thunderbird` mail popped the envelope out on the
+    left, because he sits near the right edge;
+  - the window grew from 340 to 600 px and went back to 340×460 after;
+  - no amdgpu ring timeouts during the deploy, the restart or the test.
+- **GPU crashes during the checks:** the in-Chrome previews at 11:18 and
+  12:28 hung the AMD GPU and crashed Hyprland. The kernel blamed Chrome,
+  which runs with `--ignore-gpu-blocklist --enable-gpu-rasterization`.
+  Previews now run only in headless Chromium with `--disable-gpu` and
+  SwiftShader (0 `/dev/dri` handles).
