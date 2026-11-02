@@ -93,7 +93,24 @@ A4.
 | codex | `type == "agent-turn-complete"` | `done` | `last-assistant-message` |
 | codex | another `type` containing `approval` | `ask` | `title` or `message` |
 | agy | `hook_event_name == "Notification"` | `ask` | `message` |
-| agy | anything else | `done` | `response` or `prompt_response` |
+| agy | `fullyIdle` is `false` (a sub-run ended, the agent is still working) | `None` | — |
+| agy | anything else (`Stop`) | `done` | `error` if non-empty, else `""` |
+
+**Deviation (A1, 2026-11-02).** The real agy `Stop` payload (agy CLI,
+`gemini-4-argon-medium`) has none of `cwd`, `hook_event_name`, `response` or
+`prompt_response`. It carries `workspacePaths` (a list), `terminationReason`,
+`error`, `fullyIdle`, `lastUserInput`, `conversationId`, `executionNum`,
+`modelName`, `artifactDirectoryPath` and `transcriptPath`. So:
+- In A3, the launcher also keeps `fullyIdle` (a bool) and `error`. When there
+  is no `cwd`, it sets `cwd` to `workspacePaths[0]`.
+- agy has no reply text, so a `done` from agy carries no reason, unless
+  `error` is set. The transcript is not read.
+
+The Codex payload matched the spec. Claude's could not be triggered headless.
+Its fields (`notification_type`, with the values `permission_prompt`,
+`idle_prompt`, `auth_success` and `elicitation_dialog`) were confirmed in the
+installed `claude-code` 2.1.306/2.1.316 binary, and its two fixtures are built
+from that schema.
 | any | `hook` not a dict (old hook lines) | `ask` | the joined `text`; `"is waiting for you"` becomes `""` |
 
 - Change `attention_accept(frm, text, now=None, target=None, hook=None)`:
