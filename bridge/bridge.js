@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Readable, Writable } from "node:stream";
 import { join, resolve } from "node:path";
 import { mkdir, readFile, writeFile, rename, rm, realpath } from "node:fs/promises";
-import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, appendFileSync, chmodSync, watch } from "node:fs";
 import { resolveHarness, resolveExecutable, resolveAdapter, adapterOverride, parseCommand, resolveAiMirror } from "./harness-policy.js";
 import { explainHarnessError, needsNewSession } from "./harness-errors.js";
 import { groundPrompt } from "./grounding.js";
@@ -101,6 +101,84 @@ async function loadSettings() {
     permissionMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
     trust = resolveTrust(settings.trust);
   } catch {}
+}
+
+// #146: another client (the card, the companion, an editor) may change nixi.json while this
+// bridge runs; follow it so every bridge enforces the level the user last chose. Never writes.
+let stdinSwitching = 0;       // a trust/permission_mode switch from stdin is in flight: it owns the file
+let followPending = false;
+let followBroken = false;     // one diagnostic per bad spell, not per event
+let followTimer = null;
+function watchSettings() {
+  try {
+    mkdirSync(settingsDir, { recursive: true });
+    // The folder, not the file: saves rename a new file over the old one (#103), which ends a file watch.
+    const watcher = watch(settingsDir, (_event, name) => {
+      if (name && name !== "nixi.json") return;
+      clearTimeout(followTimer);
+      followTimer = setTimeout(() => { followSettings().catch(() => {}); }, 150);
+    });
+    watcher.on("error", () => {});
+    watcher.unref();              // never keeps the bridge alive on its own
+  } catch (error) {
+    emit({ type: "diagnostic", text: `Not following ${settingsPath}: ${error.message}` });
+  }
+}
+function switchSettled() {
+  stdinSwitching--;
+  if (stdinSwitching === 0 && followPending) { followPending = false; followSettings().catch(() => {}); }
+}
+async function followSettings() {
+  if (stdinSwitching > 0) { followPending = true; return; }
+  let settings;
+  try {
+    settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("not a JSON object");
+  } catch (error) {
+    if (error.code === "ENOENT") settings = {};      // gone: the strictest level, as at a fresh start
+    else {
+      if (!followBroken) emit({ type: "diagnostic", text: `${settingsPath} is unreadable; trust left as it is` });
+      followBroken = true;
+      return;
+    }
+  }
+  followBroken = false;
+  if (stdinSwitching > 0) { followPending = true; return; }   // a switch began while we read
+  const nextTrust = resolveTrust(settings.trust);
+  const nextMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
+  const before = `${trust}/${permissionMode}`;
+  if (nextTrust !== trust) {
+    if (agentName === "codex") {
+      emit({ type: "fatal", message: `Trust changed to ${nextTrust === "guide" ? "Guide" : "Mechanic"} — start a new conversation` });
+      process.exit(0);
+    }
+    if (nextTrust === "guide") {
+      leavingMechanic++;                       // bites on receipt, as a switch from the card does (#106)
+      cancelAllPendingPermissions();
+      try {
+        if (connection && sessionId) await applyTrustMode("guide");
+        trust = "guide";
+      } catch (error) {
+        trust = "guide";                       // never looser than the file: the next requests are cancelled
+        emit({ type: "diagnostic", text: `Could not move the session to Guide: ${error.message}` });
+      } finally {
+        leavingMechanic--;
+      }
+    } else {
+      try {
+        if (connection && sessionId) await applyTrustMode("mechanic");
+        trust = "mechanic";
+      } catch (error) {
+        emit({ type: "diagnostic", text: `Could not move the session to Mechanic: ${error.message}` });
+      }
+    }
+  }
+  if (nextMode === "permission") permissionMode = "permission";
+  else if (effectiveTrust() === "mechanic" && permissionMode !== "yolo") {
+    permissionMode = "yolo";                   // YOLO only at Mechanic, as the card's own switch
+    allowAllPendingPermissions().catch(() => {});
+  }
+  if (`${trust}/${permissionMode}` !== before) emit({ type: "settings", trust, permissionMode, source: "file" });
 }
 
 // One write at a time per bridge, and rename() so the card never reads a
@@ -499,6 +577,7 @@ let codexRefused = false;
 
 async function start() {
   await loadSettings();
+  watchSettings();
   if (agentName === "codex" && trust === "guide") {
     // No session. Stay up (ready) so the card's switch to Mechanic can reach us;
     // the stdin loop below answers only trust, close and prompt in this state.
@@ -850,11 +929,12 @@ input.on("line", (line) => {
     if (message.type === "prompt") emit({ type: "error", message: CODEX_GUIDE_REFUSAL });
     else if (message.type === "trust") {
       if (resolveTrust(message.trust) === "guide") return ack("trust", true, { trust: "guide" });
+      stdinSwitching++;                        // this switch exits on its own message; the watch must not race it
       mergeSettings({ trust: "mechanic" }).then(() => {
         ack("trust", true, { trust: "mechanic" });
         emit({ type: "fatal", message: "Trust set to Mechanic — start a new conversation to use Codex" });
         process.exit(0);
-      }).catch((error) => ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }));
+      }).catch((error) => { switchSettled(); ack("trust", false, { trust: "guide", message: `Could not change trust level: ${error.message}` }); });
     } else if (message.type === "close") process.exit(0);
     else if (message.type === "steer") ack("steer", false, { message: CODEX_GUIDE_REFUSAL });
     else if (message.type === "permission_mode")
@@ -881,6 +961,7 @@ input.on("line", (line) => {
   } else if (message.type === "permission") {
     answerPermission(message);
   } else if (message.type === "trust") {
+    stdinSwitching++;
     const next = resolveTrust(message.trust);
     // Apply the ACP mode FIRST, then persist and publish. The old order set
     // `trust` before the mode call, so a failure reported the level the session
@@ -911,14 +992,16 @@ input.on("line", (line) => {
       ack("trust", false, { trust, message: `Could not change trust level: ${error.message}` });
     }).finally(() => {
       if (leaving) leavingMechanic--;
+      switchSettled();
     });
   } else if (message.type === "permission_mode") {
+    stdinSwitching++;
     savePermissionMode(message.mode).then(() => {
       if (permissionMode === "yolo") allowAllPendingPermissions().catch(() => {});
       ack("permission_mode", true, { mode: permissionMode });
     }).catch((error) => {
       ack("permission_mode", false, { mode: permissionMode, message: `Could not save permission mode: ${error.message}` });
-    });
+    }).finally(switchSettled);
   } else if (message.type === "cancel" && connection && sessionId) {
     userStopped = true;
     connection.cancel({ sessionId }).catch(() => {});
