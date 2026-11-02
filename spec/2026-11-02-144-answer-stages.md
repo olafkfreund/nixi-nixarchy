@@ -1,7 +1,7 @@
 ---
 status: approved
 issue: 144
-amendment-1: draft
+amendment-1: approved
 intent: intent/2026-11-02-144-answer-stages.md
 ---
 
@@ -325,7 +325,7 @@ everything stays a caption and the spoken-reply note doesn't ask for a block.
 
 ## Amendment 1: slice 4, the day desk
 
-Status: **draft**. Slices 1–3 above stay approved. The user asked for this on
+Status: **approved** (2026-11-02). Slices 1–3 above stay approved. The user asked for this on
 2026-11-02 ("How does my day look? or what is next for today… my task and my
 github issues"), and Codex and agy reviewed the design (agy critiquing Codex).
 
