@@ -445,6 +445,25 @@ on, plus screenshots.
 - Add all three groups to the `body.bar` hide list (they live in `#sitFront`,
   which is already hidden there; confirm it).
 
+**Deviation (B7 mail, requested by the user, 2026-11-02).** The small SVG
+envelope at his cheek doesn't read well. Mail now pops out **beside Nixi** as
+a bigger HTML/CSS envelope (about 170×120 px) and opens:
+- **Animation:** it pops out of his side, the flap opens (`rotateX`, with
+  perspective) and a letter slides up showing the app and the subject. It
+  then closes and shrinks back into him, about 5 s in all (the existing
+  notification hold). This is pure CSS, with no per-frame work.
+- **Room:** it uses the window-growing path the approval cards already use
+  (`sizeWindow`, `popWant=[200,0]`). It goes on the side with more room.
+  The region is resent so a click opens the mail.
+- **Where it doesn't show:** never in notch or hover mode, or while he's
+  hidden; the caption row stays as before. With reduced motion it just
+  fades.
+- **Speech:** the subject is spoken only under the same gates as B7.
+- The old mail SVG group, its spring and its per-frame code are removed.
+  Chat and feed are unchanged.
+- **Risk:** the window resizes for each mail, as it already does for
+  approval cards. Checked live on NVIDIA in B8.
+
 **B8. Live check and PR B** → verify by:
 - the full test suite green;
 - screenshots for each of B4–B7;
