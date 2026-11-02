@@ -1,6 +1,7 @@
 ---
 status: approved
 issue: 144
+amendment-1: draft
 intent: intent/2026-11-02-144-answer-stages.md
 ---
 
@@ -174,6 +175,11 @@ at `f65f587`.
   - **Open session** or **Open terminal**;
   - only checks that actually ran are listed, with no overall "all healthy".
 
+#### Slice 4: my day (Amendment 1, see below)
+
+- **Desk (day):** "How does my day look?" or "what's next today?" opens the day
+  desk. Its design is in [Amendment 1](#amendment-1-slice-4-the-day-desk).
+
 #### Not stages
 
 - **Timers** stay a small prop with a notification.
@@ -316,3 +322,83 @@ everything stays a caption and the spoken-reply note doesn't ask for a block.
   - typing in another window is never interrupted.
 - **Reviews:** a fresh Opus review of each slice's diff, plus Codex and agy
   (`reviewers:` in the plan).
+
+## Amendment 1: slice 4, the day desk
+
+Status: **draft**. Slices 1–3 above stay approved. The user asked for this on
+2026-11-02 ("How does my day look? or what is next for today… my task and my
+github issues"), and Codex and agy reviewed the design (agy critiquing Codex).
+
+### Design
+
+- **What opens it:**
+  - "how does my day look?", "what's next today?" or "what's on today?" sends a
+    `{"v":1,"kind":"day"}` block, so the server builds the stage;
+  - Nixi's own phrase list catches the exact "what's next?" without an agent
+    turn.
+- **Layout:** the `desk` set, in the same frame.
+  - A paper **date tab** at the top, with today's date.
+  - **Next:** one highlighted card with the next event's time, its title, "in
+    40 min", and **Join** when it has a meeting link.
+  - Three compact rows, each with a count and at most two titles:
+    - **Today:** the rest of today's events, including all-day ones.
+    - **Tasks:** tasks due today, plus overdue ones marked in red.
+    - **GitHub:** issues assigned to you and pull requests waiting for your
+      review, each shown as `repo#n title`.
+  - Clicking a row opens it in the same frame, at most 8 items. Clicking an
+    item opens it in the browser, through a server-built URL token as in §3.
+- **Data, fetched on the server when the stage opens:**
+
+  | Source | Command | Notes |
+  |---|---|---|
+  | Calendar | `gog --readonly --json calendar events <ids> --from <today 00:00> --to <tomorrow 00:00>` | The calendars `Ambient` already uses (`server.py:1098`), but the whole local day, including all-day events |
+  | Tasks | `gog --readonly --json tasks list <list> --due-max <tomorrow 00:00>` | Every list from `gog tasks lists`, up to 3 lists; not completed |
+  | GitHub | `gh search issues --assignee=@me --state=open --json repository,number,title,url -L 8`, and `gh search prs --review-requested=@me --state=open …` | Only when `gh auth status` succeeds |
+
+  - Each source runs on its own, with an 8 s timeout and a 5-minute cache.
+  - A source that fails or isn't set up shows its row as "not set up" or
+    "couldn't refresh · 10:42". The last good data stays, marked stale. A
+    snapshot from yesterday is never passed off as today's.
+  - **Mail:** at most an unread count, and only if a source is already set up.
+    No subjects.
+- **Voice:**
+  - the exact "what's next?" is answered at once from the snapshot, speaking
+    only the next item;
+  - any other question asked while the desk is open goes to the agent with a
+    short summary of the snapshot attached: counts and the top two titles per
+    row, about 150 tokens;
+  - opening an item by voice ("open the second issue") is left for later. In
+    v1 you click.
+- **Privacy:**
+  - titles are never written to logs, notifications or history;
+  - the snapshot lives in memory only;
+  - nothing goes to the agent unless you ask a question.
+- **Nixi's gesture:** a pocket watch. The flourish is a single page flip of the
+  date tab.
+
+### Alternatives rejected
+
+- **Sending the whole day to the agent every time.** Slow, and it uses tokens
+  just to view. Viewing happens on the server; only questions go to the agent.
+- **Voice-numbered opening in v1** (Codex). It needs a stable mapping from
+  numbers to IDs that survives refreshes. Click first (agy).
+- **A mail dashboard.** Too much privacy exposure for a glance.
+
+### Risks
+
+- **gog or gh missing, or not signed in:** that row says "not set up", and
+  nothing else breaks.
+- **Many events or issues:** each row shows two titles and a count; the detail
+  view shows up to 8.
+- **Time zones and all-day events:** the day is your local midnight to
+  midnight, and all-day events show as "all day".
+
+### Verification
+
+- **Unit tests:** fixtures for gog calendar, gog tasks and gh JSON. They check
+  the local-day window including all-day events, overdue marking, a stale row
+  on failure, URL tokens, and the "what's next?" fast path.
+- **Page test:** the day desk fits the frame, with empty, full and stale
+  fixtures.
+- **Live on p620:** "how does my day look?" shows your real calendar, tasks and
+  GitHub; clicking an issue opens it in the browser.
