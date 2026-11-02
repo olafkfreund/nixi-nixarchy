@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 144
 spec: spec/2026-11-02-144-answer-stages.md
 reviewers:
