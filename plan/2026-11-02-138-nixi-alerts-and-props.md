@@ -544,3 +544,30 @@ shows WhatsApp and Messenger by name.
 
 Test: `test_mail_and_chat_the_shell_misses` in `tests/test_inbox.py`. Live
 check: `notify-send` as Omamail and as WhatsApp.
+
+## Follow-up: no accessory cut off by the window (2026-11-02, approved by the user)
+
+A bug report came from another session: the rain umbrella was cut off flat
+at the top of the window, and the user's screenshots confirmed it.
+
+**Cause:**
+- `#guy`'s viewBox top (−150) is the window's edge.
+- The umbrella reached −162, the party hat about −186 and the nightcap −168.
+- A "happy" reaction (punch-zoom plus jelly stretch, anchored at the bottom)
+  lifts the top zone a further 24–40 px.
+
+**Fix:**
+- Umbrella 75 % with its top at −118; party hat 70 % and nightcap 60 %, both
+  sitting on the plate.
+- Halo `cy` −120; headphone arc control point −152.
+- Agent mark at −94 with a smaller ripple; cue at −110.
+- Mail pop-out at `left:292px`.
+
+**Guard:** `tests/accessories_fit.mjs`, run by
+`tests/test_accessories_fit.py`.
+- It turns every look, skin, prop and mark on in turn, in a GPU-free headless
+  Chromium.
+- It fails if any of them leaves the 340×460 window, with 18 px of top
+  headroom required, sampled at rest and through a "happy" bounce.
+- The mail pop-out may use the 130 px the window grows on each side.
+- Two runs passed, with at least 22 px of headroom.
