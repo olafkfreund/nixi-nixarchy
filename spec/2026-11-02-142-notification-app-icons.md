@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 142
 intent: intent/2026-11-02-142-notification-app-icons.md
 ---
