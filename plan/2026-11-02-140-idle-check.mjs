@@ -25,11 +25,16 @@ const mode = m => ev(`await post('/api/settings',{idle_mode:'${m}'}).then(r=>r.j
 
 // 1. shrink: peek after ~1 s with the timers scaled down; a tight click region even with click-through off
 await mode("shrink");
+await ev("await post('/api/settings',{click_through:false}).then(r=>r.json()).then(j=>{info=j;}); return 1");   // (the case that matters: click-through off)
 await ev("nixiIdleScale(0.02); lastUser=lastActive=lastMouse=performance.now(); idleHoldUntil=0; return 1");
 await sleep(2200);
 let st = await ev("return {st:idleSt, peek:document.body.classList.contains('peek'), ct:!!info.click_through, region:lastRegion}");
 check("peek after idle (shrink)", st.st === "peek" && st.peek, st);
-check("tight click region in the peek (click-through off)", st.region && st.region !== "off" && st.region.startsWith("[["), st.region);
+let rects = []; try { rects = JSON.parse(st.region); } catch {}
+// tight = only small boxes, together well under the window (never the whole 340x460 overlay), and click-through really off
+const tight = st.ct === false && Array.isArray(rects) && rects.length > 0 &&
+  rects.every(r => r[2] < 340 && r[3] < 460) && rects.reduce((a, r) => a + r[2] * r[3], 0) < 0.4 * 340 * 460;
+check("tight click region in the peek (click-through off)", tight, st);
 await snap("peek");
 
 // 2. an agent 'needs you' restores and holds
