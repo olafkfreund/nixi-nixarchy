@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 149
 spec: spec/2026-11-02-149-companion-plugins.md
 reviewers:
