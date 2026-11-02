@@ -138,3 +138,35 @@ SUPER+ALT+SHIFT+S, because SUPER+ALT+H is Herdr in nixarchy's seeded bindings. S
 ## Rollback
 
 Revert the merge commit. Media and text go together.
+
+## Deviations (recorded 2026-11-02 with the media, R0–R4)
+
+- **No `screencast-prep`.** It refuses while any window is open, and the herdr
+  terminal running the session is one. The user chose to record with the bar
+  showing (third-party widgets visible).
+- **The user drove R1, a workspace watcher recorded.** Driving through
+  ai-mirror misfired: a drag opened the wallpaper picker. A script recorded
+  the monitor only while an empty workspace was focused, and the user summoned
+  Nixi, asked by voice, and switched back.
+- **The GIF is a composite of real footage.**
+  - Every Nixi pixel is live. The desktop behind him is one still frame from
+    the same take, because video-encoder noise changed every pixel of every
+    frame and no other way got it under 1 MB.
+  - It's cropped to the 1152×720 around Nixi, so the caption is readable at
+    900 px.
+  - It's cut before the card opens, because the card showed "YOLO".
+  - It's 4 fps for the pop-up, then one frame every 2 s while the caption reads.
+- **Mixed themes, kept by the user:** the GIF is in Tokyo Night, the two stills
+  in Outpost.
+- **The stills are cropped to 16:10 around the subject, not the whole desktop.**
+  The card text has to be readable at 900 px.
+- **R2 and R3 were taken by script.**
+  - **R2** asked through the companion's API with a scratch file; the card was
+    answered No.
+  - **R3** was asked in nixi's card through ai-mirror (/guide, the canary
+    question, /mechanic), then the canary was deleted. The still shows no
+    CANARY text.
+  - The R3 answer names the user's aliases "fip, dip and lip". The user chose to
+    keep it.
+- **Found while recording:** the companion's bridge keeps the trust level it
+  started with (nixi-nixarchy#146).
