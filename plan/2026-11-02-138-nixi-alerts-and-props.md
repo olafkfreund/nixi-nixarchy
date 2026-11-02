@@ -373,6 +373,20 @@ screenshots with big eyes (no overlap) and with `look_beat` on (pulsing).
 - Head nod: `G.jelly.kick(.015*k)` only when `k > .6` and 200 ms have passed
   since the last nod.
 
+**Deviations (B5 visual check with the user, 2026-11-02).**
+- **Band:** the planned band path (`M-84 -8C-88 -92 88 -92 84 -8`) in
+  `#sitBack` was hidden completely behind the plate and arms. It is now
+  `M-84 -20C-100 -168 100 -168 84 -20`, which peaks at about y −125 and
+  shows between the upper arms. The user preferred this to the
+  first version.
+- **Cups:** rx 17 × ry 28, with an **accent rim** (stroke `acc` 3) instead
+  of the dark rim, so they read against the blue arms. The cushion is
+  rx 7 × ry 21.
+- **No yoke rects:** they looked like antennae, and the band already meets
+  the cups behind them.
+- The band and cups are in different parents, so the band's lift goes on an
+  inner group `bd` inside `hb`, and `put()` keeps the fade/scale on `hb`.
+
 **B6. Mic bars** → verify by a screenshot while talking, and by the bars not
 showing in notch mode.
 - Add `<g id="micBars" opacity="0" pointer-events="none">` with 5 `rect`s
