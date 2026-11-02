@@ -438,6 +438,26 @@ fresh Opus review of each slice's diff, then Codex and agy (`reviewers:`).
 
 **15. Slice 3 review, PR, deploy** (as step 9), then close #144.
 
+## Deviations
+
+- **Step 3: the bridge carries the exact command** (2026-11-02, this commit).
+  - The permission event's `detail` is the command followed by the tool's other
+    fields, so a byte-exact comparison against it is unreliable.
+  - nixi's bridge now adds `command`, which is `rawInput.command` when it's a
+    string, to each permission event (`bridge/bridge.js`, tested in
+    `bridge/herdr-bridge.test.js`).
+  - The companion compares `o["command"]` with the stored command. A
+    different **or missing** command is answered `reject_once`, so it fails
+    closed.
+- **Step 3: YOLO isn't checked byte for byte.** In YOLO, and for a command the
+  bridge already "always allows", no permission request reaches the companion,
+  so it can't check anything before the command runs.
+  - A check of the tool title afterwards would be unreliable, so it isn't
+    built.
+  - Instead, the stage event carries the trust level, and the board says "runs
+    without asking (YOLO)".
+  - The exact check is guaranteed only where a card is shown (Mechanic).
+
 ## Tests
 
 | Check | Expected |
