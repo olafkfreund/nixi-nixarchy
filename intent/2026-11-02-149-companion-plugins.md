@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 149
 author: olafkfreund
 follows: intent/2026-11-02-144-answer-stages.md
