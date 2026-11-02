@@ -234,6 +234,14 @@ Then the Opus review (a fresh agent, given the plan path and `git diff`),
 then the Codex and agy reviews (the `second-opinion` skill). Open PR A,
 linking the intent, spec and plan, with the screenshots attached.
 
+**Deviations (A7 live check, 2026-11-02).**
+- When the reason already starts with the agent's name ("Claude needs your
+  permission…"), the headline uses the reason as it is, instead of
+  "Claude needs you: Claude needs…". The project goes after it
+  (" · snowflake" on the chip, ", in snowflake" when spoken).
+- The agent mark is 1.35× bigger and sits at `translate(8 -108)`, below the
+  chip, so the chip no longer covers it.
+
 ## Steps — PR B: looks, mic bar, notification props, beat
 
 Worktree: `git worktree add ../snowflake-138b -b feat/138-props origin/main`,
