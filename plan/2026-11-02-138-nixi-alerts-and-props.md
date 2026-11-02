@@ -321,6 +321,18 @@ Check that `Ambient.sense()` runs often enough for the 1 s stop target; if it
 doesn't, also call `Beat.sync()` from `Ambient.loop`'s fast tick, and record
 that as a deviation.
 
+**Deviations (B3, 2026-11-02).**
+- `Ambient.sense()` runs every 2 s, and it refreshes music only every 5 s.
+  Instead of an extra call to `sync()`, the capture thread re-checks
+  `want()` on every read (0.5 s `select` timeout). Turning the switch off,
+  losing the subscriber or falling asleep therefore stops it within about
+  0.5 s. A meeting or music stopping stops it only once `Ambient` notices,
+  which takes up to about 2 s (meeting) or about 7 s (music), not 1 s.
+- The recorder's stderr goes to `DEVNULL`, not `PIPE`: nothing reads it
+  during a long run, and a full pipe would block the recorder.
+- The level maths is a pure `Beat.level(avg, rms)` with its own tests.
+- Live smoke test: `parecord` on `@DEFAULT_MONITOR@` gave about 19 blocks/s.
+
 **B4. Glasses (`index.html` `drawSit` `:827-830` and the eye loop
 `:1236-1245`)** → verify by screenshots: idle, looking left, big eyes
 (`poke('excited')`).
