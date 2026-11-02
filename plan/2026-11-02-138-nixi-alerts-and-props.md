@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 138
 spec: spec/2026-11-02-138-nixi-alerts-and-props.md
 reviewers:     # the user asked for Codex and agy on this work (2026-11-02); read-only, after each PR's Opus review
