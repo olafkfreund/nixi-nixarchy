@@ -582,6 +582,23 @@ Decisions copied from spec Amendment 1:
   - **"Opened ✓" is one helper.** `stageOpened` is shared by Open in Google
     Maps, Play and Search in browser.
 
+- **Slice 3, steps 13–14** (2026-11-03, nixoarchy-snowflake
+  `feat/144-sky-desk`, by the Sonnet coder).
+  - **Weather source:** "Ambient's cached weather" is now #157's
+    `Ambient.reading()` (Open-Meteo for the current place, or the omarchy
+    fallback, both with a 2 h expiry).
+  - **Day or night** comes from `SIT.day` (the forecast's day/night), not
+    `SIT.night`.
+  - **No forecast is shown:** neither source returns one, so the card
+    gives the source and the reading time instead.
+  - **"partly"** reads "partly cloudy".
+  - **Open session** attaches by `pane_id` through `attach_argv` (what
+    `session_show` uses), so two sessions with the same title don't make it
+    ask "which one?".
+  - **The calendar** looks 2 days ahead, up to 4 events. Birthday events
+    are left out, as before (their titles aren't kept).
+  - **The pocket-watch gesture** stays with slice 4.
+
 ## Tests
 
 | Check | Expected |
