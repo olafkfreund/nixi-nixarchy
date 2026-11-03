@@ -355,3 +355,12 @@ slice's diff, then Codex and agy.
     attribute, never as a DOM id.
   - **`plugins/examples/party-hat-plus/` moved forward from A6,** because
     the fit test needs it.
+- **A5.**
+  - **The examples are `legacyPackages.<system>.examples.*`**, built with
+    `nix build .#examples.<name>`, not under `packages`.
+  - **`lib.<system>.mkCompanionPlugin` is per system**, because it needs
+    nixpkgs.
+  - **The broken-manifest check** is
+    `checks.<system>.broken-manifest-fails` (`testers.testBuildFailure`).
+- **A4.** A refused toggle returns HTTP 200 with an `error` field, not a
+  4xx.
