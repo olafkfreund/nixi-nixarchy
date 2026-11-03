@@ -26,6 +26,12 @@ let
   share = "${nixiPkg}/share/nixi";
   companionPkg = cfg.companion.package.override {
     nixiBridge = [ "${plugins}/${pluginId}/bridge/nixi-node" "${plugins}/${pluginId}/bridge/bridge.js" ];
+    # Companion plugins are linked into the package, not passed as an environment variable: stage plugins are
+    # programs Nixi launches, and the environment must not be able to change what Nixi launches (#76, #149).
+    plugins = map (p: if lib.isDerivation p then p else cfg.companion.package.mkCompanionPlugin {
+      src = p;
+      pname = "nixi-plugin-${baseNameOf p}";
+    }) cfg.companion.plugins;
   };
   plugins = "${nixiPkg}/share/omarchy/plugins";
 
@@ -127,6 +133,29 @@ in
           as the card, and the environment cannot point it elsewhere (#77).
           Void's own Claude runner, trust modes, self-updater and history are
           off in this build.
+        '';
+      };
+
+      plugins = lib.mkOption {
+        # A package, or a path literal (copied into the store and checked at build time). A string is refused:
+        # it would name a folder outside the store, which the build cannot check.
+        type = lib.types.listOf (lib.types.either lib.types.package (lib.types.addCheck lib.types.path builtins.isPath));
+        default = [ ];
+        example = lib.literalExpression "[ inputs.nixoarchy-snowflake.legacyPackages.\${pkgs.system}.examples.party-hat-plus ]";
+        description = ''
+          Companion plugins: folders with a `plugin.json` (quip packs,
+          notification maps, SVG props, and programs that fill a stage). Each
+          is linked into the companion package, so what Nixi can load is fixed
+          at build time and the environment cannot add to it. Build one with
+          `inputs.nixoarchy-snowflake.lib.''${pkgs.system}.mkCompanionPlugin
+          { src = ./my-plugin; pname = "my-plugin"; }`, which checks the
+          manifest and fails the build if it is wrong.
+
+          Every plugin starts off. Turn it on in Settings > More > Plugins;
+          plugins that run programs also ask for your permission there, and
+          run in a sandbox. Nixi never downloads a plugin or an update.
+          Plugins you copy by hand into
+          `~/.local/share/nixi-companion/plugins/` are found too.
         '';
       };
 
