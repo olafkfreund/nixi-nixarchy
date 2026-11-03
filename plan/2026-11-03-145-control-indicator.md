@@ -286,3 +286,10 @@ Confirmed in the code. These override the steps above where they differ.
 - **Page test limits:** hover and calm are checked through body classes,
   and `/api/state` is stubbed in the page test, because its own polling
   would otherwise reset the mirror state.
+- **Codex's GitHub review on PR #28** (three rounds):
+  - a status answer discarded because a revoke landed is asked for again
+    next tick;
+  - an explicit `retry_at` (5 s), independent of the cached owner, replaces
+    the `last_status` shortcut when no source answers;
+  - the regression test mocks the file-read failure instead of using chmod,
+    so it holds as root.
