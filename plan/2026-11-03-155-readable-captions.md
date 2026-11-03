@@ -80,8 +80,14 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
      - keep `gap:3px`, but it no longer matters (one child).
    - Add after `#cap.off…` (`:169`):
      - `#plate{display:flex;flex-direction:column;align-items:center;gap:3px;width:fit-content;max-width:100%;padding:5px 11px;border-radius:12px;background:var(--cap-bg,#0b0b0be6);color:var(--cap-text,var(--text));transition:min-width .15s var(--ease)}`
-     - `#plate:has(#you:empty):has(#him:empty){display:none}`
+     - `#plate:has(#you:empty):not(:has(#him .w,#him>span)){display:none}`
+       (every word in `#him` is a `.w`, and notifications and nudges are a
+       `#him>span`: `:1903-1904`, `:1928`. An empty `.ln` left by a first
+       streamed chunk with no space yet, `:2091-2093`, must not draw a
+       blank pill.)
      - `#you:empty{display:none}`
+     - `#him:not(:has(.w,span)){display:none}` (otherwise an empty `#him`
+       adds the 3 px gap under "listening…")
      - `@media (prefers-reduced-motion:reduce){#plate{transition:none}}`
    - `:256`: replace `#cap.note{…}` with
      `#cap.ntf #plate{pointer-events:auto;cursor:pointer;border:1px solid var(--line)}`,
@@ -99,6 +105,9 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
    - `:274`: `#him .w.c{…color:var(--cap-code,var(--tint))}`.
    - Notch overrides, after `:123`:
      - `body.bar #plate{background:none;border:0;padding:0;min-width:0!important;border-radius:0}`
+     - `body.bar #cap.ntf #plate{border:0}` (`#cap.ntf #plate`, two IDs
+       and a class, would otherwise beat `body.bar #plate` and draw a border
+       inside the notch)
      - `body.bar #wk{display:none}`
      - `body.bar #cap{--cap-text:var(--text);--cap-dim:var(--dim);--cap-err:#ff8a8a;--cap-code:var(--tint)}`
        (the notch keeps today's colours against its own black)
@@ -108,7 +117,7 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
      keep `width:100%`.
 
 2. **Checked caption colours** (`index.html`, next to `shade()` `:859`, and
-   in `applyLook` `:885-904`) → codex
+   in `applyLook` `:885-902`) → codex
    - Add the helpers after `:859`:
      - `relLum(hex)`: WCAG relative luminance (linearise each channel of
        `hex2rgb`, then `0.2126 R + 0.7152 G + 0.0722 B`).
@@ -150,16 +159,27 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
      - `:3013`: `if(cap.classList.contains('ntf')) add(plate,4);`.
    - `:2085`: `plate.addEventListener('click',()=>notifyAct('open'));`.
    - Add `function plateGrow(){ plate.style.minWidth=plate.getBoundingClientRect().width+'px'; }`
-     and `function plateReset(){ plate.style.minWidth=''; }`.
+     and `function plateReset(){ plate.style.transition='none'; plate.style.minWidth=''; void plate.offsetWidth; plate.style.transition=''; }`.
      - The rect already includes the current `min-width`, so this only grows.
+     - **The reset skips the transition on purpose.** With the transition
+       on, a read right after a reset sees the old, wider `min-width` at
+       transition progress 0, and `plateGrow` would write it straight back
+       (both reviews).
      - Call `plateGrow()` at the end of `showHim` (after the word loop) and at
        the end of `karaPut`'s word path.
      - Call `plateReset()` where a new caption starts: `himSet`, `karaPut`'s
        `k.reset` branch, `showHim`'s `fresh` branch, `karaPut` when it
-       creates a new `.ln`, and `notifyShow` before `capShow()`.
+       creates a new `.ln` (`:1654`), `notifyShow` (`:1927`) and the
+       unvoiced nudge (`nudgeDrain`, `:1903`), each right after its
+       `#him` wipe.
    - **A notification never outlives its text:** add
-     `function ntfDrop(){ if(notifyRow&&!(notifyRow.span&&notifyRow.span.isConnected)) notifyClear(); }`.
-     - Call it right after each of those wipes, once `#him` is cleared.
+     `function ntfDrop(){ if(notifyRow&&notifyRow.span&&!notifyRow.span.isConnected) notifyClear(); }`.
+     - It drops a row only if that row *had* a span and lost it. `notifyDrain`
+       sets `notifyRow=row` with `span:null` before it calls `notifyShow`
+       (`:1943`), so the condition must not treat a missing span as gone.
+     - Call it right after the wipes in `himSet`, `karaPut` (both wipe
+       sites), `showHim`'s `fresh` branch and `nudgeDrain` (`:1903`). Not in
+       `notifyShow`.
      - The span is then disconnected, so `notifyClear` only drops the row,
        removes `ntf` and resends the region. It doesn't hide the caption.
    - **Verify:** step 4's notification and grow cases.
@@ -190,24 +210,40 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
        background, and its width is less than `#cap`'s;
      - with both lines empty, `#plate` is `display: none`;
      - `getComputedStyle(cap).maskImage` is `none` outside the bar;
-     - `notifyShow({key:'k',span:null},'Notification · test',{})`:
+     - set `notifyRow=row` with `row={key:'k',span:null}` (as `notifyDrain`
+       does at `:1943`), then `notifyShow(row,'Notification · test',{})`:
        - `cap` has `ntf` and not `note`;
        - `#plate` has a 1 px border;
        - `document.elementFromPoint` at a point inside `#cap` but outside
          `#plate` is not `#plate` or inside it;
-       - then `notifyClear()`;
-     - streaming: call `showHim` with 12 growing prefixes (`end=false`, then
-       `true`) and record `#plate`'s width after each. It never decreases.
-     - three lines: `himSet` with a text long enough to wrap to three lines.
-       `#him`'s `scrollHeight` is at most its `clientHeight` + 1, and each
-       `.w` box is inside `#plate`'s box.
+       - `notifyRow` is still `row` (it wasn't dropped by its own show);
+       - then `notifyClear()`. `ntf` is gone and `#cap` has `off`.
+     - **Replaced early:** show a notification as above, then
+       `himSet('next')`. `ntf` is gone, `notifyRow` is `null`, and `#him`
+       says "next". The same with an unvoiced nudge through `nudgeDrain`'s
+       path, if it can be called directly; otherwise note that in the PR.
+     - **Streaming:** call `showHim` with 12 growing prefixes (`end=false`,
+       then `true`) and record `#plate`'s `style.minWidth` after each. It is
+       set, and never decreases.
+     - **Reset:** after a three-line caption, `himSet('hi')`, wait 300 ms.
+       `#plate` is under 100 px wide.
+     - **Three lines:** `himSet` with a text that wraps to three lines, then
+       wait 1.2 s so the `wIn` word animations (up to 420 ms delay, 0.6 s)
+       end. `#him`'s box is inside `#plate`'s box, and every `.w` whose box
+       overlaps `#him`'s box ends inside `#plate`'s box. Don't use
+       `scrollHeight`: `#him` clips old lines on purpose (`:270`).
      - `#wk` with empty text is `display: none`. With `'working: Read'` it
        has a background.
      - Notch: add `bar` to `body`. `#plate` has a transparent background and
        0 padding, and `#wk` is `display: none`. Then remove `bar`.
-     - The region: stub `NATIVE` and `native` to capture the message, set
-       `info.click_through=true`, `notifyShow(...)` then `sendRegion(true)`.
-       The region's rects don't include one as wide as `#cap`.
+     - **The region**, on a second navigation with `?native=1` (`:8` then
+       sets `NATIVE`, a `const` at `:823` that can't be reassigned):
+       - set `window.webkit={messageHandlers:{nixiui:{postMessage:m=>(window.__m=window.__m||[]).push(m)}}}`
+         (`native()` at `:837` looks it up at each call);
+       - set `info.click_through=true`, show a notification as above, then
+         `sendRegion(true)`;
+       - parse the last `region:` message. It contains a rect that covers
+         `#plate`'s box, and none as wide as `#cap` (316 px).
    - `tests/test_caption_fit.py`: a copy of `tests/test_stages_fit.py` that
      runs `caption_fit.mjs` (same throwaway home, GPU-off Chromium flags and
      skip rule).
@@ -216,8 +252,8 @@ Code repo: `olafkfreund/nixoarchy-snowflake` (the companion), branch
      then restored).
    - **Traps:**
      - GPU-off Chromium only;
-     - if the region check can't stub `NATIVE` (a `const`), assert on
-       `#plate`'s rect against `#cap`'s instead, and note it in the PR.
+     - top-level `let` bindings (`notifyRow`, `info`) can be assigned from
+       `Runtime.evaluate`; `const` ones (`NATIVE`, `native`) can't.
 
 5. **Previews, review and live check** → lead
    - Re-render the spec's preview with `scratchpad/stg-prev/cap.mjs` against
@@ -262,3 +298,22 @@ Expected: all pass, and `clean`.
 - Then bump `nixi-companion` in `~/.config/nixos` and deploy. Or, faster on
   one host, roll back the system generation.
 - No data or settings change: the patch is page-only, with no new settings.
+
+## Review of this draft (Codex and agy, read-only)
+
+Both checked the plan against `index.html` at `2e36123`. All findings were
+confirmed in the code and are fixed above:
+
+- `ntfDrop` would have dropped every new notification, because
+  `notifyDrain` sets the row before its span exists (both reviews).
+- The unvoiced nudge (`nudgeDrain` `:1903`) wipes the caption too, and was
+  missing from the reset and drop sites (both).
+- `#cap.ntf #plate` beat `body.bar #plate`, so the notch would get a border
+  (both).
+- The `min-width` transition made `plateReset` undo itself (both).
+- An empty `.ln` would draw a blank pill, and an empty `#him` left a gap
+  (agy).
+- The three-line test used `scrollHeight`, which fails on purpose-clipped
+  lines and during the word animation (both).
+- The region test tried to reassign `const` bindings (both).
+- The `applyLook` range was off by two lines (agy).
