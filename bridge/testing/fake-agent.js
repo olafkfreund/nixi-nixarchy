@@ -66,6 +66,10 @@ new AgentSideConnection((conn) => ({
     // which runs before `ready` is emitted, so hanging it would fail the
     // session instead of exercising a later trust change.
     if (process.env.FAKE_AGENT_HANG === "mode" && ++modeCalls > 1) await new Promise(() => {});
+    // FAKE_AGENT_SLOW_MODE=<ms>: answer mode changes late (not the one at session start), so a newer
+    // settings change can arrive while one is still being applied (#146).
+    if (process.env.FAKE_AGENT_SLOW_MODE && ++modeCalls > 1)
+      await new Promise((r) => setTimeout(r, Number(process.env.FAKE_AGENT_SLOW_MODE)));
     return {};
   },
   async setSessionConfigOption(params) {
