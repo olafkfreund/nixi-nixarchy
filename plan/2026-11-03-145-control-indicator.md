@@ -195,3 +195,61 @@ python -m unittest discover -s tests
 
 Revert the squash commit, bump `nixi-companion` in `~/.config/nixos`, and
 deploy. ai-mirror and its state are untouched, and nothing is migrated.
+
+## Review of this draft (Codex and agy, both obtained)
+
+Confirmed in the code. These override the steps above where they differ.
+
+1. **Waking uses `restore(0)`, not `restore('mirror')`** (both). `restore`
+   adds `hold` to a timestamp, so a string makes `idleHoldUntil` `NaN`
+   and breaks idle for good (`index.html:3183`).
+   - "Wake on entering `pending` or `agent`" is `restore(0)`, plus a guard
+     in `idleCheck()` and `idleActive()` while `MIR.owner` is `pending` or
+     `agent`.
+   - The spec's `restore('mirror')` meant "wake him". This is its correct
+     form.
+   - Step 4 tests that idle timing still works after `off`.
+2. **The watcher is never paused while hidden** (Codex). It ticks every 5 s
+   while hidden or asleep, because control can change while he's hidden.
+   This replaces step 1's "paused while asleep as `Ambient.loop` is".
+3. **`worried` needs an `AURA` entry** as well as a `MOODS` one (agy).
+   `frame()` reads `AURA[m].spd` (`:1450`, `:1555`).
+4. **The exact strings and their triggers** (both):
+   - **`pending` starts:** the caption "An agent is asking to control your
+     desktop — answer in ai-mirror's dialog."
+   - **Click succeeds:** "Control is back with you.", spoken if voice is
+     on.
+   - **Failure:** the error caption "Couldn't take control back — press
+     Super+Shift+Esc."
+   - **The calm bar:** "An agent controls your desktop", with the button
+     "Take control back".
+   - **`watching`:** silent, even with voice on. Its tooltip and
+     `aria-label` read "ai-mirror read your screen recently", never "is
+     watching".
+   - Step 4 checks each string.
+5. **The menu** (both): add the item to `MENU` (`:2571`), where the buttons
+   are built, and to the click dispatcher (`:2590`), mapped to the
+   revoke.
+   - `layoutMenu()` (`:2579`) lays out only the visible `.mb` buttons,
+     hidden ones and `.nx` excluded.
+   - It recomputes the arc in both the orb and notch layouts, and updates
+     `MENU_XY`.
+6. **The tip** (agy): `agentMark()` still records `AM`. `frame()`'s
+   `AMX.mk` opacity and `renderCue()` hide the mark and `#cue` while a
+   mirror mark shows, so `AM` comes back when the mirror goes to `off`.
+7. **CSS hiding** (agy):
+   - the new mark group is added to the selectors that hide `#agentMark`
+     in bar, calm, hover and goohide modes (`:34`, `:77`, `:97`, `:447`);
+   - those modes use their own signals instead (the hover ring, the calm
+     bar, the notch glow);
+   - the calm bar is placed at the top of whichever of `#set`, `#panel` or
+     `#appr` is open (`calmCheck()`, `:3116`).
+8. **More server tests** (both):
+   - a failed `status` *and* an unreadable file keep the last confirmed
+     state;
+   - the CLI is re-checked every 60 s;
+   - the `watching` boundary at exactly 10 s;
+   - an expired `pending` becomes `off`;
+   - an unknown `owner` becomes `None`, so there's never a false red mark.
+9. **The tests path:** `snow-145` is the worktree created for this issue
+   from `main` after #157 merges.
