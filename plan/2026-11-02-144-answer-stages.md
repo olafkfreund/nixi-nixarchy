@@ -582,6 +582,39 @@ Decisions copied from spec Amendment 1:
   - **"Opened ✓" is one helper.** `stageOpened` is shared by Open in Google
     Maps, Play and Search in browser.
 
+- **Slice 3, steps 13–14** (2026-11-03, nixoarchy-snowflake
+  `feat/144-sky-desk`, by the Sonnet coder).
+  - **Weather source:** "Ambient's cached weather" is now #157's
+    `Ambient.reading()` (Open-Meteo for the current place, or the omarchy
+    fallback, both with a 2 h expiry).
+  - **Day or night** comes from `SIT.day` (the forecast's day/night), not
+    `SIT.night`.
+  - **No forecast is shown:** neither source returns one, so the card
+    gives the source and the reading time instead.
+  - **"partly"** reads "partly cloudy".
+  - **Open session** attaches by `pane_id` through `attach_argv` (what
+    `session_show` uses), so two sessions with the same title don't make it
+    ask "which one?".
+  - **The calendar** looks 2 days ahead, up to 4 events. Birthday events
+    are left out, as before (their titles aren't kept).
+  - **The pocket-watch gesture** stays with slice 4.
+  - **Review fixes** (Opus, Codex, agy), by the coder:
+    - meetings stay while they run (`end > now`);
+    - local DST via `astimezone()`;
+    - one bad event is skipped, and a naive `dateTime` is read as local;
+    - the welcome names today only;
+    - Join accepts only a video entry point or `hangoutLink` on Meet, Zoom,
+      Teams or Webex hosts, over https, with no user-info;
+    - the weather card uses `Ambient.reading(cached=True)`, so no
+      subprocess runs;
+    - empty states: weather off or no reading; calendar off, unread or
+      empty;
+    - no sun for an unknown sky;
+    - failed services appear in the text fallback;
+    - "open it" works on a sessions card (one session opens, several get
+      "which one?").
+    - An all-day event's `end.date` is exclusive, as Google defines it.
+
 ## Tests
 
 | Check | Expected |
