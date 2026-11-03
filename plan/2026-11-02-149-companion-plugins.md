@@ -342,3 +342,16 @@ slice's diff, then Codex and agy.
 - **Full:** revert that slice's merge in nixoarchy-snowflake (and the module
   PR in nixi-nixarchy), bump the inputs in `nixos_config`, deploy p620 the
   usual way, and restart Nixi.
+
+## Deviations
+
+- **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
+  - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
+    parent's index, so `<g>` can nest. Node 0 is the root `svg`. It carries
+    the `viewBox`, and the page doesn't create an element for it.
+  - **Anchor boxes,** in the page's units: head `[-30,-112,60,54]`, left
+    `[-98,-34,40,40]`, right `[58,-34,40,40]`, base `[-36,68,72,26]`.
+  - **The skin is stored as `plug:<id>`.** The id is used only as a data
+    attribute, never as a DOM id.
+  - **`plugins/examples/party-hat-plus/` moved forward from A6,** because
+    the fit test needs it.
