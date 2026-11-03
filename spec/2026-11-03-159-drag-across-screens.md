@@ -177,3 +177,67 @@ suggested:
 ## Open questions
 
 None. The intent's three were approved as suggested.
+
+## Fixes after the Codex and agy review
+
+These override the design above where they differ. All were confirmed in
+the code.
+
+1. **`_load_pos` runs before `self.hypr` exists** (`:350` vs `:400`)
+   (both). Create `self.hypr = Hypr()` before the layer and position setup,
+   so a connector name can be resolved at start.
+2. **Release order and the full surface** (both):
+   - on release, `_rewide()` first, extended to cards (`want_xw` and
+     `want_h`, not only the panel or code sheet);
+   - then clamp the surface with its real size, `cur_w` and `cur_h`,
+     allowing for `top_shift`;
+   - then save. `_place`'s clamp uses `cur_h`, not `H`.
+3. **Docking in X11 mode** (both): the monitor switch in `_dock_if_edge`
+   is layer-mode only. It converts the margins to the new monitor
+   (`mx + g_old.x - g_new.x`, and the same for y) before `set_bar(edge)`,
+   so `bar_home` and the glide start are right. X11 keeps its window move.
+4. **The probe tests the chosen edge itself, not 48 px out** (Codex: a
+   narrow monitor could be overshot). Use a point 1 px across that edge,
+   at the cursor's coordinate along it.
+   - **Corners** (agy): consider every edge within 40 px, nearest first,
+     and dock on the nearest **outer** one. A shared edge never blocks an
+     outer edge in the same corner.
+5. **A stale name** (both): when no name can be found, `_save_pos` removes
+   `name`. `_load_pos` reads `name` only when Hyprland is available.
+6. **Follow-focus is broken today** (both). `_follow(self, name)` (`:739`)
+   is shadowed by hover's `_follow(self)` (`:1173`), so `_watch_focus`'s
+   `idle_add(self._follow, name)` raises `TypeError`.
+   - Rename the follow-focus handler to `_follow_focus`.
+   - Ignore `focusedmon` events, without arming the 300 ms timer, while
+     `dragging`, `pmoving` or `dpos` is set, and for 600 ms after a drag
+     ends. Crossing a seam emits `focusedmon`.
+   - `aside_on` checks `dpos` too.
+7. **Tests without GTK** (both): the pure logic moves to a new module,
+   `app/screens.py`, with no `gi` import:
+   - `mon_strict(geoms, x, y)`;
+   - `dock_edge(geoms, cur, cursor) → edge | None`;
+   - `drag_margins(geoms, cursor, off) → (i, x, y)`;
+   - `pick_monitor(saved, names, n)`;
+   - `outer_clamp(...)` for `drag_by`.
+   - `window.py` calls these, and `tests/test_drag_screens.py` imports
+     only `screens.py`.
+8. **`drag_by` docking** (agy): if the window is unclamped at outer edges,
+   the pointer hits the bezel first, and `over` never grows. So clamp
+   **only at outer edges**:
+   - where no monitor lies beyond at the ball's coordinate, clamp as today,
+     and `over` collects as today, so docking works unchanged;
+   - shared edges are left unclamped, and he crosses.
+9. **A notch pull's grab point** (agy): `set_bar(None, to=…)` clamps
+   `to`, so an offset taken from the clamped spot would be wrong. When a
+   drag starts by pulling the notch:
+   - the loop's grab offset is the ball (`BALL`, plus `wide_shift`), so the
+     ball stays under the cursor;
+   - `set_bar` chooses the monitor from `to + BALL`, the cursor.
+
+Tests added for these:
+- a corner where a shared edge meets an outer edge → dock on the outer
+  one;
+- a narrow middle monitor → no false dock;
+- a stale name removed on save;
+- `drag_by` docking at an outer edge, and crossing a shared one;
+- `focusedmon` during, and just after, a drag → no move.
