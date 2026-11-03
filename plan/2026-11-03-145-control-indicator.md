@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 145
 spec: spec/2026-11-03-145-control-indicator.md
 coders:
