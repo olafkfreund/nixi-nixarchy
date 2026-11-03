@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 155
 intent: intent/2026-11-03-155-readable-captions.md
 ---
