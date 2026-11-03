@@ -638,6 +638,19 @@ Decisions copied from spec Amendment 1:
     is click-only, as specified).
   - **Not done:** the live checks on p620, and a real signed-out `gh`
     run (covered by a fake-runner test).
+  - **Review fixes** (Opus, Codex, agy), by the coder:
+    - every source outcome is cached for 5 min (ok, off, failed with its
+      stale data), so a failure is retried after 5 min;
+    - "what's next?" needs only the calendar entry;
+    - the enabled calendar ids are part of the cache key;
+    - birthdays are dropped through one shared `stages.BIRTHDAY` rule;
+    - timed events get their day from the local date;
+    - a `gh auth status` timeout is a failure, not "off";
+    - spoken hours are words;
+    - "now" shows once;
+    - Google's `www.google.com/calendar/…` event links are allowed;
+    - `DAY["snap"]` is set only when the stage shows;
+    - one cold "what's next?" fetch runs at a time.
 
 ## Tests
 
