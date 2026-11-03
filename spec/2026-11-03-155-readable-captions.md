@@ -117,6 +117,22 @@ All changes are in the companion page, `app/static/index.html`
 - **The "answering · 0:09" chip** is unchanged (open question 2 in the
   intent, the suggested answer).
 
+## Preview
+
+![Before (left) and after (right): an answer with "you said", and a notification, over a busy terminal](2026-11-03-155-readable-captions-preview.png)
+
+A prototype made by injecting the CSS into headless Chromium with the GPU off,
+over a screenshot of a terminal on p620. Left is today, right is the
+proposal.
+
+Two things the implementation must get right, which the prototype doesn't
+yet:
+
+- **When both lines show,** the two backings share one width, the wider of
+  the two, so the shape is one clean block.
+- **A small empty pill showed above the notification card.** An empty
+  element must never draw a backing.
+
 ## Alternatives rejected
 
 - **One big plate the size of `#cap`.** That would be a 100 px dark box even
