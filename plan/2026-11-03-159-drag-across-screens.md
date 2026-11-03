@@ -201,3 +201,18 @@ here; they override the steps above where they differ.
   before the first `self._load_pos()` call.
 - **A trap:** `_hmons()` returns triples `(name, index, focused)`.
   `pick_monitor` takes pairs, so convert them in step 3.
+
+## Deviations
+
+- **The ball grab offset** includes `top_shift`, as
+  `(BALL[0]+wide_shift, BALL[1]+top_shift)`. The ball sits at
+  `my+top_shift+BALL[1]` (`_spot()`). The coder did this, and the Opus
+  review confirmed it's correct.
+- **`drag_by`** builds its wanted spot from the window's current spot plus
+  the page's delta, never as a running sum (Codex review). The page
+  measures from its own grab point.
+- **After the Opus review:**
+  - the release clamp also runs while docked (a panel moved while docked);
+  - `drag_end` ignores a stray `dragend` when no drag is running;
+  - `_load_pos` falls back to the saved index when Hyprland's monitor list
+    is empty.
