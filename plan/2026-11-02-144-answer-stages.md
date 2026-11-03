@@ -569,6 +569,19 @@ Decisions copied from spec Amendment 1:
     without asking (YOLO)".
   - The exact check is guaranteed only where a card is shown (Mechanic).
 
+- **Slice 2, steps 10-12** (2026-11-03, nixoarchy-snowflake `feat/144-stages-slice2`).
+  - **The search runs after the answer.** The video search (yt-dlp,
+    `--ignore-config`, 8 s) runs in a thread after the turn's `result`. The
+    cinema arrives on the bus when the search is done, and a stale result is
+    dropped if another stage has been shown since.
+  - **Posters are built from the video id.** They come from the validated
+    11-character id (`i.ytimg.com/vi/<id>/mqdefault.jpg`), not from yt-dlp's
+    thumbnail URL. A poster that fails to load keeps a dark 16:9 ▶ frame.
+  - **The hat (`#hat`) and popcorn (`#pop`) are separate elements**, not part
+    of the skin system. They were placed by eye in a headless preview.
+  - **"Opened ✓" is one helper.** `stageOpened` is shared by Open in Google
+    Maps, Play and Search in browser.
+
 ## Tests
 
 | Check | Expected |
