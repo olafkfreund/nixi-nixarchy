@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 159
 spec: spec/2026-11-03-159-drag-across-screens.md
 coders:
