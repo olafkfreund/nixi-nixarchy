@@ -317,3 +317,17 @@ confirmed in the code and are fixed above:
   lines and during the word animation (both).
 - The region test tried to reassign `const` bindings (both).
 - The `applyLook` range was off by two lines (agy).
+
+## Deviations
+
+- **Step 4, the region check:** the region always holds his body's own rect
+  (`[-16,0,368,320]`), which is wider than `#cap`. The test requires
+  instead that every rect overlapping the plate's band is narrower than
+  `#cap`, and that one rect covers the plate.
+- **Step 4, the three-line check:** words overlapping `#him` by 3 px or
+  less are ignored. The oldest, clipped line still overlaps by about
+  0.25 px.
+- **Step 4, the streaming check:** it starts from the first `minWidth`
+  that exists. The first prefix has no finished word yet.
+- **Step 4, the nudge case:** `nudgeDrain` is reached directly, by setting
+  `nudgeQ` and `notifyAt=0`.
