@@ -39,14 +39,20 @@ the four-product review (Codex and agy, 2026-11-02), issue #145.
      dialog, curious;
    - an agent holds control → a clear red mark on him, and a worried face,
      the whole time;
-   - an agent is only watching → a "looking" face;
+   - ai-mirror was read recently (the `watching` marker is fresh) → a
+     "looking" face. The marker shows recent reads, including ones that
+     need no grant, not proof that an agent is watching right now, and
+     his wording says that (Codex);
    - control is off → normal.
 2. **You can take control back from him,** in any of these ways:
    - say it ("take control back", "stop the agent");
    - click the red mark;
    - use a Settings or menu item.
-   Each runs `ai-mirror control off`. He then confirms it visibly at once
-   (the mark goes, relief) and says it aloud if voice is on.
+   Each runs `ai-mirror control off`.
+   - **When it succeeds** (the command exits 0 and the state reads `off`),
+     he confirms it at once: the mark goes, he looks relieved, and he says
+     it aloud if voice is on.
+   - **When it fails,** he shows it, and points to SUPER+SHIFT+ESC.
 3. **The physical kill switch stays the real one.** SUPER+SHIFT+ESC is
    unchanged, and Nixi says so where it matters.
 4. **Without ai-mirror, nothing changes:** with no state file, there's no
@@ -76,9 +82,21 @@ the four-product review (Codex and agy, 2026-11-02), issue #145.
   (Guide, Mechanic or YOLO). Revoking is never gated.
 - **Cheap to watch:** read a small local file (an inotify watch or a
   1–2 s poll), with no subprocess per tick.
-- **A stale state** (ai-mirror crashed, file left behind) must not leave a
-  red mark forever. How to tell is for the spec, for example by checking
-  the `since` and `generation` values.
+- **Stale states must not show** (Codex):
+  - **An expired request:** ai-mirror writes an expiry into `request`, and
+    only turns an expired `pending` into `off` when its own `read_state()`
+    runs (`control.py:281-296`). Nixi must apply the same expiry, so the
+    waiting look ends at the deadline.
+  - **A leftover `agent`:** `since` and `generation` aren't heartbeats, so
+    they can't show that a grant is stale. The spec must find a liveness
+    signal that never hides a live grant: for example, asking
+    `ai-mirror status` once when the state changes, not on every tick.
+  - **ai-mirror not installed:** a `state.json` left behind with no
+    `ai-mirror` CLI on `PATH` counts as not installed.
+- **The same user only** (Codex). ai-mirror keeps its state under the
+  caller's `$XDG_RUNTIME_DIR/ai-mirror` (folder `0700`, file `0600`). Nixi
+  reads it and runs the CLI as the desktop user, for that user's session
+  only.
 - **GPU safety** for any new mark or animation: flat colours, no filters,
   and the usual GPU-off previews and live `journalctl -k` check.
 
@@ -92,3 +110,22 @@ the four-product review (Codex and agy, 2026-11-02), issue #145.
    the companion can never grant. Nixi only shows that one is waiting.
 3. **The watching look:** show it only while `watching` is fresh, say
    within the last 10 s? My suggestion: yes, 10 s.
+
+## Review (Codex; agy not obtained)
+
+Codex checked these claims against ai-mirror 3.1.0's `control.py` and
+`cli.py`:
+- `owner` is `off`, `pending` or `agent`;
+- `watching` holds a Unix timestamp;
+- `control off` revokes, bumps the generation and releases held input.
+
+Fixed in this draft:
+- an expired `pending` request;
+- `since` and `generation` aren't proof of liveness;
+- confirmation only after the revoke succeeds;
+- the same-user boundary;
+- a leftover state file when ai-mirror is gone;
+- what `watching` really means.
+
+agy's run returned only its opening sentence, so its review was not
+obtained.
