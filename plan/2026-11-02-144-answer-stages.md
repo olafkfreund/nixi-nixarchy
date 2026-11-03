@@ -615,6 +615,30 @@ Decisions copied from spec Amendment 1:
       "which one?").
     - An all-day event's `end.date` is exclusive, as Google defines it.
 
+- **Slice 4, steps 16–18** (2026-11-03, nixoarchy-snowflake
+  `feat/144-day-desk`, by the Sonnet coder).
+  - **URL check:** `item_url_ok` lives in `stages.py`, not `day.py`, to
+    avoid a circular import. Items open only on github.com,
+    calendar.google.com and meet.google.com. The calendar's `htmlLink` is
+    used only on an allowed host; otherwise the link is
+    calendar.google.com.
+  - **"What's next?":** it answers only from a cache under 5 minutes old.
+    If the cache is cold, it says "Let me look at your day." and fetches
+    in a thread, then shows the desk. The request never blocks.
+  - **The calendar row** is `off` while the `ambient_calendar` setting is
+    off, as in slice 3. Tasks and GitHub don't depend on it.
+  - **A failure with nothing cached** reads "couldn't refresh · HH:MM" with
+    empty data.
+  - **GitHub row order:** review requests come before assigned issues.
+  - **Ongoing events** show "now".
+  - **Layout:** the Next card's buttons sit beside the time, so a normal day
+    fits without scrolling (tested). A full day and the detail view scroll
+    inside the frame.
+  - **Voice:** "open it" and numbered phrases are off on the day desk (v1
+    is click-only, as specified).
+  - **Not done:** the live checks on p620, and a real signed-out `gh`
+    run (covered by a fake-runner test).
+
 ## Tests
 
 | Check | Expected |
