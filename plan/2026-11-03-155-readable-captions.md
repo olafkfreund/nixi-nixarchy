@@ -331,3 +331,9 @@ confirmed in the code and are fixed above:
   that exists. The first prefix has no finished word yet.
 - **Step 4, the nudge case:** `nudgeDrain` is reached directly, by setting
   `nudgeQ` and `notifyAt=0`.
+- **Review fixes (step 5):**
+  - an empty `#you` is also hidden in full-text mode (Opus);
+  - `#him` gets `max-width:100%;min-width:0;overflow-wrap:anywhere`, so a
+    long URL wraps inside the plate. Without `width:100%` it overflowed
+    (Codex's GitHub review on PR #24).
+  - Both have test cases.
