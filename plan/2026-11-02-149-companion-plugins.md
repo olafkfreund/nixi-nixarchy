@@ -364,3 +364,20 @@ slice's diff, then Codex and agy.
     `checks.<system>.broken-manifest-fails` (`testers.testBuildFailure`).
 - **A4.** A refused toggle returns HTTP 200 with an `error` field, not a
   4xx.
+- **A7 review** (Opus, Codex and agy).
+  - **Props:**
+    - they're drawn in a nested `<svg x y width height viewBox>` at the
+      anchor box, which clips them;
+    - the `viewBox` is sent as 4 numbers, each side at least 1;
+    - each `scale()` is between 0.01 and 10, and the product along any path
+      is at most 10;
+    - every attribute is at most 64 characters (`d` and `points` at most
+      4,000) before any regex runs.
+  - **Module plugin entries** are packages, or path literals built through
+    `mkCompanionPlugin`. A raw string is refused. `package.nix` asserts
+    `lib.isStorePath`.
+  - **Symlinked plugin folders** are skipped only in the user folder: the
+    package folder is made of links to store paths. A symlink inside any
+    plugin marks it broken.
+  - **A plugin that is on stays switchable** even when it's broken.
+  - **On a duplicate id, a Nix plugin wins** over a Folder one.
