@@ -175,3 +175,29 @@ python -m unittest discover -s tests
 
 Revert the squash commit, bump `nixi-companion` in `~/.config/nixos`, and
 deploy. An extra `name` key in `pos.json` is ignored by older builds.
+
+## Review of this draft
+
+Codex reviewed it; agy's run returned only its opening sentence, so its
+review was not obtained. Codex's findings were confirmed and are fixed
+here; they override the steps above where they differ.
+
+- **More pure, tested logic** (the window paths can't be imported in
+  tests). Step 1 also puts these in `screens.py`, with tests:
+  - `pos_dict(p, mon, x, y, name, bar) -> dict`: writes `name`, or
+    removes it when `name` is `None`. `_save_pos` uses it, which covers
+    the stale-name case.
+  - `focus_blocked(dragging, pmoving, dpos, now, drag_end_t) -> bool`:
+    `_follow_focus` and the `focusedmon` handler use it, which covers
+    "no move during, and 600 ms after, a drag".
+  - The release order (rewide → clamp → save) and the monitor switch in
+    `_drag_loop` stay in `window.py`. They're checked by the Opus review
+    and the live drag, not by unit tests.
+- **`outer_clamp` returns `(gx, gy, over_x, over_y)`,** with signed
+  overflow per axis, as `drag_end` needs. An edge is outer if no monitor
+  lies beyond it **at the ball's coordinate along that edge**.
+- **The start-up order gets a check:** a test that reads
+  `app/window.py`'s source and asserts that `self.hypr = Hypr()` comes
+  before the first `self._load_pos()` call.
+- **A trap:** `_hmons()` returns triples `(name, index, focused)`.
+  `pick_monitor` takes pairs, so convert them in step 3.
