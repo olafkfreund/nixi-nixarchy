@@ -191,3 +191,82 @@ intent's open questions were approved as suggested:
 ## Open questions
 
 None. The intent's three were approved as suggested.
+
+## Fixes after the Codex and agy review
+
+These override the design above where they differ. All were checked
+against ai-mirror 3.1.0 (`control.py`, `cli.py`, `api.py`) and the
+companion code.
+
+1. **Errors go to stdout** (both). ai-mirror prints `{"error": {...}}` to
+   **stdout** and exits 1 (`cli.py:177-181`).
+   - **The revoke** parses `control off`'s own stdout: success is exit 0
+     and JSON `owner == "off"`. There's no second `status` call.
+   - **On failure,** the message comes from `error.message`, with the
+     last stderr line as a fallback.
+   - **The fake CLI in the tests** reproduces both.
+2. **`status` can fail after it has already revoked** (agy). It calls
+   `read_state()` (which may write `off`), then `host.monitors()`, which
+   fails when Hyprland is unreachable. When `status` fails or times out:
+   - read `state.json` directly and apply the expiry rule;
+   - an `agent` read straight from the file stays `agent`, so a live grant
+     is never hidden (Codex);
+   - only an unreadable file *and* a failed `status` keep the last
+     confirmed state.
+3. **SSE reconnects** (both). The server emits `mirror` on every new
+   `/api/events` subscription, next to `hello` and `situation`
+   (`server.py:5124-5128`).
+4. **Never hidden while control is held** (both):
+   - **Hover:** the red ring is drawn around him instead of on a tip;
+     there are no tips to use there.
+   - **Calm** (a panel or Settings is open): a red bar across the top of
+     the open panel: "An agent controls your desktop", with a "Take control
+     back" button.
+   - **Notch:** a red CSS `box-shadow` or border on `#barPill` (an HTML
+     element), not an SVG filter.
+   - **Peek and doze:** `idleActive()` counts `pending` and `agent` as
+     active, and entering either calls `restore('mirror')`, so he wakes,
+     full size and visible (agy).
+5. **The mood** (agy): `t_unsure` counts as talking (`isTalk`), so it
+   isn't used.
+   - A new non-talking mood, `worried` (raised inner brows, tighter lids),
+     is added to `MOODS`.
+   - While `agent` holds, it replaces both the idle and the `sleepy`
+     moods.
+6. **"Installed"** is the CLI on `PATH` (agy). `state.json` may not exist
+   before the first request, and a missing file reads as `off`. `watching`
+   works without it.
+7. **Change detection** uses `(st_mtime_ns, st_size, st_ino)`, because
+   ai-mirror writes with `os.replace` (agy).
+8. **Voice** (agy): `quick.handle` returns `{"mirror": "off"}` only. The
+   `/api/quick` handler runs the revoke and then sets `say`, `mood` and
+   `sfx` from the **result**: `happy`/`ok`, or `sorry`/`error` on failure.
+   - While a turn is `busy`, the phrase still works in one breath ("hey
+     Nixi, take control back"), as other quick commands do. The mark and
+     the menu item always work.
+9. **Settings text** goes in the **More** tab, outside `.nx` (which is
+   hidden in bridged mode). There's no About tab.
+10. **The tip** (agy): `#cue` and `#agentMark` share the upper-right tip.
+    - While a mirror mark shows, `renderCue()` and `agentMark()` yield.
+    - When the mirror returns to `off`, a still-valid `AM` re-renders.
+    - The menu's extra item is added by filtering the menu list and
+      recomputing its positions in `layoutMenu()`.
+11. **`held_by` can be `null`** for a grant made from the CLI. It isn't used
+    for anything.
+12. **Tests added** (both):
+    - the token is rejected without the header;
+    - revoke works at all three trust levels;
+    - a failure on stdout, and `status` failing after a revoke;
+    - `watching` with no `state.json`;
+    - a mirror event on SSE subscribe;
+    - `/api/quick` mood and sfx on failure;
+    - `idleActive` during `agent`;
+    - the `worried` mood, and no `sleepy` while held;
+    - the hover ring, the calm bar and the notch signal;
+    - tip precedence with `AM` and `#cue`;
+    - the success fade, and the mark staying after a failure.
+
+### Review
+
+Both reviews were obtained (Codex and agy). Every finding above was
+confirmed.
