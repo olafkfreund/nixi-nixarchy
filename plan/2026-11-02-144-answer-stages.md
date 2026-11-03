@@ -598,6 +598,22 @@ Decisions copied from spec Amendment 1:
   - **The calendar** looks 2 days ahead, up to 4 events. Birthday events
     are left out, as before (their titles aren't kept).
   - **The pocket-watch gesture** stays with slice 4.
+  - **Review fixes** (Opus, Codex, agy), by the coder:
+    - meetings stay while they run (`end > now`);
+    - local DST via `astimezone()`;
+    - one bad event is skipped, and a naive `dateTime` is read as local;
+    - the welcome names today only;
+    - Join accepts only a video entry point or `hangoutLink` on Meet, Zoom,
+      Teams or Webex hosts, over https, with no user-info;
+    - the weather card uses `Ambient.reading(cached=True)`, so no
+      subprocess runs;
+    - empty states: weather off or no reading; calendar off, unread or
+      empty;
+    - no sun for an unknown sky;
+    - failed services appear in the text fallback;
+    - "open it" works on a sessions card (one session opens, several get
+      "which one?").
+    - An all-day event's `end.date` is exclusive, as Google defines it.
 
 ## Tests
 
