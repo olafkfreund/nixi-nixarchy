@@ -253,3 +253,25 @@ Confirmed in the code. These override the steps above where they differ.
    - an unknown `owner` becomes `None`, so there's never a false red mark.
 9. **The tests path:** `snow-145` is the worktree created for this issue
    from `main` after #157 merges.
+
+## Deviations
+
+- **Step 2** was done by the coder after agy's run produced nothing in
+  38 min. The lead added `tests/test_mirror_http.py`: a real server with a
+  fake `ai-mirror`, covering the token, SSE on subscribe and the voice
+  replies, which the unit tests couldn't reach.
+- **The failure mood is `sad`, not `sorry`.** The page has no `sorry`
+  mood, `MOODS[m]` crashes `frame()` on an unknown key, and `t_sorry` would
+  count as talking.
+- **Voice "take control back" always runs the revoke** when `ai-mirror` is
+  installed (Codex review): the cached owner can lag a grant by 1–5 s.
+  Without `ai-mirror`, it says the "not through ai-mirror" line.
+- **Smaller fixes from the review:**
+  - the red bar's position is converted when the page is scaled
+    (`fitK < 1`);
+  - a revoke keeps the `watching` flag;
+  - when both `status` and the file fail, the next try is in 5 s, not 30
+    (agy).
+- **Page test limits:** hover and calm are checked through body classes,
+  and `/api/state` is stubbed in the page test, because its own polling
+  would otherwise reset the mirror state.
