@@ -263,15 +263,26 @@ Confirmed in the code. These override the steps above where they differ.
 - **The failure mood is `sad`, not `sorry`.** The page has no `sorry`
   mood, `MOODS[m]` crashes `frame()` on an unknown key, and `t_sorry` would
   count as talking.
-- **Voice "take control back" always runs the revoke** when `ai-mirror` is
-  installed (Codex review): the cached owner can lag a grant by 1–5 s.
-  Without `ai-mirror`, it says the "not through ai-mirror" line.
+- **Voice "take control back" asks ai-mirror live** (`ai-mirror status`,
+  in the `/api/quick` handler) instead of trusting the cache, which can lag
+  a grant by 1–5 s (Codex review).
+  - It revokes only when something holds control, so there's no needless
+    audit entry (Opus review).
+  - Without `ai-mirror`, or when the live owner is `off`, it says the "not
+    through ai-mirror" line.
+- **A revoke counter** stops a `status` that started before a revoke from
+  bringing the red mark back (Opus review).
+- **`watching`** allows up to 1 s ahead, because ai-mirror rounds the
+  timestamp to the second.
+- **Known limit:** the pending and watching marks don't take the pointer,
+  so their tooltips don't show on hover. Their `aria-label`s are set.
 - **Smaller fixes from the review:**
   - the red bar's position is converted when the page is scaled
     (`fitK < 1`);
   - a revoke keeps the `watching` flag;
   - when both `status` and the file fail, the next try is in 5 s, not 30
-    (agy).
+    (agy; fixed again after the Opus review, which found it retried every
+    tick).
 - **Page test limits:** hover and calm are checked through body classes,
   and `/api/state` is stubbed in the page test, because its own polling
   would otherwise reset the mirror state.
