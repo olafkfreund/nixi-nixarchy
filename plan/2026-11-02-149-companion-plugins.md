@@ -456,6 +456,21 @@ slice's diff, then Codex and agy.
       hangs the scan.
     - **Hard links** (`st_nlink > 1`) are refused.
     - **The sandbox PATH** keeps only `/nix/store` entries.
+  - **Final security probe** (Opus): the verdict was **safe to ship** once
+    these were done:
+    - **The card** says "It can use the internet and your local networks
+      (not this computer's own services)." Your router and tailnet peers
+      are reachable, so the user is told.
+    - **The block list** comes from the kernel's local route tables
+      (`ip route show table local type local`, IPv4 and IPv6). That
+      covers ranges and scope-host addresses, minus loopback.
+    - **Tailscale:** `100.100.100.100` and `fd7a:115c:a1e0::53` (served
+      by tailscaled itself) are blocked too.
+    - **Accepted:** an address that appears mid-run is open for at most
+      that run (8 s); every run re-reads the list.
+    - **Tests:** the address test fails with "connected to N" when the
+      routes are missing (control run checked), and the route-removal test
+      targets a blocking route.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
