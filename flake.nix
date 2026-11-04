@@ -116,7 +116,7 @@
                     home = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; default = { }; };
                     programs = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
                     systemd = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
-                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.attrsOf lib.types.raw); default = { }; };  # attrsOf, as Home Manager: a mkIf false entry is absent
                   };
                   config._module.args.pkgs = pkgs;
                   config.services.nixi = {
@@ -130,16 +130,27 @@
               ];
             }).config;
             peers = [
-              { name = "p620"; address = "p620.lan"; port = 9188; }
-              { name = "razer"; address = "razer.lan"; port = 9200; }
+              { name = "p620"; address = "100.69.100.115"; }          # port left to its default
+              { name = "razer"; address = "100.90.72.124"; port = 9200; }
             ];
             ok = eval { inherit peers; peerTokenFile = "/run/agenix/tok"; };
             bad = eval { inherit peers; };
+            empty = eval { };                                       # the default: no peers
+            inStore = eval { inherit peers; peerTokenFile = "/nix/store/42psygl9aaaaaaaaaaaaaaaaaaaaaaaa-tok"; };
+            json = ok.xdg.configFile."nixi-companion/peers.json".text;
           in
-          assert builtins.fromJSON ok.xdg.configFile."nixi-companion/peers.json".text
-            == { inherit peers; token_file = "/run/agenix/tok"; };
+          assert builtins.fromJSON json == {
+            peers = [ ((builtins.head peers) // { port = 9188; }) (builtins.elemAt peers 1) ];
+            token_file = "/run/agenix/tok";
+          };
           assert builtins.all (a: a.assertion) ok.assertions;
-          assert builtins.any (a: !a.assertion) bad.assertions;  # peers without a token file must fail
+          # peers without a token file must fail, and for that reason
+          assert builtins.any (a: !a.assertion && pkgs.lib.hasInfix "peerTokenFile" a.message) bad.assertions;
+          # no peers (every user's default): no peer assertion, no peers.json
+          assert builtins.all (a: a.assertion) empty.assertions;
+          assert !(empty.xdg.configFile ? "nixi-companion/peers.json");
+          # a token file in the store would be world-readable: refused by the type
+          assert !(builtins.tryEval (builtins.deepSeq inStore.xdg.configFile."nixi-companion/peers.json".text true)).success;
           pkgs.runCommand "nixi-hm-companion-peers" { } "touch $out";
 
       });

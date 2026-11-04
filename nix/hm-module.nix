@@ -149,7 +149,7 @@ in
       };
 
       peerTokenFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
+        type = lib.types.nullOr (lib.types.pathWith { inStore = false; absolute = true; });  # a store path is world-readable
         default = null;
         example = "/run/agenix/nixi-status-token";
         description = ''
