@@ -1,5 +1,5 @@
 ---
-status: approved
+status: draft
 issue: 176
 intent: intent/2026-11-04-176-voice-engines.md
 ---
@@ -244,3 +244,119 @@ The user approved this spec while the Codex and agy reviews were still
 running. Real findings from those reviews will be added as a "Revisions after
 review" section. Any that change the design are shown to the user before the
 plan.
+
+## Revisions after review (binding; these override the sections above where they differ)
+
+Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
+finding was checked against the code. These revisions change the design,
+so they are shown to the user before the plan.
+
+1. **Setup comes before the choice.** The ElevenLabs section is a block of its
+   own in Settings → Voice, always visible. It holds the key status, the on
+   switch with its notice and confirm, the voice list with Preview and
+   Choose, and the usage bar and cap. The ElevenLabs engine chip is enabled
+   only once it is on and a voice is chosen. Previews work as soon as it is
+   on, before ElevenLabs is the engine.
+2. **The key file follows agenix's symlink.** `/run/agenix/<name>` is a
+   symlink into `/run/agenix.d/<gen>/`. `_key()`:
+   - resolves the path with `os.path.realpath`;
+   - requires the result under `/run/agenix.d/`, `/run/secrets/` or
+     `$CREDENTIALS_DIRECTORY`, or equal to the configured path when that path
+     isn't a symlink;
+   - then opens it with `O_NOFOLLOW`: a regular file of at most 256 bytes,
+     owned by the user or root.
+
+   A test uses a symlinked layout like agenix's.
+3. **Both playback paths behave the same.** Native (`Speaker`, `/api/say`) and
+   page (`/api/tts` per sentence, used when `voice_native` is false) both go
+   through one function, `speak_sentence(text, gen)`. It does the engine
+   choice, the cap reservation, the cloud call, the fallback and the notes,
+   and returns a WAV or `None` with a reason.
+   - **Fallback:** a sentence that fails in the cloud is synthesised by
+     `tts_fallback` and returned as normal audio (not `spk_skip`), so the
+     mouth moves.
+   - **Off and switching:** the page path carries a reply id. When ElevenLabs
+     is turned off, the page drops queued and decoded clips whose reply id
+     belongs to a generation before the change. It gets the current
+     generation from the settings response and from a `tts_gen` bus event.
+4. **The cap is reserved, never exceeded.** Under the usage lock,
+   `used + reserved + len(text) ≤ cap` is checked, and `len(text)` is added to
+   `reserved` before the request is sent.
+   - **On success:** the reservation moves into `used`.
+   - **On a definite failure before sending** (connection refused, DNS):
+     released.
+   - **On a timeout or reset after sending:** counted as used. That is the
+     conservative choice, because ElevenLabs may have billed it.
+
+   Concurrent requests can't both pass. Previews never reserve.
+5. **Off and switching are race-free.**
+   - The engine and a generation number are captured **with each queue
+     item** when `say()` enqueues it.
+   - The maker (3623) checks the item's generation against the current one
+     immediately before sending, under the condition lock. A stale cloud
+     item is dropped without a request. A local item is kept and spoken
+     with the current engine.
+   - Turning ElevenLabs off, or changing `tts`, bumps the generation. It also
+     stops the current player process (`Speaker.stop()`'s existing path,
+     which ends `paplay` and releases the floor), then republishes
+     `spk_done` for the dropped item so the page clears its caption.
+   - A cloud request already in flight can't be aborted safely in `urllib`.
+     Its result is discarded at the generation check, and it is counted per
+     rule 4.
+   - Switching between local engines doesn't drop anything. Only items made
+     for the cloud are dropped.
+6. **The reply boundary.** `auth`, `cap` and `bad_voice` stick until the next
+   **turn**: a new `ask`, or `/api/say` with a new `reply` id. The speaker
+   keeps the id from the queue item.
+7. **The preview proxy is locked down.**
+   - Token-authenticated: the page fetches it with `X-Nixi-Token` through
+     `fetch()`, then plays a `blob:` URL, so `<audio>` never fetches by
+     itself.
+   - The host allowlist is exact, read from the voice list at fetch time:
+     `storage.googleapis.com` (ElevenLabs' preview bucket). Only `https`, port
+     443.
+   - **Redirects are refused:** a custom `HTTPRedirectHandler` raises, as the
+     news plugin's `SafeRedirect` does.
+   - It reads at most 1 MB + 1 byte, with a 5 s timeout, and the content
+     type must be `audio/mpeg` or `audio/wav`. Anything else is a 502 with a
+     short reason.
+8. **A first-sound budget that includes failure.** The cloud sentence timeout
+   is a 1.5 s connect and first byte, and 4 s in total. A failure then
+   reaches local synthesis at once, so first sound stays at about 2.5 s at
+   worst. It is measured live (verification) and logged as
+   `tts first-sound ms` in diagnostics.
+9. **Status mapping:**
+   - 401/403 → `auth`;
+   - 429 → `quota`, and retried at most once after `Retry-After` (≤ 2 s);
+   - 402 → `quota`;
+   - 404 or 422 on the voice → `bad_voice`;
+   - 5xx and timeouts → `network`;
+   - the cap → `cap`.
+10. **Cloud-provided text is rendered as text.** Voice names, descriptions,
+    accents and languages are built with `textContent`/`hx()`, never
+    `innerHTML`. The existing voice grid (3179) moves to the same builder. A
+    test uses a voice named `<img src=x onerror=alert(1)>`.
+11. **"Cloud voice" is visible everywhere it matters.** A small ☁ appears on
+    Nixi's caption plate while ElevenLabs speaks, and the hint line says
+    "Speaking with ElevenLabs (cloud)".
+12. **Local only, end to end.** `warm_tts()`, `stress_voice()` (including its
+    `Speaker.say()` loop) and the startup log never use the cloud. Under
+    `tts: elevenlabs` they use `tts_fallback`, and `auto` resolves the local
+    chain as today.
+13. **Explicit piper with `piper_voice` set** uses that file, as today. Robot
+    under explicit `piper` or `kokoro` is shown disabled, and `synth` raises
+    `NoVoice`. Under explicit `espeak`, only Robot (and an espeak voice for
+    each preset) is offered.
+
+Added tests:
+- the agenix symlink layout;
+- the redirect refused (302 to `http://127.0.0.1`);
+- the preview without the token → 403;
+- the page path: fallback, and off drops stale clips;
+- two concurrent requests at the cap → one refused;
+- a timeout counted;
+- off mid-sentence stops `paplay`, releases the floor and sends `spk_done`;
+- stale queue items never call `eleven.speak`;
+- `stress_voice`'s loop is local;
+- HTML in a voice name renders as text;
+- the 429 retry once.
