@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 190
 author: olafkfreund
 ---
@@ -131,37 +131,18 @@ store path as the deployed package:
   sandboxing) just to make tests run.
 - No new dependency for people running the app.
 
-## Open questions
+## Decisions
 
-1. **Where should the six tests run?**
-   - **A. A dev shell or one documented command** that puts `passt` and
-     `iproute2` on PATH. It is the smallest option and already known to work,
-     but someone has to remember to run it. **Recommended**, because there is
-     no CI to attach anything else to.
-   - **B. A NixOS VM test in the flake `checks`,** run by `nix flake check`.
-     It would have a real `/dev/net/tun`, but it's slower, needs KVM and isn't
-     proven. It still only runs when someone runs it.
-   - **C. Bring back GitHub Actions.** The only automatic option, but the
-     workflows were deleted on purpose. Whether a hosted runner allows bwrap
-     and pasta is unverified.
-2. **What should a run without pasta do?** Keep skipping (the plain command
-   stays easy, and the skip stays quiet), or fail when asked to run everything
-   (for example with an environment variable)? A alone doesn't meet the second
-   outcome without this. Recommended: keep the skip by default and add the
-   strict mode.
-3. **When is a pass required?** Only on demand, or before any change to the
-   sandbox is merged? With no CI, the second is a rule people and agents have
-   to follow. Recommended: required for any PR touching `app/plugins.py`,
+The user approved all the recommendations:
+
+1. **Where the six tests run:** option A, one documented command or dev shell
+   that puts `passt` and `iproute2` on PATH.
+2. **A run without pasta:** keeps skipping by default. A strict mode fails when
+   pasta is missing.
+3. **When a pass is required:** for any PR touching `app/plugins.py`,
    `tests/test_plugin_sandbox.py` or the wrapper's PATH.
-4. **Should the news test be made to prove refusal?** Today it would pass
-   with the check removed. Recommended: yes, it's a test whose name promises
-   more than it checks.
-5. **Should the other 31 tests in this file, and the rest of the suite, run in
-   a check too?** Nothing runs them automatically either. Whether they would
-   pass inside a Nix build is untested. Recommended: out of scope here, as its
-   own issue.
-6. **Should a check confirm the package's wrapper carries `passt` and
-   `iproute2`?** The tests don't cover that, because they use the test PATH.
-   It is a small addition and guards availability, not security.
-7. **Is the priority low?** Given the fail-closed findings, I'd treat it as
-   test hygiene and not as a security fix. Is that right?
+4. **The news test:** is made to prove refusal.
+5. **The rest of the suite:** gets its own issue.
+6. **A check that the wrapper carries `passt` and `iproute2`:** only if it stays
+   small.
+7. **Priority:** low. This is test hygiene, not a security fix.
