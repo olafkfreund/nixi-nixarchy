@@ -344,6 +344,33 @@ slice's diff, then Codex and agy.
   usual way, and restart Nixi.
 
 ## Deviations
+- **Slice B, steps B1–B4** (2026-11-04, nixoarchy-snowflake
+  `feat/149-stage-programs`, by the Sonnet coder).
+  - **Two sandbox additions so scripts can start:**
+    - `--ro-bind /usr/bin/env /usr/bin/env`, when it exists, for
+      `#!/usr/bin/env` scripts;
+    - the sandbox `PATH` is `/plugin:$PATH`, plus the server
+      interpreter's `/nix/store` directory.
+  - **`rss-headlines`** fetches with a 2 s timeout (the runner's default
+    kill is 3 s; there's no manifest timeout field).
+  - **Output caps** (64 KB stdout, 8 KB stderr) are enforced by reader
+    threads, not after `communicate()`.
+  - **The consent card** sits inline in Settings → Plugins, not over
+    Nixi.
+    - `needs_consent` carries `{id, name, sha256, what, runs, network,
+      reads}`.
+    - The plain enable route forces `consent:false`, so the page can't
+      skip the card.
+  - **Failures:** an agent-requested plugin failure shows as a one-line
+    facts notebook; a phrase-route failure is spoken.
+  - **Collisions:** the reply to "Which one?" goes to the agent like any
+    other message.
+  - **Loader:** argv entries that are absolute paths or contain `..` are
+    rejected, and phrases are normalised like `fast_path`.
+  - **`nix/plugin.nix`'s `--check`** copies `stages.py` next to
+    `plugins.py`, which imports it.
+  - The old "a stage plugin can't be switched on" route test is replaced
+    by the consent tests.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
