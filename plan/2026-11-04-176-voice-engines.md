@@ -303,6 +303,15 @@ Each step is one commit, made by the lead after checking. Fork tests run from
   concurrent requests settle the right counts. Also added: the key kinds
   `key` and `preview` for refusals.
 
+- **Step 2:**
+  - `state_info` fetches the ElevenLabs voice list only while it is on and a
+    key exists, with a 1.5 s deadline and a 60 s memory of failures, so a
+    network failure can't stall every state call.
+  - Between steps 2 and 3, `tts: elevenlabs` speaks nothing (`NoVoice`). It
+    is never deployed in that state.
+  - The "no `ELEVEN*` in the agent environments" test is a source check,
+    because nothing in the code sets such a variable.
+
 ## Revisions after review (binding; these override the steps above where they differ)
 
 Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
