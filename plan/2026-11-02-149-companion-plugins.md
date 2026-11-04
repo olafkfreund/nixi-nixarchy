@@ -435,6 +435,27 @@ slice's diff, then Codex and agy.
     - **Hashing streams** one file at a time in 1 MiB chunks, with a 64 MB
       folder cap. A file that changes while it's read is refused. The hash
       format is unchanged, so consent already given stays valid.
+  - **Third security review** (Opus probing the real sandbox):
+    - **Host addresses:** pasta forwards to any host-owned address, so a
+      network plugin reached services on the Tailscale, Docker and libvirt
+      addresses (ollama, ssh, NFS, the k8s API).
+      - Pasta's command is now a router step that adds an `unreachable`
+        route for every IPv4 and IPv6 address the host owns, then
+        `exec`s bwrap.
+      - The plugin can't remove the routes (it has no CAP_NET_ADMIN).
+      - A run is refused if the routes can't be set.
+      - `iproute2` is a new runtime dependency.
+      - The card again says "It can use the internet (not this computer's
+        own services)." This supersedes the wording change above.
+    - **Nested user namespaces:** bwrap now gets
+      `--unshare-user --disable-userns --cap-drop ALL`, so there are no
+      nested user namespaces, no capabilities, and no tmpfs or remount
+      bypass.
+    - **Manifests** are opened `O_NOFOLLOW|O_NONBLOCK`, must be regular
+      files, and are capped at 64 KiB. A FIFO `plugin.json` no longer
+      hangs the scan.
+    - **Hard links** (`st_nlink > 1`) are refused.
+    - **The sandbox PATH** keeps only `/nix/store` entries.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
