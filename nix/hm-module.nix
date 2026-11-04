@@ -119,6 +119,47 @@ in
       enable = lib.mkEnableOption
         "the snowflake desktop companion (a Void fork), driven through Nixi's bridge";
 
+      peers = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            name = lib.mkOption {
+              type = lib.types.str;
+              description = "The peer's host name, as shown on the fleet board.";
+            };
+            address = lib.mkOption {
+              type = lib.types.str;
+              description = "The peer's tailnet IPv4 address (100.64.0.0/10). Not a host name: a short name can resolve to the LAN, and the companion refuses any address outside the tailnet.";
+            };
+            port = lib.mkOption {
+              type = lib.types.port;
+              default = 9188;
+              description = "The peer's `nixi-status` port.";
+            };
+          };
+        });
+        default = [ ];
+        example = lib.literalExpression ''[ { name = "razer"; address = "100.90.72.124"; } ]'';
+        description = ''
+          The other hosts whose status the companion shows on its fleet board.
+          Normally this is derived from the NixOS fleet list, not typed by
+          hand. Written to `~/.config/nixi-companion/peers.json` only when
+          non-empty, and then {option}`services.nixi.companion.peerTokenFile`
+          must be set.
+        '';
+      };
+
+      peerTokenFile = lib.mkOption {
+        type = lib.types.nullOr (lib.types.pathWith { inStore = false; absolute = true; });  # a store path is world-readable
+        default = null;
+        example = "/run/agenix/nixi-status-token";
+        description = ''
+          File holding the token the peers' `nixi-status` expects. Only the
+          path is written to `peers.json`; the companion reads the file at
+          runtime. Pass a runtime path (e.g. an agenix secret), never a store
+          path: the token would become world-readable.
+        '';
+      };
+
       package = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
         default = null;
@@ -328,7 +369,16 @@ in
       assertions = [{
         assertion = cfg.companion.package != null;
         message = "services.nixi.companion.package must be set: the companion is not in nixpkgs (see its option description).";
-      }];
+      }] ++ lib.optional (cfg.companion.peers != [ ] && cfg.companion.peerTokenFile == null) {
+        assertion = false;
+        message = "services.nixi.companion.peerTokenFile must be set when services.nixi.companion.peers is not empty.";
+      };
+      xdg.configFile."nixi-companion/peers.json" = lib.mkIf (cfg.companion.peers != [ ]) {
+        text = builtins.toJSON {
+          peers = map (p: { inherit (p) name address port; }) cfg.companion.peers;
+          token_file = toString cfg.companion.peerTokenFile;
+        };
+      };
       # nixi-node, not a bare node: it carries the pinned adapters and grounding command (#76).
       home.packages = lib.optional (cfg.companion.package != null) companionPkg;
       # Omarchy runs theme-set.d hooks on every `omarchy theme set`: the snowflake recolours live.

@@ -84,8 +84,19 @@ jobs:
             };
             outputs = { nixpkgs, home-manager, nixi, ... }:
               let
+                # shortcut: nixpkgs' opencode 2.2.5 ships a wrong node_modules hash on
+                # nixos-unstable; this applies the one-line fix from NixOS/nixpkgs#582675
+                # and does nothing once that lands (the hash no longer matches). Remove it then.
+                opencodeFix = final: prev: {
+                  opencode =
+                    if prev.opencode.node_modules.outputHash or null == "sha256-xfOVcw1+waLVNhFDwzOtzxrUSQEogvn88YomydOlhwc="
+                    then prev.opencode.overrideAttrs (o: {
+                      node_modules = o.node_modules.overrideAttrs { outputHash = "sha256-prx9dX7kUvs/E3zopkaPk5LXh3xJAy5sZeum/W8L7cA="; };
+                    })
+                    else prev.opencode;
+                };
                 mk = unfree: settings: home-manager.lib.homeManagerConfiguration {
-                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; };
+                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; overlays = [ opencodeFix ]; };
                   modules = [
                     nixi.homeModules.default
                     {
