@@ -7,7 +7,7 @@ coders:
   2: coder   # engine choice, settings keys and state: careful but plain
   3: codex   # speak_sentence, cap reservation, speaker generations and off (concurrency)
   4: agy     # large page change: Voice tab engine chips, ElevenLabs section, page path
-  5: coder   # nixos_config: declare the agenix secret (guarded until the user creates it)
+  # 5: dropped (the existing api-elevenlabs secret is reused; see revisions)
 reviewers:
   - codex    # second model on the diff, read-only
   - agy      # second model on the key handling, the cap and off/fallback races, read-only
