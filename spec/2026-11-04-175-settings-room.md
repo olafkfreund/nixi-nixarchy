@@ -209,3 +209,57 @@ scope.
   5. Nixi near the left, right and bottom edges: Settings stays on screen;
   6. closing returns Nixi to his own size, and the desktop beside him is
      clickable.
+
+## Revisions after review (binding; these override the sections above where they differ)
+
+Codex (gpt-6-sol) and agy (model not reported) reviewed the draft on
+2026-11-04. Their findings were checked against the code, and these
+revisions fix them:
+
+1. **One size owner.** A single `panelSize()` decides what the window is
+   asked for, from which of `#set` and `#panel` is open:
+   - with `#set` open: `setWant` set, `wide:off`;
+   - with `#panel` open: `wide:on`, `setWant` zero;
+   - with neither: both cleared.
+
+   Every path that opens or closes either one calls it: `settings()`,
+   `openPanel()`, `closePanels()`, Esc, the click outside `.pn`, the radial
+   menu, and the ✕. No path sends `wide:` or `size:` for panels by itself any
+   more. Tests cover:
+   - Settings → panel → close;
+   - panel → Settings → close;
+   - Settings → Esc;
+   - Settings → click outside;
+   - Settings with a stage card open.
+
+   After each close, the window request returns to the remaining wants.
+2. **Floating mode grows like layer mode.** `split_room` is used for both
+   modes, with left and up growth.
+   - In floating mode the window is moved by the left/top shift with the
+     existing `_xmove` (X11) or Hyprland `movewindowpixel exact` (as
+     `resizewindowpixel` is already used), and moved back on shrink.
+   - The monitor is the one under the window's current global position
+     (`Gdk.Display.get_monitor_at_point`), not the stored `mon_i`.
+   - Tests use a non-primary monitor and each corner.
+3. **Enter, Space and typing inside Settings never reach the global
+   shortcuts.** `setEl`'s keydown stops propagation for every key except Esc
+   and Ctrl+, (today it does so only for text inputs, 3397). The grip resets
+   on double-click and on Enter, without closing Settings.
+4. **The read-back clamp runs on every `resize` event and when Settings
+   opens.** It clamps `--setW`/`--setH` to `innerWidth − 24` and
+   `innerHeight − 46`, so a resize that arrives late, or a request that
+   changed nothing (`set_wide` returning early), still ends with the panel
+   inside the window. A test sends the size answer out of order.
+5. **Position and shifts.** While `top_shift` or `wide_shift` is non-zero,
+   saving the position, detecting the corner, moving between monitors and
+   switching to hover all use the base position (the current position minus
+   the shifts). This is how the existing wide shift is handled; it now
+   covers T too. Tests: open Settings with upward growth, drag Nixi by the
+   header, close; the saved position equals the base.
+6. **Small screens and the minimum.** 420 × 420 is the minimum for dragging
+   only. When the available room is smaller, Settings takes the room and its
+   body scrolls, so the panel stays reachable at any scale. The fitK < 1
+   case is covered by a test at 320 × 400.
+7. **Other wants:** opening Settings from a stage card (the map card's
+   Settings button, 2322) first collapses that stage to its tab, so
+   `stageWant` and `setWant` don't jump the window in turn.
