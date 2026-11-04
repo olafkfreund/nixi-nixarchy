@@ -214,3 +214,61 @@ checking. Tests run from `tests/`. Name the step in the commit.
 
 Revert the merge commit in the fork, or roll back the `nixi-companion` bump.
 Saved sizes in `localStorage` are ignored by older builds.
+
+## Revisions after review (binding; these override the steps above where they differ)
+
+Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
+finding was checked against `window.py` and `index.html`.
+
+1. **`split_room` lives in a new GTK-free module, `app/room.py`.**
+   `window.py` imports `gi`/GTK/WebKit at load (29, 75), so a helper inside it
+   can't be imported by a test without a display. The signature is
+   `split_room(x, y, w, h, xw, eh, side, mon)`:
+   - `x, y` is the window's base position in global coordinates;
+   - `side` is the left room that code, bar or panel already need;
+   - `mon` is the monitor rect `(mx, my, mw, mh)`, including its origin.
+
+   It returns `(L, R, T, extra_h)`. `window.py` imports it, and the tests
+   import `room` directly.
+2. **Base position, by function.** Step 1 names exactly where the base
+   (current position minus the `L`/`T` shifts) must be used:
+   - `_moved` (floating, which stores the current position);
+   - `_save_xpos`;
+   - `set_hover`;
+   - `go_monitor`;
+   - the corner detection;
+   - `_place` (layer).
+
+   Floating mode subtracts the shifts in `_moved` before storing. A test
+   covers each path with a fake window.
+3. **The Hyprland move:** use the existing `_xmove()`, which already calls
+   `Hypr.move()` → `movewindowpixel exact` (`window.py` 919, 231). No new
+   Hyprland call is needed.
+4. **Wanted size ≠ shown size.**
+   - `setW`/`setH` (the user's or the default) is what `setWant` requests,
+     and it is never reduced by the read-back clamp.
+   - The shown box is `width: min(var(--setW), 100vw − 24px)` and
+     `height: min(var(--setH), 100vh − 46px)`, so the clamp is pure CSS.
+   - Dragging changes `setW`/`setH` directly. The window can therefore grow
+     on open and during a drag.
+5. **From a stage card:** the Settings button (2322) calls `stageHide(true)`,
+   which collapses to the tab, instead of `stageClose()`, before opening
+   Settings.
+6. **More transitions in step 2's tests:**
+   - Settings → Memory/History (the `data-open` buttons, 3351);
+   - Quick actions → Settings (2870);
+   - **an out-of-order size answer**: a stale `size:` acknowledgement or a
+     `resize` that arrives after a newer request leaves the box matching
+     the latest request.
+7. **Region checks run with `?native=1`**, so `sendRegion()` isn't a no-op
+   (947, 3482), with a stubbed `window.webkit.messageHandlers.nixiui`.
+8. **At fitK < 1** (320 × 400), the test asserts only that Settings is
+   reachable and its body scrolls. The pixel size isn't checked, because
+   `transform` changes the containing block.
+9. **Small items for step 3:**
+   - the Plugins tab button gets the puzzle icon;
+   - moving the plugin rows keeps their `.row` wrapper (895–898);
+   - the `nixi.tab` fallback also applies in `settings(true, tab)` when
+     called with an unknown tab;
+   - arrow keys on a focused `.sgrip` call `preventDefault`, so the body
+     doesn't scroll (step 4).
