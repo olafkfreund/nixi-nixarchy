@@ -582,6 +582,76 @@ Decisions copied from spec Amendment 1:
   - **"Opened ✓" is one helper.** `stageOpened` is shared by Open in Google
     Maps, Play and Search in browser.
 
+- **Slice 3, steps 13–14** (2026-11-03, nixoarchy-snowflake
+  `feat/144-sky-desk`, by the Sonnet coder).
+  - **Weather source:** "Ambient's cached weather" is now #157's
+    `Ambient.reading()` (Open-Meteo for the current place, or the omarchy
+    fallback, both with a 2 h expiry).
+  - **Day or night** comes from `SIT.day` (the forecast's day/night), not
+    `SIT.night`.
+  - **No forecast is shown:** neither source returns one, so the card
+    gives the source and the reading time instead.
+  - **"partly"** reads "partly cloudy".
+  - **Open session** attaches by `pane_id` through `attach_argv` (what
+    `session_show` uses), so two sessions with the same title don't make it
+    ask "which one?".
+  - **The calendar** looks 2 days ahead, up to 4 events. Birthday events
+    are left out, as before (their titles aren't kept).
+  - **The pocket-watch gesture** stays with slice 4.
+  - **Review fixes** (Opus, Codex, agy), by the coder:
+    - meetings stay while they run (`end > now`);
+    - local DST via `astimezone()`;
+    - one bad event is skipped, and a naive `dateTime` is read as local;
+    - the welcome names today only;
+    - Join accepts only a video entry point or `hangoutLink` on Meet, Zoom,
+      Teams or Webex hosts, over https, with no user-info;
+    - the weather card uses `Ambient.reading(cached=True)`, so no
+      subprocess runs;
+    - empty states: weather off or no reading; calendar off, unread or
+      empty;
+    - no sun for an unknown sky;
+    - failed services appear in the text fallback;
+    - "open it" works on a sessions card (one session opens, several get
+      "which one?").
+    - An all-day event's `end.date` is exclusive, as Google defines it.
+
+- **Slice 4, steps 16–18** (2026-11-03, nixoarchy-snowflake
+  `feat/144-day-desk`, by the Sonnet coder).
+  - **URL check:** `item_url_ok` lives in `stages.py`, not `day.py`, to
+    avoid a circular import. Items open only on github.com,
+    calendar.google.com and meet.google.com. The calendar's `htmlLink` is
+    used only on an allowed host; otherwise the link is
+    calendar.google.com.
+  - **"What's next?":** it answers only from a cache under 5 minutes old.
+    If the cache is cold, it says "Let me look at your day." and fetches
+    in a thread, then shows the desk. The request never blocks.
+  - **The calendar row** is `off` while the `ambient_calendar` setting is
+    off, as in slice 3. Tasks and GitHub don't depend on it.
+  - **A failure with nothing cached** reads "couldn't refresh · HH:MM" with
+    empty data.
+  - **GitHub row order:** review requests come before assigned issues.
+  - **Ongoing events** show "now".
+  - **Layout:** the Next card's buttons sit beside the time, so a normal day
+    fits without scrolling (tested). A full day and the detail view scroll
+    inside the frame.
+  - **Voice:** "open it" and numbered phrases are off on the day desk (v1
+    is click-only, as specified).
+  - **Not done:** the live checks on p620, and a real signed-out `gh`
+    run (covered by a fake-runner test).
+  - **Review fixes** (Opus, Codex, agy), by the coder:
+    - every source outcome is cached for 5 min (ok, off, failed with its
+      stale data), so a failure is retried after 5 min;
+    - "what's next?" needs only the calendar entry;
+    - the enabled calendar ids are part of the cache key;
+    - birthdays are dropped through one shared `stages.BIRTHDAY` rule;
+    - timed events get their day from the local date;
+    - a `gh auth status` timeout is a failure, not "off";
+    - spoken hours are words;
+    - "now" shows once;
+    - Google's `www.google.com/calendar/…` event links are allowed;
+    - `DAY["snap"]` is set only when the stage shows;
+    - one cold "what's next?" fetch runs at a time.
+
 ## Tests
 
 | Check | Expected |

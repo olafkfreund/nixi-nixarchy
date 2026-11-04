@@ -344,6 +344,133 @@ slice's diff, then Codex and agy.
   usual way, and restart Nixi.
 
 ## Deviations
+- **Slice B, steps B1–B4** (2026-11-04, nixoarchy-snowflake
+  `feat/149-stage-programs`, by the Sonnet coder).
+  - **Two sandbox additions so scripts can start:**
+    - `--ro-bind /usr/bin/env /usr/bin/env`, when it exists, for
+      `#!/usr/bin/env` scripts;
+    - the sandbox `PATH` is `/plugin:$PATH`, plus the server
+      interpreter's `/nix/store` directory.
+  - **`rss-headlines`** fetches with a 2 s timeout (the runner's default
+    kill is 3 s; there's no manifest timeout field).
+  - **Output caps** (64 KB stdout, 8 KB stderr) are enforced by reader
+    threads, not after `communicate()`.
+  - **The consent card** sits inline in Settings → Plugins, not over
+    Nixi.
+    - `needs_consent` carries `{id, name, sha256, what, runs, network,
+      reads}`.
+    - The plain enable route forces `consent:false`, so the page can't
+      skip the card.
+  - **Failures:** an agent-requested plugin failure shows as a one-line
+    facts notebook; a phrase-route failure is spoken.
+  - **Collisions:** the reply to "Which one?" goes to the agent like any
+    other message.
+  - **Loader:** argv entries that are absolute paths or contain `..` are
+    rejected, and phrases are normalised like `fast_path`.
+  - **`nix/plugin.nix`'s `--check`** copies `stages.py` next to
+    `plugins.py`, which imports it.
+  - The old "a stage plugin can't be switched on" route test is replaced
+    by the consent tests.
+  - **Security fixes after the review** (Opus, Codex and agy each found
+    the first one independently):
+    - **A sandbox escape is closed.** `reads: ["system-status"]` no longer
+      binds `/run/user/<uid>/systemd` or `/run/current-system`. A
+      read-only bind still allowed connecting to the systemd manager's
+      control sockets, and through them starting a transient unit outside
+      the sandbox. Instead, the server collects
+      `system_status {generation, failed}` and passes it on stdin.
+      `nix-status` reports "unavailable" when the query fails. **This
+      narrows an approved decision: system status is data, not access.**
+    - **Consent is re-checked before every run:** the folder's hash is
+      compared, and on a mismatch the plugin is switched off.
+    - **Hash and symlink walks** raise on unlistable folders, and
+      `review()` switches off broken, symlinked or vanished plugins.
+    - **The consent card:**
+      - name, description and hint lose control characters and are capped
+        (60, 200 and 79 characters);
+      - the card shows "Nixi tells the agent: <hint>";
+      - network plugins are described as also reaching services on this
+        computer.
+    - **Limits:** `--size 64M` on `/tmp`, `RLIMIT_AS` 1 GiB and
+      `RLIMIT_FSIZE` 64 MiB.
+    - **I/O:** stdin is written from a thread, and stderr keeps draining
+      past its cap.
+    - **Stale results:** a background result is published only if its stage
+      is still current, and the cache is cleared on reload or disable.
+    - **Phrases:** `reserved()` rejects guide, mechanic and anything
+      `quick.handle` answers.
+    - **Source "nix"** is only a real `/nix/store` path; anything else
+      needs consent.
+    - **argv** rejects absolute paths and `..`, including after `=`, and
+      stderr is cleaned before logging.
+  - **Second security review** (Opus probing the real sandbox, Codex,
+    agy):
+    - **Phrase checks:** `reserved()` used `quick.handle`, which runs
+      commands; scanning a plugin that declared "lock the screen" locked
+      it. It now uses a side-effect-free `quick.matches()`.
+    - **Network plugins run under pasta**
+      (`--config-net --no-map-gw`, with no ports and DNS forwarded) in a
+      network namespace of their own. They get the internet but not this
+      computer's loopback services or abstract sockets (adb and 1Password
+      were reachable before). Without pasta they refuse to run. `passt`
+      is a new runtime dependency. **This narrows the approved
+      `network: true`** to internet access. Services listening on the
+      host's non-loopback addresses (e.g. a Tailscale IP) are still
+      reachable, like any other host on that network.
+    - **The card:** a manifest is rejected for control characters or
+      Unicode separators in any field or argv element. argv is capped at
+      8 elements of 80 characters.
+    - **Limits:** a launcher sets `RLIMIT_NPROC` 64 and `RLIMIT_CORE` 0
+      inside the namespace. `/dev/shm` is a 16 MiB tmpfs.
+    - **Runs use a private copy:** each run uses a copy of the folder made
+      while hashing it (`O_NOFOLLOW`, regular files only), bound read-only
+      and removed afterwards.
+    - **Duplicates:** a broken duplicate no longer switches off the valid
+      Nix plugin with the same id.
+    - **Card wording** (Codex): pasta doesn't filter the host's
+      non-loopback addresses (a VPN or second network card), so the card
+      says exactly what is isolated: "It can use the internet and your local
+      networks. It cannot reach services that only listen on this computer
+      (localhost)."
+    - **Hashing streams** one file at a time in 1 MiB chunks, with a 64 MB
+      folder cap. A file that changes while it's read is refused. The hash
+      format is unchanged, so consent already given stays valid.
+  - **Third security review** (Opus probing the real sandbox):
+    - **Host addresses:** pasta forwards to any host-owned address, so a
+      network plugin reached services on the Tailscale, Docker and libvirt
+      addresses (ollama, ssh, NFS, the k8s API).
+      - Pasta's command is now a router step that adds an `unreachable`
+        route for every IPv4 and IPv6 address the host owns, then
+        `exec`s bwrap.
+      - The plugin can't remove the routes (it has no CAP_NET_ADMIN).
+      - A run is refused if the routes can't be set.
+      - `iproute2` is a new runtime dependency.
+      - The card again says "It can use the internet (not this computer's
+        own services)." This supersedes the wording change above.
+    - **Nested user namespaces:** bwrap now gets
+      `--unshare-user --disable-userns --cap-drop ALL`, so there are no
+      nested user namespaces, no capabilities, and no tmpfs or remount
+      bypass.
+    - **Manifests** are opened `O_NOFOLLOW|O_NONBLOCK`, must be regular
+      files, and are capped at 64 KiB. A FIFO `plugin.json` no longer
+      hangs the scan.
+    - **Hard links** (`st_nlink > 1`) are refused.
+    - **The sandbox PATH** keeps only `/nix/store` entries.
+  - **Final security probe** (Opus): the verdict was **safe to ship** once
+    these were done:
+    - **The card** says "It can use the internet and your local networks
+      (not this computer's own services)." Your router and tailnet peers
+      are reachable, so the user is told.
+    - **The block list** comes from the kernel's local route tables
+      (`ip route show table local type local`, IPv4 and IPv6). That
+      covers ranges and scope-host addresses, minus loopback.
+    - **Tailscale:** `100.100.100.100` and `fd7a:115c:a1e0::53` (served
+      by tailscaled itself) are blocked too.
+    - **Accepted:** an address that appears mid-run is open for at most
+      that run (8 s); every run re-reads the list.
+    - **Tests:** the address test fails with "connected to N" when the
+      routes are missing (control run checked), and the route-removal test
+      targets a blocking route.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
