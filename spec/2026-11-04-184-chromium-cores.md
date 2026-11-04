@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 184
 intent: intent/2026-11-04-184-chromium-cores.md
 ---
@@ -8,6 +8,14 @@ intent: intent/2026-11-04-184-chromium-cores.md
 
 The code lives in olafkfreund/nixoarchy-snowflake (`tests/`), so the code PR
 goes there. These artifacts stay here, with issue #184.
+
+## Approved decisions
+
+The user approved this spec and these recommendations ("approve all"):
+
+- A browser that can't start, even with `--no-sandbox`, stays a test failure, not a skip.
+- There is no `stop_browser()`.
+- The 5 non-test aborts are out of scope here and get a follow-up issue.
 
 ## What the evidence shows
 
