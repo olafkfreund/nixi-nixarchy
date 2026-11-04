@@ -223,6 +223,13 @@ Saved sizes in `localStorage` are ignored by older builds.
   - the window stores its physical top-left corner, so the base position is
     that corner **plus** the shifts (the revisions said "minus").
 
+- **Step 3 follow-up (from the user's live screenshot, 2026-11-04):**
+  - the consent card's text box no longer scrolls inside the tab
+    (`max-height:none`), so its first lines can't be cut off;
+  - plugin rows wrap long settings paths, and each switch stays in line with
+    its plugin's name;
+  - a page test covers the consent card open + 6 plugins + a long path.
+
 ## Revisions after review (binding; these override the steps above where they differ)
 
 Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
