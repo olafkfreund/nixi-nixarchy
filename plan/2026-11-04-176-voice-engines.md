@@ -297,6 +297,12 @@ Each step is one commit, made by the lead after checking. Fork tests run from
 - Code: revert the fork merge, or roll back the bump.
 - The secret declaration is guarded and harmless without the file.
 
+## Deviations (made during implementation)
+
+- **Step 1:** `settle(n, ok, sent)` takes the reserved length explicitly, so
+  concurrent requests settle the right counts. Also added: the key kinds
+  `key` and `preview` for refusals.
+
 ## Revisions after review (binding; these override the steps above where they differ)
 
 Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
