@@ -299,6 +299,8 @@ Each step is one commit, made by the lead after checking. Fork tests run from
 
 ## Deviations (made during implementation)
 
+- **Same request as the agent narrator (the user's choice, 2026-11-04, after hearing a difference):** speech moves from `eleven_flash_v2_5` and `pcm_22050` to `eleven_v4_turbo`, stability 0.5, similarity 0.75, `mp3_44100_128`, decoded by ffmpeg with `volume=6dB,alimiter=limit=0.84:level=0` to 16-bit mono 44100 Hz; without ffmpeg it stays at `pcm_22050`. `ffmpeg-headless` joins the package. Measured 0.22 to 1.04 s on real sentences, within the 1.5 s and 4 s budgets. Known: the player restarts on a rate change, so a mid-reply fallback can cut about 0.5 s; about 28% of voiced frames reach the mouth's maximum. Fix: snowflake `fix/176-same-lily`.
+
 - **Step 1:** `settle(n, ok, sent)` takes the reserved length explicitly, so
   concurrent requests settle the right counts. Also added: the key kinds
   `key` and `preview` for refusals.
