@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 184
 spec: spec/2026-11-04-184-chromium-cores.md
 coders:
