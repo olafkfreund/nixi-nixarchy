@@ -44,7 +44,7 @@ let
       root = ../bridge;
       fileset = lib.fileset.unions [ ../bridge/package.json ../bridge/package-lock.json ];
     };
-    npmDepsHash = "sha256-+hVJkMXXoTih3i/+IP73NUCPuunlhgweQtXaFH4tktw=";
+    npmDepsHash = "sha256-w8U8QY+4ravbZTB9wxQtPnsch0m7lPi40CyHhFMDz2E=";
     dontNpmBuild = true;
     installPhase = ''
       runHook preInstall
