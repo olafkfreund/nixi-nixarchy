@@ -21,7 +21,7 @@ They are the only tests that run a network plugin in the real sandbox:
 | `test_the_routes_cannot_be_removed_from_inside` (141) | the plugin can't delete the blocking routes |
 | `test_no_nested_userns_no_mounts_no_capabilities_with_pasta` (166) | no capabilities or new namespaces under pasta |
 | `test_rss_headlines_example_against_a_local_feed` (367) | the RSS example works; with the network off it can't |
-| `test_news_refuses_unsafe_feed_urls_in_real_sandbox` (398) | the news plugin refuses private and local feed URLs |
+| `test_news_refuses_unsafe_feed_urls_in_real_sandbox` (398) | the news plugin, given private and local feed URLs, ends in "couldn't be reached" (this doesn't prove it refused them; see "What was run") |
 
 Nothing else runs them, so a change that breaks this protection would pass
 every check we have:
@@ -35,32 +35,44 @@ every check we have:
 
 ### How serious it is
 
-This is a gap in testing. It is not a hole in the running sandbox. Checked
-against snowflake `main` at `0b5e20d`:
+This is a gap in testing. I found no hole in the running sandbox, and missing
+pasta doesn't open one, but this is not proof that the sandbox is complete.
+Checked against snowflake `main` at `7af143c`:
 
-- **The deployed package carries its own pasta.** `nix/package.nix:116-117`
+- **The deployed package carries its own pasta.** `nix/package.nix:118-119`
   puts `iproute2` and `passt` on the wrapper's PATH. The server running on
   p620 has both on its PATH (read from `/proc/<pid>/environ`). Only an
   interactive shell lacks pasta, which is why only the tests are affected.
 - **The deployed sandbox code matches `main`:** `pasta_ok()` through
-  `sandbox_argv()` is identical in the installed store path.
+  `sandbox_argv()`, `_launch` and `ROUTER` are identical in the installed
+  store path.
 - **A network plugin fails closed when pasta is missing:**
   - `_launch` raises `StageError` before anything starts
-    (`app/plugins.py:824`). The user sees "plugins that use the internet need
-    pasta (passt), and it doesn't work here" (`app/server.py:4868`).
+    (`app/plugins.py:824-825`). The user sees "plugins that use the internet need
+    pasta (passt), and it doesn't work here" (`app/server.py:4871`).
   - If pasta disappears after `pasta_ok()` remembered `True`, pasta is still
     the program being started (`app/plugins.py:592`). `Popen` raises `OSError`
-    and the run ends in "couldn't start it" (`:857`). `bwrap --share-net` is
-    only ever started by pasta, and `_launch` is the only caller of
-    `sandbox_argv` (`:855`).
+    and the run ends in "couldn't start it" (`:858`). `bwrap --share-net` is
+    only ever started by pasta, and `_run_copy`, called from `_launch`, is the
+    only caller of `sandbox_argv` in `app/` (`:855`).
   - If the host's addresses can't be read, the run stops (`:558`). If a
-    blocking route can't be added, the plugin is never started (`:536`).
+    blocking route can't be added, or `ip` is gone, `ROUTER` exits before it
+    starts the plugin (`:536`) and the run ends in "it failed" (`:900`).
   - A refused run can still show the plugin's last good result, marked
-    "couldn't refresh" (`:800-803`). The plugin itself doesn't run.
+    "couldn't refresh" (`:800-804`). The plugin itself doesn't run.
 - **The refusal is tested without pasta.**
   `test_a_network_plugin_will_not_run_without_pasta` and
   `test_a_network_plugin_will_not_run_without_the_address_list` run and pass
   in the normal run.
+
+Limits of the protection itself, which fail-closed doesn't cover:
+
+- Only addresses `_host_addrs` returns are blocked. If it succeeds but leaves
+  one out, that address stays open, and `..._other_addresses` can't notice,
+  because it takes its list from the same function (`tests/...:128`).
+- An address that appears during a run stays open for that run, at most
+  `TIME_MAX` (`:546`). The code says so.
+- Network plugins can reach the LAN by design (`:591`).
 
 What remains is the risk of an unnoticed regression:
 
@@ -80,10 +92,19 @@ store path as the deployed package:
 - With the route step removed in memory (no repo edit),
   `..._other_addresses` fails as it should. `..._routes_cannot_be_removed...`
   still passes, because it guards removal and not whether the routes exist.
-  The other four weren't tested this way.
-- `bwrap` works inside a Nix build, but `pasta` doesn't: "Failed to open()
-  /dev/net/tun: No such file or directory". So the issue's "Nix build's
-  checks" can't be a plain `checkPhase`.
+  The news test still passes with `url_ok` disabled in a scratch copy of the
+  plugin, because nothing answers those URLs inside the sandbox anyway. The URL
+  rule has its own tests (`tests/test_stages.py:132`,
+  `tests/test_news_plugin.py:67`), but this test doesn't prove the plugin
+  applies it. The other three weren't tested this way.
+- In a sandboxed Nix build on p620 (`sandbox = relaxed`), `bwrap` works but
+  `pasta` doesn't: "Failed to open() /dev/net/tun: No such file or directory".
+  So the issue's "Nix build's checks" can't be a plain `checkPhase` without
+  giving builds that device, which the constraints below rule out. Other
+  builder setups weren't tried.
+- `ip` is on p620's shell PATH only through the user profile. `test_argv_shape`
+  needs it and has no skip guard. Three of the six (lines 112, 366, 397) check
+  only for pasta, so with pasta but no `ip` they would fail, not skip.
 
 ## Proposed outcome
 
@@ -128,8 +149,19 @@ store path as the deployed package:
    (for example with an environment variable)? A alone doesn't meet the second
    outcome without this. Recommended: keep the skip by default and add the
    strict mode.
-3. **Should a check confirm the package's wrapper carries `passt` and
+3. **When is a pass required?** Only on demand, or before any change to the
+   sandbox is merged? With no CI, the second is a rule people and agents have
+   to follow. Recommended: required for any PR touching `app/plugins.py`,
+   `tests/test_plugin_sandbox.py` or the wrapper's PATH.
+4. **Should the news test be made to prove refusal?** Today it would pass
+   with the check removed. Recommended: yes, it's a test whose name promises
+   more than it checks.
+5. **Should the other 31 tests in this file, and the rest of the suite, run in
+   a check too?** Nothing runs them automatically either. Whether they would
+   pass inside a Nix build is untested. Recommended: out of scope here, as its
+   own issue.
+6. **Should a check confirm the package's wrapper carries `passt` and
    `iproute2`?** The tests don't cover that, because they use the test PATH.
    It is a small addition and guards availability, not security.
-4. **Is the priority low?** Given the fail-closed findings, I'd treat it as
+7. **Is the priority low?** Given the fail-closed findings, I'd treat it as
    test hygiene and not as a security fix. Is that right?
