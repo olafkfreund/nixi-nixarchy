@@ -427,6 +427,14 @@ slice's diff, then Codex and agy.
       and removed afterwards.
     - **Duplicates:** a broken duplicate no longer switches off the valid
       Nix plugin with the same id.
+    - **Card wording** (Codex): pasta doesn't filter the host's
+      non-loopback addresses (a VPN or second network card), so the card
+      says exactly what is isolated: "It can use the internet and your local
+      networks. It cannot reach services that only listen on this computer
+      (localhost)."
+    - **Hashing streams** one file at a time in 1 MiB chunks, with a 64 MB
+      folder cap. A file that changes while it's read is refused. The hash
+      format is unchanged, so consent already given stays valid.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
