@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 176
 spec: spec/2026-11-04-176-voice-engines.md
 coders:
