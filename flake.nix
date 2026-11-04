@@ -102,6 +102,46 @@
           assert allowed.claudeAcp != null;      # unfree allowed: pinned, whatever config says
           pkgs.runCommand "nixi-hm-module-eval" { } "touch $out";
 
+        # Companion peers (#168): evaluates the module's real config with stub
+        # Home Manager options, so no extra flake input. Only the lazy values
+        # under test are forced.
+        hm-companion-peers =
+          let
+            eval = extra: (nixpkgs.lib.evalModules {
+              modules = [
+                (self.homeModules.default)
+                ({ lib, ... }: {
+                  options = {
+                    assertions = lib.mkOption { type = lib.types.listOf lib.types.raw; default = [ ]; };
+                    home = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; default = { }; };
+                    programs = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    systemd = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                  };
+                  config._module.args.pkgs = pkgs;
+                  config.services.nixi = {
+                    enable = true;
+                    companion = {
+                      enable = true;
+                      package = pkgs.hello;
+                    } // extra;
+                  };
+                })
+              ];
+            }).config;
+            peers = [
+              { name = "p620"; address = "p620.lan"; port = 9188; }
+              { name = "razer"; address = "razer.lan"; port = 9200; }
+            ];
+            ok = eval { inherit peers; peerTokenFile = "/run/agenix/tok"; };
+            bad = eval { inherit peers; };
+          in
+          assert builtins.fromJSON ok.xdg.configFile."nixi-companion/peers.json".text
+            == { inherit peers; token_file = "/run/agenix/tok"; };
+          assert builtins.all (a: a.assertion) ok.assertions;
+          assert builtins.any (a: !a.assertion) bad.assertions;  # peers without a token file must fail
+          pkgs.runCommand "nixi-hm-companion-peers" { } "touch $out";
+
       });
 
       formatter = forAllSystems (pkgs: pkgs.nixpkgs-fmt);
