@@ -215,6 +215,14 @@ checking. Tests run from `tests/`. Name the step in the commit.
 Revert the merge commit in the fork, or roll back the `nixi-companion` bump.
 Saved sizes in `localStorage` are ignored by older builds.
 
+## Deviations (made during implementation)
+
+- **Step 1:**
+  - `side` is a `(left, right)` pair, which keeps the room the code panel
+    and the bar need on both sides;
+  - the window stores its physical top-left corner, so the base position is
+    that corner **plus** the shifts (the revisions said "minus").
+
 ## Revisions after review (binding; these override the steps above where they differ)
 
 Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
