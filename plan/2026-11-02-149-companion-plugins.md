@@ -371,6 +371,38 @@ slice's diff, then Codex and agy.
     `plugins.py`, which imports it.
   - The old "a stage plugin can't be switched on" route test is replaced
     by the consent tests.
+  - **Security fixes after the review** (Opus, Codex and agy each found
+    the first one independently):
+    - **A sandbox escape is closed.** `reads: ["system-status"]` no longer
+      binds `/run/user/<uid>/systemd` or `/run/current-system`. A
+      read-only bind still allowed connecting to the systemd manager's
+      control sockets, and through them starting a transient unit outside
+      the sandbox. Instead, the server collects
+      `system_status {generation, failed}` and passes it on stdin.
+      `nix-status` reports "unavailable" when the query fails. **This
+      narrows an approved decision: system status is data, not access.**
+    - **Consent is re-checked before every run:** the folder's hash is
+      compared, and on a mismatch the plugin is switched off.
+    - **Hash and symlink walks** raise on unlistable folders, and
+      `review()` switches off broken, symlinked or vanished plugins.
+    - **The consent card:**
+      - name, description and hint lose control characters and are capped
+        (60, 200 and 79 characters);
+      - the card shows "Nixi tells the agent: <hint>";
+      - network plugins are described as also reaching services on this
+        computer.
+    - **Limits:** `--size 64M` on `/tmp`, `RLIMIT_AS` 1 GiB and
+      `RLIMIT_FSIZE` 64 MiB.
+    - **I/O:** stdin is written from a thread, and stderr keeps draining
+      past its cap.
+    - **Stale results:** a background result is published only if its stage
+      is still current, and the cache is cleared on reload or disable.
+    - **Phrases:** `reserved()` rejects guide, mechanic and anything
+      `quick.handle` answers.
+    - **Source "nix"** is only a real `/nix/store` path; anything else
+      needs consent.
+    - **argv** rejects absolute paths and `..`, including after `=`, and
+      stderr is cleaned before logging.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
