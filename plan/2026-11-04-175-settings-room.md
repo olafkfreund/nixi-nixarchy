@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 175
 spec: spec/2026-11-04-175-settings-room.md
 coders:
