@@ -403,6 +403,30 @@ slice's diff, then Codex and agy.
       needs consent.
     - **argv** rejects absolute paths and `..`, including after `=`, and
       stderr is cleaned before logging.
+  - **Second security review** (Opus probing the real sandbox, Codex,
+    agy):
+    - **Phrase checks:** `reserved()` used `quick.handle`, which runs
+      commands; scanning a plugin that declared "lock the screen" locked
+      it. It now uses a side-effect-free `quick.matches()`.
+    - **Network plugins run under pasta**
+      (`--config-net --no-map-gw`, with no ports and DNS forwarded) in a
+      network namespace of their own. They get the internet but not this
+      computer's loopback services or abstract sockets (adb and 1Password
+      were reachable before). Without pasta they refuse to run. `passt`
+      is a new runtime dependency. **This narrows the approved
+      `network: true`** to internet access. Services listening on the
+      host's non-loopback addresses (e.g. a Tailscale IP) are still
+      reachable, like any other host on that network.
+    - **The card:** a manifest is rejected for control characters or
+      Unicode separators in any field or argv element. argv is capped at
+      8 elements of 80 characters.
+    - **Limits:** a launcher sets `RLIMIT_NPROC` 64 and `RLIMIT_CORE` 0
+      inside the namespace. `/dev/shm` is a 16 MiB tmpfs.
+    - **Runs use a private copy:** each run uses a copy of the folder made
+      while hashing it (`O_NOFOLLOW`, regular files only), bound read-only
+      and removed afterwards.
+    - **Duplicates:** a broken duplicate no longer switches off the valid
+      Nix plugin with the same id.
 
 - **A3** (2026-11-03, nixoarchy-snowflake `feat/149-plugins-slice-a`).
   - **The prop node list is flat:** `[{tag, a, p}]`, where `p` is the
