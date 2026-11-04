@@ -508,3 +508,21 @@ slice's diff, then Codex and agy.
     plugin marks it broken.
   - **A plugin that is on stays switchable** even when it's broken.
   - **On a duplicate id, a Nix plugin wins** over a Folder one.
+- **B5 live check** (2026-11-04, p620; fix in nixoarchy-snowflake PR #32,
+  `fix/144-149-live-checks`, by Codex).
+  - **Passed:** "nixi status" shows the notebook; switching on "RSS headlines"
+    shows the consent card ("the internet and your local networks"), then
+    "headlines" shows five headlines; editing `rss-headlines/run` switches it
+    off with "Changed — check it again".
+  - **Consent comes from Settings, not the phrase.** A plugin that is off
+    doesn't answer its phrase (the phrase goes to the agent); the card shows
+    when it is switched on in Settings → Plugins. That is the B2 design; the
+    B5 wording "headlines shows the consent card first" is read that way.
+  - **Bug: the store line always read "Store: couldn't check".** The sandbox
+    keeps only the `/nix/store` entries of the companion's `PATH`, and the
+    packaged `PATH` has no coreutils, so `df` was never found. B4's
+    "store size from `df`" becomes `os.statvfs("/nix/store")`. The test now
+    runs with a `PATH` whose store entries hold no `df`, and asserts the
+    "used of" form.
+  - **Not fixed:** the consent card's Allow button sits below the fold of the
+    Settings panel; you scroll to reach it.

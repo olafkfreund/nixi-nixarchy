@@ -652,6 +652,22 @@ Decisions copied from spec Amendment 1:
     - `DAY["snap"]` is set only when the stage shows;
     - one cold "what's next?" fetch runs at a time.
 
+- **Step 19 live check** (2026-11-04, p620; fix in nixoarchy-snowflake
+  PR #32, `fix/144-149-live-checks`, by Codex).
+  - **Passed:** "how does my day look?" shows the desk with calendar, tasks
+    and GitHub; "what's next?" answers from the cache in 2 ms; Open on a
+    GitHub item opens it in the browser; with `gh` signed out the GitHub row
+    is "not set up".
+  - **The signed-out recipe doesn't work on p620.** `gh` there is a wrapper
+    that loads the agenix token when `GH_TOKEN` is empty, so an empty
+    `GH_CONFIG_DIR` still signs in. The check put the real `gh` binary first
+    on `PATH` with an empty `GH_CONFIG_DIR` instead.
+  - **Bug: Today always read "couldn't refresh" with more than one calendar.**
+    gog v0.47.1 `calendar events` takes at most one positional calendar id
+    (exit 2); several go as repeated `--cal=<id>`. Both callers (the desk,
+    `day.py`, and the ambient calendar, `server.py`) passed them
+    positionally. Fixed in both, with a test for each.
+
 ## Tests
 
 | Check | Expected |
