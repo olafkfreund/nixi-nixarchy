@@ -296,3 +296,76 @@ Each step is one commit, made by the lead after checking. Fork tests run from
 - Users: set the engine to Automatic, or switch ElevenLabs off.
 - Code: revert the fork merge, or roll back the bump.
 - The secret declaration is guarded and harmless without the file.
+
+## Revisions after review (binding; these override the steps above where they differ)
+
+Codex (gpt-6-sol) and agy (model not reported) reviewed the draft. Each
+finding was checked against the code and `nixos_config`.
+
+1. **Reuse the existing key; step 5 is dropped.** `nixos_config` already
+   declares `secrets/api-elevenlabs.age` for all hosts
+   (`modules/secrets/api-keys.nix` 63; `secrets.nix` 27). It is used by
+   omarchy-voice and is mounted at `/run/agenix/api-elevenlabs`: a regular
+   file, mode 0400, owned by the user, present on p620 today.
+   - The companion's default `eleven_key_file` becomes
+     `/run/agenix/api-elevenlabs`.
+   - There is no new secret and no `nixos_config` change. The user doesn't
+     need to add a key.
+   - This deviates from the spec's example path, not from its rule (an agenix
+     file, never in the environment).
+2. **Key path rules** (they tighten spec revision 2):
+   - the realpath must be under `/run/agenix/`, `/run/agenix.d/`,
+     `/run/secrets/`, or `$CREDENTIALS_DIRECTORY` **only when that variable
+     is set and non-empty**;
+   - the "equal to the configured path" clause is dropped, so a changed
+     `config.json` can't point the header at an arbitrary user file;
+   - it is opened `O_RDONLY|O_NOFOLLOW` on the realpath, and `os.fstat(fd)`
+     checks a regular file, `0 < size ≤ 256`, and an owner of root or the
+     user.
+3. **Off can't start a cloud request after it returns.**
+   - The maker takes the condition lock, checks the item's `gen`, marks the
+     item `sending`, and only then releases the lock and calls the API.
+   - Off takes the same lock and bumps `gen`, so any item not yet marked
+     `sending` will never send. An item already `sending` is in flight: its
+     audio is discarded, and it is counted by the usage rule.
+   - **The page path:** `/api/tts` does the same check under the same lock,
+     via `speak_sentence`.
+   - Test: off is called between the check and the send, using an event
+     injected in a fake `speak`, and no second request is made.
+4. **Off and engine changes don't use `Speaker.stop()`.** It clears every
+   `todo`/`ready` item (3604). A new `Speaker.cut_cloud(gen)`:
+   - stops the current player only if the current item is a cloud item;
+   - drops only cloud items from `todo` and `ready`, publishing `spk_done`
+     for each so the page clears `spkMap`;
+   - re-synthesises local items with the current engine.
+
+   A switch between local engines changes nothing in the queue. Tests cover:
+   - local → local keeps the queue;
+   - cloud → off keeps local items, and the page captions clear.
+5. **The reply id, end to end.**
+   - The page sends `reply` (the id of the answer being spoken, which it
+     already tracks for captions) with every `/api/say` and `/api/tts` call.
+   - The server stores it on the queue item.
+   - `ask()` (a new turn) clears the sticky errors. A new `reply` id clears
+     them too.
+   - Step 4 (page) and step 3 (server) share this contract. Step 3 adds the
+     server side; step 4 adds the page side and a test.
+6. **One deadline per sentence.**
+   - The deadline is `t0 + 4 s`. A 429 is retried once only if
+     `Retry-After ≤ 2 s` and the remaining time is at least `Retry-After + 1.5
+     s`.
+   - Each attempt's socket timeout is `min(1.5, remaining)` for connect and
+     first byte, then the body is read until the deadline.
+   - Tests use a fake clock and a fake `urlopen` that sleeps, to prove the
+     1.5 s first byte and the 4 s total, including the retry.
+7. **Approved behaviours now named in the steps and checks:**
+   - an unknown or deleted `eleven_voice` → "voice no longer on your
+     account", and the fallback (steps 1 and 3);
+   - explicit espeak offers Robot plus an espeak voice for each preset
+     (step 2);
+   - the `/api/settings` refusals return `400 {"error": "<sentence>"}`, which
+     the page shows under the control (steps 2 and 4);
+   - `stress_voice`'s `say` loop test moves to step 3, where the speaker
+     changes land.
+8. **Step 2 BRIDGED note:** the new keys are client-side settings and are not
+   popped in BRIDGED mode. A test confirms they persist there.
