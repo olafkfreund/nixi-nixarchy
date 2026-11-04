@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 176
 intent: intent/2026-11-04-176-voice-engines.md
 ---
