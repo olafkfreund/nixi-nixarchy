@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 176
 intent: intent/2026-11-04-176-voice-engines.md
 ---
@@ -237,3 +237,10 @@ map of 2026-11-04 (`app/server.py` 6146 lines, `index.html` 3760).
   4. off: he speaks locally at once;
   5. an explicit piper with its model missing gives a visible reason, not a
      silent other voice.
+
+## Approval (2026-11-04)
+
+The user approved this spec while the Codex and agy reviews were still
+running. Real findings from those reviews will be added as a "Revisions after
+review" section. Any that change the design are shown to the user before the
+plan.
