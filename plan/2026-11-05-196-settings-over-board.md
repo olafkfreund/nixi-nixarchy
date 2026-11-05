@@ -3,7 +3,7 @@ status: draft
 issue: 196
 spec: spec/2026-11-05-196-settings-over-board.md
 coders:
-  1: codex   # small, tricky logic in one file; the lead runs the page tests it can't
+  1: codex   # small, tricky logic in one file; step 2's tests are its real check, so both commit together
   2: coder   # page tests that have to run in headless Chromium
 reviewers:
   - codex    # caught the ordering bug in the spec
@@ -29,22 +29,25 @@ reviewers:
 Work is on `fix/196-settings-over-board` from `olafkfreund/nixoarchy-snowflake` main, in worktree
 `../nixoarchy-snowflake-196`. Merge main first: another session is merging #178 and #188 in the same file.
 
-1. `app/static/index.html`, searching by name:
+1. `app/static/index.html`. Lines are from main `a263fed`; search by name if they've moved: CSS 367, `let stgPosted` 2360,
+   `sizeWindow` 3725, `stageShow` 2581, `panelSize` 2877, `stageClosedByServer` 2621, `stageTick` 2606.
    - **CSS:** add `body.calm #stgTab,body.calm #chalk` to the rule with `body.calm #stg`.
    - **`let stgPosted=…`:** add `stgHeld=null`.
    - **`sizeWindow`:** with `document.body.classList.contains('pnl')`, leave out `stageWant` and `popWant`.
    - **`stageShow`, first line:** `if(document.body.classList.contains('pnl')){ stgHeld=ev; return; }`, before
      `stgPosted=false; gaugeStop();`.
    - **`panelSize`, last line, after `sendRegion(true)`:**
-     `if(!sOn&&!pOn&&stgHeld){ const e=stgHeld; stgHeld=null; onEvent(e); }`. Check that `onEvent` is the event
-     handler's name; if not, use whichever function holds the `ev.t==='stage'` branch.
+     `if(!sOn&&!pOn&&stgHeld){ const e=stgHeld; stgHeld=null; onEvent(e); }`. `onEvent` is the top-level event
+     handler (2154), not the local `handle` inside `send()`.
    - **`stageClosedByServer`:** set `stgHeld=null` first, whatever the state.
    - **`stageTick`, first line after `now`:** with `body.pnl`, `stgUse=stgQuiet=now; return;`.
-   → `grep -n stgHeld app/static/index.html` shows the four places; the lead runs step 2's tests.
+   → Nothing is committed on this step alone. It's verified by step 2's tests, which the coder of step 2 runs, and
+   steps 1 and 2 commit together only when they pass. Codex reports its diff.
    Traps: Codex's sandbox can't run Chromium. No GPU browser for Nixi pages. Nothing outside this file. Don't commit.
 
 2. `tests/settings_fit.mjs`:
-   - update case `6g`'s open assertion from `size:300,266` to `size:244,266`; keep its close assertion;
+   - update case `6g`'s open assertion from `size:300,266` to `size:244,266`, with its comment and failure message;
+     keep its close assertion;
    - add the spec's page cases: open board then Settings; tab then Settings; `stgSize(0)` during Settings; a `stage`
      event during Settings (no caption, old board untouched, shown on close); two events, newest wins; `stage_close`
      clears; `stageTick` with an old `stgUse`; the history panel and Settings-to-panel; a held board closing in hover
