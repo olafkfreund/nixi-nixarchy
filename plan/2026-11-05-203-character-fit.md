@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 203
 spec: spec/2026-11-05-203-character-fit.md
 coders:
@@ -41,6 +41,12 @@ commit. Work in a new worktree `../nixoarchy-snowflake-203`, branch
 5. **The window check measures real ink,** not group boxes, for headphones.
 6. **Snowflake stays pixel-identical.** The eye rig doesn't change. Previews'
    global colours stay as they are.
+
+## The user's answers at approval (2026-11-05)
+
+- If the real fit test fails by a fraction, the lead may move a cup by up to 1 px without asking, and reports it afterwards.
+- The user runs the live check on p620.
+- This approval is the go-ahead to deploy to p620 and razer. p510 stays untouched.
 
 ## Steps
 
