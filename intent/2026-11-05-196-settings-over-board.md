@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 196
 author: olafkfreund
 ---
@@ -60,3 +60,7 @@ razer.
    Recommended: re-test after this fix, which removes the likely geometry cause, and
    close #196 if it's gone. If it isn't, it gets its own issue. Nobody has reproduced it
    yet, so it isn't promised here.
+
+## Approval (2026-11-05)
+
+Approved by the user, with the recommended answers to both open questions.
