@@ -85,3 +85,10 @@ Expected: OK, with `~/.config/nixi-companion/config.json`'s timestamp unchanged 
 ## Rollback
 
 Revert the merge commit and bump again. There's no stored state: `stgHeld` lives only in the page.
+
+## Close-out (2026-11-05)
+
+- Merged in nixoarchy-snowflake #51, on p620 in nixos_config #2728. razer takes it at its nightly upgrade or next deploy.
+- Full suite on the merged code: 798 OK. Reviewed by Opus and Codex; agy's code review came back empty.
+- Closed at the user's request. The live list wasn't reported back, so Settings' real position over a board and the fast
+  right-click and gear click are unconfirmed.
