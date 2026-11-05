@@ -67,6 +67,12 @@ Work is on `fix/196-settings-over-board` from `olafkfreund/nixoarchy-snowflake` 
    - `export $(systemctl --user show-environment | grep ^HYPRLAND_INSTANCE_SIGNATURE=); nixi-companion restart`.
    - Live on p620: the spec's list. Close #196 if the fast click no longer fails; if it does, give it its own issue and close #196.
 
+## Deviations (after code review)
+
+- `onEvent`'s `stage_update` also updates a held board, matched by `copy` or `refresh`. Headlines' video clips arrive late and aren't resent, so they were lost (Codex).
+- `dismiss()` takes the held board before `closePanels()`, and follows the hidden rule. Otherwise the replay ran before `hiddenNow` was set, and a board opened unseen (Opus).
+- Test hardening: the position check is live-only, since the fake window never resizes.
+
 ## Tests
 
 ```bash
