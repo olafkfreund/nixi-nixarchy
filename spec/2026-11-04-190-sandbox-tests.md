@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 190
 intent: intent/2026-11-04-190-sandbox-tests.md
 ---
@@ -82,9 +82,10 @@ and guards all stage plugins.
 - **`CLAUDE.md`, new (decision 2):** a few lines pointing to that section. The
   repo has no agent instructions today, so agents wouldn't otherwise read it.
 
-### 6. Proposed addition: catch port forwarding (decision 1)
+### 6. Catch port forwarding (decision 1)
 
-**This goes beyond what the user approved.**
+This goes beyond the answers approved in the intent. The user approved it with
+this spec.
 
 `test_network_plugins_cannot_reach_this_computers_own_services` listens on port
 0, so the kernel picks an ephemeral port (32768-60999 on p620). With pasta's
@@ -177,11 +178,10 @@ The RSS example test wasn't tried this way.
 
 ## Decisions
 
-1. **Include the port-forwarding fix (section 6)?** It wasn't in the approved
-   answers. It's one assertion and a few lines in `serve()`. Without it, the main
-   test named in #190 misses the regression it's for. Recommended: **yes**. The
-   flag assertion alone is the smaller option, but it doesn't prove pasta's
-   actual behaviour.
-2. **Add a `CLAUDE.md` to the snowflake repo?** The rule was approved, but where
-   it lives wasn't. Recommended: **yes**, because a README-only rule may not reach
-   agents. The alternative is README only.
+The user approved this spec with both recommendations:
+
+1. **The port-forwarding fix (section 6): included, both parts.** `test_argv_shape`
+   asserts `-t none -u none -T none -U none`, and `serve()` binds a free port below
+   the host's real ephemeral range.
+2. **A `CLAUDE.md` in the snowflake repo: yes.** A short file pointing to the
+   README section.
