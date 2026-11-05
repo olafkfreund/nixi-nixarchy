@@ -323,3 +323,7 @@ real filter.
 
 Revert the code PR. It touches only `tests/`, and the eight harnesses go back to their
 own launches. Remove the code worktree with `git worktree remove ../nixoarchy-snowflake-184`.
+
+## Deviations
+
+- **Step 7, the real filter (2026-11-05, closed by the owner):** the planned run couldn't pass. `chromium` isn't on PATH in agy's sandbox, so page tests skip there with their reason. With its store path, Nixi's server and DevTools don't answer on localhost (blocked loopback is inferred, not confirmed). Direct check instead, through `start_browser` in that sandbox: probe 1, `--no-sandbox` added, Chromium ran until terminated, exit 0, no core. No unprotected control was run. Agents' own scripts stay out of reach (#192, not planned).
