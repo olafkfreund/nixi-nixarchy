@@ -123,7 +123,7 @@ def start_browser(browser, cdp_port, data_dir, *extra, env=None):
   not match `test_*.py`, so discovery ignores it. The resolver rule is one argv
   item, comma and spaces included.
 
-**2. The eight harnesses** (coder: Codex)
+**2. The nine harnesses** (coder: Codex)
 - Add `from _browser import start_browser` right after `from pathlib import Path`.
 - Replace the browser `Popen` with one call. `test_voice_fit` keeps its extras and `env`:
 
@@ -137,6 +137,7 @@ def start_browser(browser, cdp_port, data_dir, *extra, env=None):
 | `test_token_fit.py` | 16 | 55-59 | same |
 | `test_weather_fit.py` | 15 | 54-58 | same |
 | `test_voice_fit.py` | 12 | 135-147 | `procs.append(start_browser(BROWSER, cdp, home / "chromium", "--no-proxy-server", "--autoplay-policy=no-user-gesture-required", env=env))` |
+| `test_agent_voice_fit.py` | 16 | 53-57 at `7efdc88` | same (a ninth harness: #191 landed it while this plan ran, and the guard fails without it) |
 
 - Check: `python3 -m py_compile tests/test_*_fit.py`, and
   `grep -lE -- '--headless|--no-sandbox' tests/test_*.py` prints nothing.
