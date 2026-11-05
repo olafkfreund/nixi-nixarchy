@@ -25,8 +25,8 @@ Effects:
 - **From reading the code, not observed:** a test server could keep the live Nixi or another voice waiting, or send
   messages to the live window, shell or Hyprland.
 
-Seven more page tests have the same setup: accessories, mirror, stages, settings, caption, weather, character and token
-start a server the same way, as does `test_voice_fit`. The shared `_ServerEnv` that about 40 unit test files use keeps it as well.
+Nine more page tests have the same setup: accessories, mirror, stages, settings, caption, weather, character, token and
+voice. The shared `_ServerEnv`, used by 29 test files, keeps the real folder as well.
 This repeats the kind of mistake #176 made with `HOME`, where tests overwrote the user's real config.
 
 ## Proposed outcome
