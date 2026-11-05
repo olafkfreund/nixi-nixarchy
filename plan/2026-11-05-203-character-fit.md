@@ -190,4 +190,12 @@ migration is needed.
 
 ## Deviations
 
-None yet.
+- **Step 3, extra checks (`2c2e2b7`):** the Opus review found gaps the plan didn't
+  cover. The band must match `BODY.band` after a real switch, proved by deleting
+  the `setCharacter` write and seeing the test fail. The Robot skin case also
+  checks the crown's `.anc` is `display:none`, and that a crown that was never
+  drawn can't pass as restored.
+- **Step 3, "full sway":** the test's 7° is the target's clamp. The Opus review's
+  simulation shows the spring overshooting it (about 18°), which would briefly
+  put a cup under 0.3 px into the face box at gaze levels and combinations the
+  page rarely reaches. Not measured in Chromium, and positions are unchanged.
