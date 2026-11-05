@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 201
 spec: spec/2026-11-05-201-test-voice-lock.md
 coders:
