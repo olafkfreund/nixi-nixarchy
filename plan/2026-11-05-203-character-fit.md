@@ -75,9 +75,8 @@ any `SIT_P` exists, hence the guard. Leave the `EYE_HALFW` term and `y -8` alone
 - 3829: before `return setLook({skin:k})`:
   ``if(!bodyFits(BODY,k)) return tick(`${k} doesn't fit ${BODY.label}`,true);``
 
-Check: `grep -nE "LOOK\.skin|L\.skin" app/static/index.html` shows only what's
-meant to read the saved value (`drawSkin`, `syncLook`, `sprout`'s sway at 1892,
-the plugin tile's `on` at 3530). Lead's browser run in step 4.
+Check: `grep -nE "L(OOK)?\.skin[!=]==?'none'" app/static/index.html` finds nothing.
+The lead's browser run in step 4 decides the rest.
 Traps: keep `drawSkin` building the hidden skin; existing test 5 loads `crown` on
 every body and expects its `.anc` wrapper. Snowflake's `fits` has no `'plug'`, so
 the Snowflake short-circuit must stay first. `L.skin` goes through `String()` as
@@ -90,33 +89,48 @@ the Snowflake short-circuit must stay first. `L.skin` goes through `String()` as
   for Snowflake, add `c.cupX!==88` and today's path to the `snowflake numbers`
   check.
 - **Cups clear the face and marks** (new section after 2), every body except
-  Snowflake. Hold music on as section 9 does (`SIT.music=true`,
-  `info.look_music=true`, `info.look_beat=true`) until `SIT_P.hf` has opacity 1.
-  For gaze 0 and ±14, lift 0 and 1, sway 0 and ±28, beat 0 and 1:
-  - `gazeHook=()=>[gaze,0]`, `poke('talking',1e9)` for lift 1 and
-    `transientUntil=0` for lift 0, then let the springs settle;
-  - in one synchronous block with `ts=lastTs+16`, set `beat=bt?1+.016*8:0`,
-    `beatAt=bt?ts:-1e9`, `G.sitLift.x=lift`, `G.sitLift.v=0`,
-    `G.sitW.x=sway/.9925`, `G.sitW.v=0`, and call `frame(ts)`;
-  - assert the left cup's transform reached it: with lift and beat 1,
-    `rotate(-20.00)` and `scale(1.070)`, and `SIT_P.hf` rotated ±6.9 at full sway;
-  - take 48 points on `cu.firstChild`'s outline (rx 18.5, ry 29.5, stroke
-    included) through its CTM into `#body` coordinates. Fail if a point is inside
-    `faceBox` or a `.avoid`'s `bodyBox`.
-  No 0.5 px tolerance. Restore `gazeHook=null` and `transientUntil=0` after.
+  Snowflake. Park `idleSwapAt=nextFidAt=1e15`, hold music on as section 9 does
+  (`SIT.music=true`, `info.look_music=true`, `info.look_beat=true`), and wait the
+  section's 4800 ms so the fade has settled. For each gaze 0 and ±14 and lift 0
+  and 1, settle once (about 1400 ms):
+  - `gazeHook=()=>[gaze,0]`, and `poke('talking',1e9)` for lift 1 or
+    `transientUntil=0` for lift 0.
+
+  Then for each sway 0 and ±28 and beat 0 and 1, with no wait between them, in one
+  synchronous block with `ts=lastTs+16`:
+  - set `beat=bt?1+.016*8:0`, `beatAt=bt?ts:-1e9`, `G.sitLift.x=lift`,
+    `G.sitLift.v=0`, `G.sitW.x=sway/.9784`, `G.sitW.v=0`, and call `frame(ts)`;
+  - assert the left cup reached it: with lift and beat 1, `rotate(-20.00)` and
+    `scale(1.070)`, and `SIT_P.hf` at `rotate(±7.00)` for full sway;
+  - for `cu` in `SIT_P.cL` and `SIT_P.cR`, take 48 points on `cu.firstChild`'s
+    outline (rx 18.5, ry 29.5, stroke included) through its CTM into `#body`
+    coordinates. Fail if a point is inside `faceBox` (`[x,y,width,height]`) or a
+    `.avoid`'s `bodyBox` (`[x0,y0,x1,y1]`).
+
+  No 0.5 px tolerance. After: `gazeHook=null`, `transientUntil=0`, music off.
 - **Window by ink** (section 9, 250-274): for the `headphones` case only, grow
   `worst` from 60 points along `SIT_P.bd.querySelector('path')`
   (`getPointAtLength`, through its screen CTM, ±5 × scale) and the two cup
   outlines, not `SIT_P.hb` and `SIT_P.hf`. Limits, bounce and `roll` stay.
-- **Pixels** (`STATES`, 36): add
+- **Pixels** (`STATES`, 36): add last
   `music: "transientUntil=0; info.look_music=true; info.look_beat=false; SIT.music=true; sitOn.music=true;"`.
-  In `shoot`, record `SIT_P.hf`'s opacity for that state. Require opacity 1 in
-  both pages and 0 px off for `music`; other states keep today's allowance.
-- **Skins** (new section), on Robot: no `crown` or `sprout` tile in `#skinGrid`;
-  with `crown` saved, the `none` tile has `on`, there's no Skin chip in
-  `#partChips` and `wxHat()` is false; `slash('/skin bow')` then `slash('/skin crown')`
-  leaves `look.skin` at `bow`; with `crown` saved, Snowflake's crown is drawn and
-  its tile lit. On Snowflake, all five tiles show.
+  In `shoot`, record `+SIT_P.hf.getAttribute('opacity')` for that state (the
+  attribute reads `"1.00"`). Require 1 in both pages and 0 px off for `music`;
+  other states keep today's allowance.
+- **Skins** (new section), with `settings(true,'look')` open and every change
+  through `await setLook(...)`, because the grid and chips read `info.look` and
+  only redraw while Settings is open:
+  - Snowflake: all five tiles show.
+  - Robot: no `crown` or `sprout` tile.
+  - Robot with `crown` saved: the `none` tile has `on`, no Skin chip in
+    `#partChips`, and `wxHat()` is false.
+  - Robot with `bow` saved: `await slash('/skin crown')` leaves `info.look.skin` at
+    `bow`, and `#chip` reads `crown doesn't fit Robot` with class `bad`.
+  - Robot with `crown` saved, then `character:'snowflake'`: the crown's `.anc` isn't
+    `display:none`, and its tile has `on`.
+  - Cleanup: `await setLook({character:__id,skin:'none'})` and `settings(false)`.
+    The server is shared by all four bodies' runs, and a leftover skin turns off
+    the party hat and nightcap cases in section 9.
 
 Check: `node --check tests/character_fit.mjs`.
 Traps: Codex's sandbox blocks sockets, so Codex can't run this file; it says so
@@ -126,9 +140,7 @@ keep each set, frame and sample in one block.
 
 **Step 4. Tests, reviews, PR** (lead)
 
-Run from the worktree, with no Codex involved:
-`python3 -m unittest tests.test_character_fit -v`, the rest of `tests/`, and
-`nix build .#nixi-companion`. Expected results are under "Tests". Reviews: a fresh
+Run the commands under "Tests", with no Codex involved. Reviews: a fresh
 Opus agent given this plan and `git diff origin/main...HEAD`; `codex review --base
 origin/main`; agy on exported files. Fix, re-run, commit. Open the PR linking the
 intent, spec and plan, naming the steps Codex did, then merge.
@@ -156,12 +168,12 @@ position change needs the user's say-so.
 
 | Command | Expected |
 | ------- | -------- |
-| `python3 -m unittest tests.test_character_fit -v` | all pass, four bodies plus pixels |
-| rest of `tests/` | as on `origin/main` |
-| `nix build .#nixi-companion` | builds |
+| `python3 -m unittest test_character_fit -v` (from `tests/`) | all pass, four bodies plus pixels |
+| `python3 -m unittest discover -s .` (from `tests/`) | as on `origin/main` |
+| `nix build .#nixi-companion` (repo root) | builds |
 
-Measured on a scratch prototype with a stub API, not the real server: 0.7 px
-smallest face gap, no marks hit, ink at least 16 px inside the window, Snowflake 0
+Measured on a scratch prototype with a stub API, not the real server: 0.6 px
+smallest face gap at full sway (the spec's 0.7 was at 6.9°), no marks hit, ink at least 16 px inside the window, Snowflake 0
 px off in five states. The save and reload cases haven't run against this change.
 
 ## Rollback
