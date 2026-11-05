@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 203
 author: olafkfreund
 ---
@@ -51,6 +51,8 @@ checked. No server change: `SKINS` stays.
 - The window limit of 340 × 460 still holds, through a bounce.
 
 ## Open questions
+
+Answered by the user on 2026-11-05: all five as recommended below.
 
 1. **Headphones: per-body positions, a different look, or stay off? Terminal
    too?** Recommend per-body positions with the same art, Terminal included,
