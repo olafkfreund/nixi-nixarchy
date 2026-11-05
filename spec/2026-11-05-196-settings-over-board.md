@@ -29,10 +29,12 @@ themselves are kept, closing the panel restores the board's room with no extra s
 current board or its gauge. The newest one wins. Returning `undefined` means `onEvent` doesn't
 put its text in the caption.
 
-**4. When the panel closes:** in `panelSize`'s closing branch, after `sizeWindow`, if `stgHeld`
-is set, take it and show it through the same path as a live `stage` event. Its normal gates
-then apply, including the caption fallback (hidden, the bar, hover, fullscreen, locked,
-listening, an approval), so `onEvent`'s two lines become one function, `stageIn(ev)`.
+**4. When the panel closes:** at the very end of `panelSize`, after `sendRegion(true)` has cleared
+`body.calm`, if no panel is open and `stgHeld` is set, take it and pass it to `onEvent(ev)`, exactly as
+if it had just arrived. The order matters: with `calm` still set, `stageShow` would refuse the board and
+close the old one. If he's in a state where a board can't show at that moment (hidden, the bar, hover,
+fullscreen, locked, listening, an approval), the normal rule applies: the old board closes and its text goes in
+the caption. That's what happens today to a board arriving in those states, so no new rule is added.
 
 **5. A board the server closes during a panel:** `stageClosedByServer` also clears `stgHeld`.
 
@@ -83,6 +85,8 @@ its change:
 - `stageTick` with an old `stgUse` during Settings: still open, `stgUse` fresh, and on closing it
   doesn't close on the next tick;
 - history panel: same size rule, and moving from Settings to the panel keeps the board hidden.
+- a held board when the panel closes in hover, and with `hiddenNow` set: the same result as a board arriving then;
+- turning hover on inside Settings with a board up, then closing: no room asked for in effect (`set_wide` already ignores room in hover and the bar).
 
 Also `test_stages_fit`, `test_accessories_fit`, and the full suite.
 
