@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 201
 author: olafkfreund
 ---
@@ -56,3 +56,7 @@ desktop, on p620 and razer.
    fixed then, and the folder has to outlive the first test class.
 2. **Should the suite also fail if a test touches the live folder?** Recommended: only the import guard above. Watching
    the folder during a run would flag other programs on the desktop.
+
+## Approval (2026-11-05)
+
+Approved by the user, with the recommended answers to both open questions.
