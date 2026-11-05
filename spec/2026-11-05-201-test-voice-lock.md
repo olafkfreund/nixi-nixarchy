@@ -50,18 +50,20 @@ change for this.
   `tempfile.gettempdir()`, the same test `CONF_PATH` uses, with a message naming the path. So a throwaway folder from another
   test passes, and the live `/run/user/<uid>` fails.
 
-### 4. Two tests that import too early
+### 4. Tests that import too early
 
-- `test_floor.py:13` has `from floor import Floor` at module level, under the real environment. That creates `FLOOR` with the
-  real path, which `server` then reuses, so the guard would fail whenever it runs first. The import goes inside
-  `with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": nixi_env.run_dir()}):`.
-- `test_mirror.py:34` imports `server` in `setUpClass`, before `setUp` sets its own folder at line 57. The same patch wraps that
-  import.
+`floor.FLOOR` is fixed when `server` or `floor` is first imported, so a test that does either under the real folder fixes the live
+path for the whole run, and the guard then fails. These need the runtime folder set around that import:
+
+- `test_floor.py:13`: `from floor import Floor` at module level;
+- tests with their own `import server` or `import window` in `setUp` or `setUpClass`, outside `_ServerEnv`: test_desk_stages, test_location_api, test_location, test_bridge, test_mirror, test_window_token, test_nixi_ask, test_sessions, test_stage_stream.
+
+`test_mirror.py:34` is one of those: it imports before `setUp` sets its own folder at line 57. Each uses
+`with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": nixi_env.run_dir()}):` around the import. `window.py:126` fixes its socket path
+at import in the same way.
 
 `test_floor_wiring` needs nothing: line 23 is in a child's source string, and line 80 runs after `_ServerEnv` has imported `server`.
-
-Before starting, check with `grep` that no other test imports `floor`, `server` or `window` at module level. `window.py:126` fixes its
-socket path at import in the same way.
+The plan's first check re-runs the search, so a file added since is caught.
 
 ### Not changed
 
