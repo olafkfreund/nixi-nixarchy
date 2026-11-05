@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 203
 intent: intent/2026-11-05-203-character-fit.md
 ---
