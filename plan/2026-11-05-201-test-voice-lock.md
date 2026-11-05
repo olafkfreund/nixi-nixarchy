@@ -73,6 +73,13 @@ main `b4de326`; search by name if they've moved.
    - PR with `@codex review`; Opus, Codex and agy review the diff read-only.
    - Close #201 on merge. There's no deploy, since only `tests/` changes.
 
+## Deviations (after code review)
+
+- `test_nixi_ask`'s `test_open_in_nixi` sets the throwaway folder for the whole test, not only the import. Without it, run from a shell
+  without Hyprland, it could tell the live window to step aside (Opus, from reading the code).
+- `test_voice_fit` passed without the real audio sockets, so the audio exception wasn't needed.
+- Known limit, left as is: the guard can't fire if `TMPDIR` is itself the live folder. The `CONF_PATH` guard has the same limit.
+
 ## Tests
 
 ```bash
