@@ -198,7 +198,7 @@ scratch copy (`git archive HEAD | tar -x -C <scratch>`), never in the worktree.
 
 1. `nix develop -c python3 -B tests/test_plugin_sandbox.py`: `Ran 37`, `OK`, nothing skipped. Tried: passes.
 2. `python3 -B tests/test_plugin_sandbox.py` in a plain p620 shell: `OK (skipped=6)`, unchanged. Tried: passes.
-3. `NIXI_SANDBOX_TESTS=require python3 -B tests/test_plugin_sandbox.py` in that shell: fails, names `pasta`, exit 1.
+3. `NIXI_SANDBOX_TESTS=require python3 -B tests/test_plugin_sandbox.py` in that shell: fails, names `pasta`, exit 1. Tried: passes.
 4. `cd tests && python3 -B -m unittest test_news_plugin`: `OK`. Tried: passes.
 5. `nix build --no-link .#checks.x86_64-linux.wrapper-has-sandbox-tools`: passes. Tried: passes.
 6. `git diff --stat origin/main` shows nothing under `app/` or `plugins/`, and no `flake.lock`.
@@ -207,7 +207,7 @@ scratch copy (`git archive HEAD | tar -x -C <scratch>`), never in the worktree.
    | Change | Test | Must give |
    | ------ | ---- | --------- |
    | `app/plugins.py:592` `"-T", "none"` → `"-T", "auto"` | `..._own_services`, `test_argv_shape` | both fail, `['connected'] != ['refused']`. Tried: yes |
-   | `plugins/examples/news/run:146`, drop `or not url_ok(url)` | both news tests | both fail |
+   | `plugins/examples/news/run:146`, drop `or not url_ok(url)` | both news tests | both fail. Tried: yes |
    | `nix/package.nix:119`, delete the `passt` line | `wrapper-has-sandbox-tools` | assertion fails. Tried: yes |
 
 "Tried" means on this plan's exact code, in a scratch copy of `7efdc88`. The RSS
