@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 196
 intent: intent/2026-11-05-196-settings-over-board.md
 ---
