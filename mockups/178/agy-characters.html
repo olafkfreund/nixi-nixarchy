@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desktop Companion Character Mockups</title>
+  <style>
+    :root {
+      --bg: #0c0e14;
+      --card-bg: #151924;
+      --card-border: #262d40;
+      --text: #e2e8f0;
+      --subtext: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      letter-spacing: -0.02em;
+    }
+
+    p.subtitle {
+      color: var(--subtext);
+      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stage {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 1.5rem 1.5rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Per-character default eye CSS variables (overridable by user theme) */
+    .card.terminal {
+      --white: #d8fbe8;
+      --pupil: #10b981;
+    }
+    .card.robot {
+      --white: #e0f2fe;
+      --pupil: #0284c7;
+    }
+    .card.devil {
+      --white: #fef3c7;
+      --pupil: #7c2d12;
+    }
+
+    .label {
+      margin-top: 0.75rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .tag {
+      font-size: 0.78rem;
+      color: var(--subtext);
+      margin-top: 0.2rem;
+    }
+
+    /* Shared Animations */
+    @keyframes bob {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-7px); }
+    }
+
+    @keyframes shadow-breathe {
+      0%, 100% { transform: scale(1); opacity: 0.45; }
+      50% { transform: scale(0.88); opacity: 0.28; }
+    }
+
+    @keyframes blink {
+      0%, 45%, 49%, 94%, 98%, 100% { transform: scaleY(1); }
+      47%, 96% { transform: scaleY(0.06); }
+    }
+
+    @keyframes glance {
+      0%, 18%, 100% { transform: translate(0px, 0px); }
+      23%, 40% { transform: translate(-6px, -1px); }
+      45%, 60% { transform: translate(0px, 0px); }
+      65%, 82% { transform: translate(6px, 1px); }
+      87%, 95% { transform: translate(0px, -3px); }
+    }
+
+    /* Character-Specific Animations */
+    @keyframes cursor-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.1; }
+    }
+
+    @keyframes antenna-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.85; }
+      50% { transform: scale(1.22); opacity: 1; }
+    }
+
+    @keyframes antenna-halo {
+      0%, 100% { transform: scale(0.9); opacity: 0.2; }
+      50% { transform: scale(1.45); opacity: 0.65; }
+    }
+
+    @keyframes tail-swish {
+      0%, 100% { transform: rotate(-7deg); }
+      50% { transform: rotate(9deg); }
+    }
+
+    .bob-group {
+      animation: bob 3.6s ease-in-out infinite;
+    }
+    .card.robot .bob-group {
+      animation-delay: -1.2s;
+    }
+    .card.devil .bob-group {
+      animation-delay: -2.4s;
+    }
+
+    .floor-shadow {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: shadow-breathe 3.6s ease-in-out infinite;
+    }
+    .card.robot .floor-shadow {
+      animation-delay: -1.2s;
+    }
+    .card.devil .floor-shadow {
+      animation-delay: -2.4s;
+    }
+
+    .eyes-blink {
+      transform-origin: 0px -6px;
+      animation: blink 5.2s ease-in-out infinite;
+    }
+    .card.robot .eyes-blink {
+      animation-delay: -1.7s;
+    }
+    .card.devil .eyes-blink {
+      animation-delay: -3.3s;
+    }
+
+    .pupils-glance {
+      animation: glance 6.8s ease-in-out infinite;
+    }
+    .card.robot .pupils-glance {
+      animation-delay: -2.1s;
+    }
+    .card.devil .pupils-glance {
+      animation-delay: -4.2s;
+    }
+
+    .eye-white {
+      fill: var(--white, #ffffff);
+    }
+
+    .eye-pupil {
+      fill: var(--pupil, #38bdf8);
+    }
+
+    .prompt-cursor {
+      animation: cursor-blink 1.05s steps(1) infinite;
+    }
+
+    .antenna-bulb {
+      transform-origin: 0px -118px;
+      animation: antenna-pulse 1.8s ease-in-out infinite;
+    }
+
+    .antenna-glow {
+      transform-origin: 0px -118px;
+      animation: antenna-halo 1.8s ease-in-out infinite;
+    }
+
+    .devil-tail {
+      transform-origin: 48px 54px;
+      animation: tail-swish 2.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Desktop Companion Mockups</h1>
+  <p class="subtitle">Drop-in body replacements sharing Nixi's core <code>(±24, -6)</code> two-oval eye rig</p>
+
+  <div class="stage">
+
+    <!-- 1. TERMINAL -->
+    <div class="card terminal">
+      <svg viewBox="-128 -150 256 256" width="300" height="300" aria-label="Terminal companion">
+        <defs>
+          <linearGradient id="term-case" x1="0" y1="-90" x2="0" y2="80" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#3b4254" />
+            <stop offset="100%" stop-color="#1e2330" />
+          </linearGradient>
+          <linearGradient id="term-screen" x1="0" y1="-65" x2="0" y2="45" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#091310" />
+            <stop offset="100%" stop-color="#0f241d" />
+          </linearGradient>
+          <linearGradient id="term-glare" x1="-70" y1="-65" x2="30" y2="20" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.09" />
+            <stop offset="50%" stop-color="#ffffff" stop-opacity="0.02" />
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+
+        <!-- Floor Shadow -->
+        <ellipse class="floor-shadow" cx="0" cy="108" rx="68" ry="11" fill="#000000" />
+
+        <g class="bob-group">
+          <!-- Monitor Neck & Stand -->
+          <rect x="-20" y="54" width="40" height="22" rx="4" fill="#181c26" stroke="#2d3446" stroke-width="2" />
+          <path d="M -52 74 L 52 74 C 60 74 64 82 66 88 L -66 88 C -64 82 -60 74 -52 74 Z" fill="#282f40" stroke="#3d465e" stroke-width="2" />
+          <!-- Cute mini keycaps on the base -->
+          <g fill="#4b556e">
+            <rect x="-46" y="78" width="12" height="5" rx="2" />
+            <rect x="-30" y="78" width="12" height="5" rx="2" />
+            <rect x="-14" y="78" width="28" height="5" rx="2" />
+            <rect x="18" y="78" width="12" height="5" rx="2" />
+            <rect x="34" y="78" width="12" height="5" rx="2" />
+          </g>
+
+          <!-- Outer CRT/Terminal Bezel -->
+          <rect x="-92" y="-82" width="184" height="142" rx="28" fill="url(#term-case)" stroke="#525c75" stroke-width="3" />
+          <!-- Top vent slots -->
+          <line x1="-28" y1="-73" x2="-8" y2="-73" stroke="#181c26" stroke-width="3" stroke-linecap="round" />
+          <line x1="8" y1="-73" x2="28" y2="-73" stroke="#181c26" stroke-width="3" stroke-linecap="round" />
+
+          <!-- Inner Recessed Screen -->
+          <rect x="-76" y="-64" width="152" height="106" rx="18" fill="url(#term-screen)" stroke="#060d0b" stroke-width="4" />
+
+          <!-- Subtle CRT scanlines -->
+          <g stroke="#10b981" stroke-opacity="0.06" stroke-width="1.5">
+            <line x1="-70" y1="-48" x2="70" y2="-48" />
+            <line x1="-70" y1="-32" x2="70" y2="-32" />
+            <line x1="-70" y1="-16" x2="70" y2="-16" />
+            <line x1="-70" y1="0" x2="70" y2="0" />
+            <line x1="-70" y1="16" x2="70" y2="16" />
+            <line x1="-70" y1="32" x2="70" y2="32" />
+          </g>
+
+          <!-- Screen Prompt ">_" in bottom-left corner of screen -->
+          <path d="M -62 24 L -55 29 L -62 34" fill="none" stroke="#10b981" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+          <rect class="prompt-cursor" x="-50" y="25" width="11" height="10" rx="2" fill="#10b981" />
+
+          <!-- Power LED on bezel -->
+          <circle cx="66" cy="50" r="3.5" fill="#10b981" />
+
+          <!-- SHARED EYE RIG: centred at (±24, -6), rx=16, ry=26 -->
+          <g class="eyes-blink">
+            <ellipse class="eye-white" cx="-24" cy="-6" rx="16" ry="26" />
+            <ellipse class="eye-white" cx="24" cy="-6" rx="16" ry="26" />
+            <g class="pupils-glance">
+              <ellipse class="eye-pupil" cx="-24" cy="-6" rx="9.5" ry="15.5" />
+              <ellipse class="eye-pupil" cx="24" cy="-6" rx="9.5" ry="15.5" />
+              <!-- Eye catchlights -->
+              <circle cx="-28" cy="-15" r="3.5" fill="#ffffff" opacity="0.85" />
+              <circle cx="20" cy="-15" r="3.5" fill="#ffffff" opacity="0.85" />
+            </g>
+          </g>
+
+          <!-- Screen glass glare overlay -->
+          <path d="M -68 -60 L 20 -60 L -35 38 L -68 38 C -72 38 -74 34 -74 28 L -74 -52 C -74 -57 -71 -60 -68 -60 Z" fill="url(#term-glare)" pointer-events="none" />
+        </g>
+      </svg>
+      <div class="label">1. Terminal</div>
+      <div class="tag">Screen face &amp; blinking prompt cursor</div>
+    </div>
+
+    <!-- 2. ROBOT -->
+    <div class="card robot">
+      <svg viewBox="-128 -150 256 256" width="300" height="300" aria-label="Robot companion">
+        <defs>
+          <linearGradient id="bot-shell" x1="0" y1="-85" x2="0" y2="85" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#64748b" />
+            <stop offset="55%" stop-color="#334155" />
+            <stop offset="100%" stop-color="#1e293b" />
+          </linearGradient>
+          <linearGradient id="bot-visor" x1="0" y1="-50" x2="0" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#091526" />
+            <stop offset="100%" stop-color="#0f2542" />
+          </linearGradient>
+          <radialGradient id="bulb-grad" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#bae6fd" />
+            <stop offset="50%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#0284c7" />
+          </radialGradient>
+        </defs>
+
+        <!-- Floor Shadow -->
+        <ellipse class="floor-shadow" cx="0" cy="108" rx="64" ry="11" fill="#000000" />
+
+        <g class="bob-group">
+          <!-- Antenna stem & pulsing light -->
+          <line x1="0" y1="-78" x2="0" y2="-110" stroke="#94a3b8" stroke-width="5" stroke-linecap="round" />
+          <path d="M -16 -78 A 16 10 0 0 1 16 -78 Z" fill="#475569" stroke="#64748b" stroke-width="2" />
+          <circle class="antenna-glow" cx="0" cy="-118" r="16" fill="#38bdf8" />
+          <circle class="antenna-bulb" cx="0" cy="-118" r="9.5" fill="url(#bulb-grad)" />
+
+          <!-- Side Ear Bolts -->
+          <g fill="#475569" stroke="#94a3b8" stroke-width="2">
+            <rect x="-102" y="-22" width="16" height="34" rx="6" />
+            <rect x="86" y="-22" width="16" height="34" rx="6" />
+            <circle cx="-94" cy="-5" r="3" fill="#1e293b" stroke="none" />
+            <circle cx="94" cy="-5" r="3" fill="#1e293b" stroke="none" />
+          </g>
+
+          <!-- Rounded Robot Chassis / Head -->
+          <rect x="-88" y="-78" width="176" height="156" rx="64" fill="url(#bot-shell)" stroke="#94a3b8" stroke-width="2.5" />
+
+          <!-- Subtle forehead panel seam & rivets -->
+          <path d="M -52 -66 Q 0 -56 52 -66" fill="none" stroke="#1e293b" stroke-width="2" opacity="0.6" />
+          <circle cx="-58" cy="-48" r="2.5" fill="#94a3b8" opacity="0.7" />
+          <circle cx="58" cy="-48" r="2.5" fill="#94a3b8" opacity="0.7" />
+
+          <!-- Dark Visor Plate -->
+          <rect x="-66" y="-48" width="132" height="84" rx="36" fill="url(#bot-visor)" stroke="#0f172a" stroke-width="4" />
+          <!-- Visor rim highlight -->
+          <rect x="-66" y="-48" width="132" height="84" rx="36" fill="none" stroke="#38bdf8" stroke-opacity="0.22" stroke-width="1.5" />
+
+          <!-- Cute LED cheek blushes inside visor -->
+          <ellipse cx="-48" cy="14" rx="7" ry="4" fill="#38bdf8" opacity="0.35" />
+          <ellipse cx="48" cy="14" rx="7" ry="4" fill="#38bdf8" opacity="0.35" />
+
+          <!-- SHARED EYE RIG: centred at (±24, -6), rx=16, ry=26 -->
+          <g class="eyes-blink">
+            <ellipse class="eye-white" cx="-24" cy="-6" rx="16" ry="26" />
+            <ellipse class="eye-white" cx="24" cy="-6" rx="16" ry="26" />
+            <g class="pupils-glance">
+              <ellipse class="eye-pupil" cx="-24" cy="-6" rx="9.5" ry="15.5" />
+              <ellipse class="eye-pupil" cx="24" cy="-6" rx="9.5" ry="15.5" />
+              <!-- Eye catchlights -->
+              <circle cx="-28" cy="-15" r="3.5" fill="#ffffff" opacity="0.9" />
+              <circle cx="20" cy="-15" r="3.5" fill="#ffffff" opacity="0.9" />
+            </g>
+          </g>
+
+          <!-- Chin happy speaker grille -->
+          <g stroke="#1e293b" stroke-width="3.5" stroke-linecap="round">
+            <line x1="-18" y1="54" x2="18" y2="54" />
+            <line x1="-12" y1="62" x2="12" y2="62" />
+          </g>
+        </g>
+      </svg>
+      <div class="label">2. Robot</div>
+      <div class="tag">Lit visor face &amp; pulsing antenna</div>
+    </div>
+
+    <!-- 3. DEVIL -->
+    <div class="card devil">
+      <svg viewBox="-128 -150 256 256" width="300" height="300" aria-label="Devil companion">
+        <defs>
+          <radialGradient id="devil-body" cx="35%" cy="25%" r="75%">
+            <stop offset="0%" stop-color="#fb7185" />
+            <stop offset="55%" stop-color="#e11d48" />
+            <stop offset="100%" stop-color="#881337" />
+          </radialGradient>
+          <linearGradient id="devil-horn" x1="0" y1="-112" x2="0" y2="-55" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#fef3c7" />
+            <stop offset="100%" stop-color="#f59e0b" />
+          </linearGradient>
+        </defs>
+
+        <!-- Floor Shadow -->
+        <ellipse class="floor-shadow" cx="0" cy="108" rx="64" ry="11" fill="#000000" />
+
+        <g class="bob-group">
+          <!-- Swishing Spade Tail (behind body on right) -->
+          <g class="devil-tail">
+            <path d="M 48 54 C 86 64 90 18 106 8" fill="none" stroke="#be123c" stroke-width="7" stroke-linecap="round" />
+            <!-- Cute spade tip -->
+            <path d="M 106 8 L 101 -5 L 117 2 L 109 16 Z" fill="#e11d48" stroke="#be123c" stroke-width="2" stroke-linejoin="round" />
+          </g>
+
+          <!-- Tiny Bat Wings -->
+          <path d="M -78 4 C -106 -14 -116 8 -104 28 C -95 20 -88 26 -80 34 Z" fill="#9f1239" stroke="#be123c" stroke-width="2" stroke-linejoin="round" />
+          <path d="M 78 4 C 106 -14 116 8 104 28 C 95 20 88 26 80 34 Z" fill="#9f1239" stroke="#be123c" stroke-width="2" stroke-linejoin="round" />
+
+          <!-- Little Feet -->
+          <ellipse cx="-32" cy="82" rx="16" ry="10" fill="#881337" />
+          <ellipse cx="32" cy="82" rx="16" ry="10" fill="#881337" />
+
+          <!-- Plump Little Devil Body (radius ~86) -->
+          <path d="M 0 -78 C 56 -78 86 -42 86 8 C 86 56 54 84 0 84 C -54 84 -86 56 -86 8 C -86 -42 -56 -78 0 -78 Z" fill="url(#devil-body)" stroke="#fda4af" stroke-opacity="0.35" stroke-width="2" />
+
+          <!-- Soft tummy patch -->
+          <ellipse cx="0" cy="52" rx="38" ry="20" fill="#fda4af" opacity="0.18" />
+
+          <!-- Cute Curved Horns -->
+          <path d="M -56 -58 C -72 -92 -48 -112 -28 -98 C -36 -84 -36 -70 -30 -64 Z" fill="url(#devil-horn)" stroke="#b45309" stroke-width="2" stroke-linejoin="round" />
+          <path d="M 56 -58 C 72 -92 48 -112 28 -98 C 36 -84 36 -70 30 -64 Z" fill="url(#devil-horn)" stroke="#b45309" stroke-width="2" stroke-linejoin="round" />
+
+          <!-- Rosy cheeks -->
+          <ellipse cx="-50" cy="18" rx="9" ry="5" fill="#fecdd3" opacity="0.45" />
+          <ellipse cx="50" cy="18" rx="9" ry="5" fill="#fecdd3" opacity="0.45" />
+
+          <!-- SHARED EYE RIG: centred at (±24, -6), rx=16, ry=26 -->
+          <g class="eyes-blink">
+            <ellipse class="eye-white" cx="-24" cy="-6" rx="16" ry="26" />
+            <ellipse class="eye-white" cx="24" cy="-6" rx="16" ry="26" />
+            <g class="pupils-glance">
+              <ellipse class="eye-pupil" cx="-24" cy="-6" rx="9.5" ry="15.5" />
+              <ellipse class="eye-pupil" cx="24" cy="-6" rx="9.5" ry="15.5" />
+              <!-- Eye catchlights -->
+              <circle cx="-28" cy="-15" r="3.5" fill="#ffffff" opacity="0.9" />
+              <circle cx="20" cy="-15" r="3.5" fill="#ffffff" opacity="0.9" />
+            </g>
+          </g>
+
+          <!-- Subtle cheeky brow ridge ( sits above eyes without clipping rx=16 ry=26 ) -->
+          <path d="M -42 -34 Q -24 -27 -8 -31" fill="none" stroke="#881337" stroke-width="3.5" stroke-linecap="round" />
+          <path d="M 42 -34 Q 24 -27 8 -31" fill="none" stroke="#881337" stroke-width="3.5" stroke-linecap="round" />
+
+          <!-- Cheeky grin with one tiny fang -->
+          <path d="M -18 30 Q 0 40 20 27" fill="none" stroke="#4c0519" stroke-width="3.5" stroke-linecap="round" />
+          <polygon points="10,33 16,30 14,40" fill="#fef3c7" />
+        </g>
+      </svg>
+      <div class="label">3. Devil</div>
+      <div class="tag">Warm crimson imp &amp; swishing tail</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
