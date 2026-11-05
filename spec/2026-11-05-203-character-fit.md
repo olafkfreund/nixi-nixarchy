@@ -20,14 +20,15 @@ three other bodies.
 | Body | `cupX` | `band` |
 | ---- | ------ | ------ |
 | Snowflake | 88 | `M-84 -20C-100 -144 100 -144 84 -20` (today's path) |
-| Terminal | 105 | `M-105 -30C-128 -140 128 -140 105 -30` |
-| Robot | 103 | `M-103 -30C-124 -146 124 -146 103 -30` |
-| Devil | 105 | `M-105 -30C-128 -140 128 -140 105 -30` |
+| Terminal | 106 | `M-105 -30C-128 -140 128 -140 105 -30` |
+| Robot | 104 | `M-103 -30C-124 -146 124 -146 103 -30` |
+| Devil | 106 | `M-105 -30C-128 -140 128 -140 105 -30` |
 
 The user looked at `mockups/203/headphones-fit.png` and said "mockup approved
 looks fine continue". These positions and the wider per-body bands are the
-user's choice, subject to the fit test through sway and bounce. The bands are a
-new shape: the intent only asked for positions. With Snowflake's band the cups
+user's choice, subject to the fit test through sway and bounce. That test moved
+each cup 1 px out from the mock-up's ±105 and ±103, as "Measured so far" shows;
+the bands stay as shown. The bands are a new shape: the intent only asked for positions. With Snowflake's band the cups
 float clear of it, and on Terminal it vanishes behind the case. No body stays
 off.
 
@@ -57,8 +58,9 @@ const wornSkin=L=>bodyFits(CHARACTERS[L.character]||CHARACTERS.snowflake,L.skin)
   The grid redraws after a character is picked, because `setSetting` calls
   `renderSettings`.
 - **Saved skin:** `look.skin` is never rewritten, so switching back restores it.
-  `wornSkin` replaces the raw check in `wxHat()` (~1600), `skinless` (~1896) and
-  the Skin colour row in `renderParts` (~3419).
+  `wornSkin` replaces the raw check in `wxHat()` (~1600), `skinless` (~1896),
+  the party confetti in `sitStep` (~2412) and the Skin colour row in
+  `renderParts` (~3419). `drawSkin` still builds the hidden skin, as it does now.
 - **`/skin`** (`slash`, ~3829): if `!bodyFits(BODY,k)`, answer
   ``tick(`${k} doesn't fit ${BODY.label}`,true)`` and save nothing. The text is
   plain English, like the rest of that command's messages.
@@ -81,7 +83,7 @@ const wornSkin=L=>bodyFits(CHARACTERS[L.character]||CHARACTERS.snowflake,L.skin)
   Terminal -1 to 342 and -7 up top, Robot -3 to 343 and -8 up top, against limits
   of 3 and 337. The band's real ink stays in, so the test must measure ink (see
   "Verification"). This changes a test to pass the design, so review it as such.
-- **Thin face margin.** The cups clear the face box by 0.3 px at the worst
+- **Thin face margin.** The cups clear the face box by 0.7 px at the worst
   combination (gaze 14, talk lift, full sway, beat). Gaze 14 is the eye test's
   extreme; the moods I checked reach about 7.5.
 - **A stale colour target.** With the Skin part selected, switching to a body
@@ -102,13 +104,18 @@ Changes to `tests/character_fit.mjs`:
    exactly 88 and today's path.
 2. **Cups clear the face and marks,** for each body except Snowflake: sample
    the shell ellipse's outline (rx 18.5, ry 29.5, stroke included) in `#body`
-   coordinates, and fail if a point falls inside `faceBox` or a `.avoid`'s box.
-   Run gaze 0 and ±14, lift 0 and 1, sway 0 and ±28, beat 0 and 1.
+   coordinates, and fail if a point falls inside `faceBox` or a `.avoid`'s
+   `bodyBox`. Run gaze 0 and ±14, lift 0 and 1, sway 0 and ±28, beat 0 and 1.
+   `frame()` moves the springs and `beat` before it reads them, so the test must
+   reach the real values: drive lift with a talking mood, set sway and beat for
+   the last frame, and assert the cup's `rotate` and `scale`. No 0.5 px tolerance.
 3. **Window, by ink:** the `headphones` case samples the band's path, widened by
    half its stroke, and the cup outlines, instead of the groups' boxes. The eye
    test already does this, because "a box round a leaning oval has empty
    corners". The 3 px margin and the bounce and `roll` stay.
 4. **Pixels:** add a `music` state to Snowflake's comparison with `origin/main`.
+   It asserts the cups are drawn (opacity 1) in both pages, and 0 px off, because
+   the comparison's usual allowance doesn't prove "identical".
 5. **Skins:** on Robot, no `crown` or `sprout` tile. With `crown` saved, the
    `none` tile is lit, there's no Skin chip and `wxHat()` is false. `/skin crown`
    leaves `look.skin` alone. Switching to Snowflake restores the crown.
@@ -123,15 +130,16 @@ server:
 
 | Check | Terminal | Robot | Devil |
 | ----- | -------- | ----- | ----- |
-| Smallest gap to face box, all combinations | 0.3 | 0.3 | 0.3 |
+| Smallest gap to face box, all combinations | 0.7 | 0.7 | 0.7 |
 | Marks hit | 0 | 0 | 0 |
-| Ink range in x through bounce and roll, gaze -14 | 16 to 324 | 19 to 321 | 16 to 324 |
-| Ink range in y, same run | 18 to 313 | 20 to 310 | 18 to 313 |
+| Ink range in x through bounce and roll, gaze -14 | 17 to 323 | 19 to 321 | 17 to 323 |
+| Ink range in y, same run | 16 to 313 | 19 to 311 | 16 to 313 |
 
-Snowflake's pixels matched the untouched page in all five states, `music`
-included, with its headphones confirmed drawn in a separate run.
+At the mock-up's ±105 and ±103 the same check overlapped the face box by 0.3 px,
+which is why the cups moved. Snowflake's pixels matched the untouched page in all
+five states, 0 px off, with the cups at opacity 1 in the `music` state.
 
-**Limits of the mock-up and these numbers:** the PNG shows only rest and the
-gaze and beat extremes, not sway, lift or bounce. The fit test as a whole didn't
+**Limits of the mock-up and these numbers:** the PNG shows ±105 and ±103, and
+only rest and the gaze and beat extremes, not sway, lift or bounce. The fit test as a whole didn't
 run, because its save and reload cases need the real server. Tests 2, 3 and 5
 above are measured or designed, not yet written. Nothing ran on the desktop.
