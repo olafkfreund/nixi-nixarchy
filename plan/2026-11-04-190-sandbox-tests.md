@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 190
 spec: spec/2026-11-04-190-sandbox-tests.md
 coders:
