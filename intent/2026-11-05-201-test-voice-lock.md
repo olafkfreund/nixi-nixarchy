@@ -9,14 +9,15 @@ author: olafkfreund
 ## Problem
 
 The tests start real Nixi servers with a throwaway `HOME`, so they can't touch the user's config. But they keep the
-real `XDG_RUNTIME_DIR`, and `app/server.py` and `app/floor.py` use that folder to find live things:
+real `XDG_RUNTIME_DIR`, or fall back to `/run/user/<uid>` if it's unset, and `app/server.py` and `app/floor.py` use that folder to find live things:
 
 | In `XDG_RUNTIME_DIR` | Used for |
 | ---- | ---- |
 | `nixarchy-voice-floor.lock` | The voice lock shared with the live Nixi and other voices |
-| `nixi-companion-<uid>.sock` | The live Nixi window; a server sends it `aside:on` when it has no layer events |
+| `nixi-companion-<uid>.sock` | The live Nixi window; `open_in_nixi` sends it `aside:on` when Hyprland isn't in the environment |
 | `omarchy-shell-<hash>.sock` | The live desktop shell |
 | `hypr/` | The live Hyprland instance |
+| `ai-mirror/` | The live desktop-control state, read when `ai-mirror` is installed |
 
 Effects:
 
@@ -26,14 +27,15 @@ Effects:
   messages to the live window, shell or Hyprland.
 
 Nine more page tests have the same setup: accessories, mirror, stages, settings, caption, weather, character, token and
-voice. The shared `_ServerEnv`, used by 29 test files, keeps the real folder as well.
+voice. The shared `_ServerEnv`, used by about 30 test files, keeps the real folder as well.
 This repeats the kind of mistake #176 made with `HOME`, where tests overwrote the user's real config.
 
 ## Proposed outcome
 
-- A test server or `_ServerEnv` test can't reach the live voice lock, window, shell or Hyprland, because it has its own
-  empty runtime folder.
-- A guard fails loudly if a server is imported under the real runtime folder, as `_ServerEnv` already does for `HOME`.
+- A test server or `_ServerEnv` test can't reach the live voice lock, window, shell, Hyprland or ai-mirror state, because it
+  has its own throwaway runtime folder that exists for the whole run. A test may put things in it. It's always set,
+  never left unset, so nothing falls back to `/run/user/<uid>`.
+- A guard fails loudly if the voice lock's path is outside the throwaway folder, as `_ServerEnv` already does for `HOME`.
 - The page tests stop queueing on each other: running several at once doesn't fail them through the voice lock.
 
 ## Affected users and systems
@@ -50,6 +52,7 @@ desktop, on p620 and razer.
 ## Open questions
 
 1. **How much of the suite?** Recommended: every server start and `_ServerEnv`, through one small shared helper, since a
-   partial fix leaves the same trap.
+   partial fix leaves the same trap. The spec must handle `_ServerEnv` importing `server` once: the lock's path is
+   fixed then, and the folder has to outlive the first test class.
 2. **Should the suite also fail if a test touches the live folder?** Recommended: only the import guard above. Watching
    the folder during a run would flag other programs on the desktop.
