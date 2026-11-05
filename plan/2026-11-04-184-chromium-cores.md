@@ -27,6 +27,8 @@ reviewers:
   `unshare -U` or `os.unshare`: they miss it or are the abort itself.
 - **Only exit 1 (a real denial) adds `--no-sandbox`.** Exit 2, a signal, a
   timeout or a probe that can't run keep the sandbox on.
+- **A denial means `ENOSYS` or `EPERM`.** Any other `clone` error exits 2, so a
+  transient `EAGAIN` or `ENOMEM` can't turn the sandbox off (review finding, step 6).
 - **Unsandboxed browsers reach only this machine:** `--no-sandbox` always comes
   with `--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1`.
 - **Flags don't change.** A GPU-forced Chrome hung an AMD GPU twice (#138).
@@ -67,18 +69,18 @@ import sys
 _CHILD = """
 import os
 try:
-    import ctypes
+    import ctypes, errno
     nr = {"x86_64": 56, "aarch64": 220}.get(os.uname().machine)  # SYS_clone; flake.nix builds these two
     if nr is None:
         os._exit(0)
-    libc = ctypes.CDLL(None)
+    libc = ctypes.CDLL(None, use_errno=True)
     libc.syscall.argtypes = [ctypes.c_long] * 6                  # syscall is variadic
     libc.syscall.restype = ctypes.c_long
     r = libc.syscall(nr, 0x10000000 | 17, 0, 0, 0, 0)            # CLONE_NEWUSER | SIGCHLD
     if r == 0:
         os._exit(0)
     if r < 0:
-        os._exit(1)
+        os._exit(1 if ctypes.get_errno() in (errno.ENOSYS, errno.EPERM) else 2)  # EAGAIN or ENOMEM isn't a denial
     os._exit(0 if os.waitpid(r, 0)[1] == 0 else 2)
 except Exception:
     os._exit(2)
