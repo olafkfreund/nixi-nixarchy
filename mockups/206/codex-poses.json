@@ -1,0 +1,171 @@
+{
+ "wizard": {
+  "defs": "",
+  "css": ".c-wizard .whole{transform-box:fill-box;transform-origin:center bottom}.c-wizard.s-think .wizard-thought,.c-wizard.s-work .wizard-rune,.c-wizard.s-busy .wizard-fan{transform-box:fill-box;transform-origin:center center}.c-wizard.s-think .wizard-thought{animation:wizard-muse 2.8s ease-in-out infinite}.c-wizard.s-work .wizard-rune{animation:wizard-glow 1.8s ease-in-out infinite}.c-wizard.s-sleep .whole{transform:rotate(-15deg) translateY(9px)}.c-wizard.s-sad .whole{transform:translateY(8px) scaleY(.94)}.c-wizard.s-alert .whole{transform:rotate(-8deg) translateY(4px)}.c-wizard.s-busy .wizard-fan{animation:wizard-fan 1.2s ease-in-out infinite}.c-wizard.s-boop .whole{animation:wizard-boop 1s ease-out 1}@keyframes wizard-muse{50%{transform:translateY(-7px) rotate(12deg)}}@keyframes wizard-glow{50%{opacity:.3;transform:scale(1.25)}}@keyframes wizard-fan{50%{transform:rotate(18deg)}}@keyframes wizard-boop{25%{transform:scale(1.09,.88)}55%{transform:scale(.94,1.08)}80%{transform:scale(1.02,.98)}}",
+  "poses": {
+   "think": {
+    "back": "<g class='wizard-thought'><path d='M91 -31 q14 -13 25 0 q5 10 -5 17 q-12 7 -18 -3 q-4 -7 4 -12' fill='none' stroke='#e9d9ab' stroke-width='4' stroke-linecap='round'/><circle cx='108' cy='-39' r='3' fill='#fff0bd'/></g>",
+    "front": "<path d='M-73 65 Q-48 88 -20 63' fill='none' stroke='#ad91b9' stroke-width='15' stroke-linecap='round'/><path d='M-25 57 q7 -8 14 0 q2 8 -7 10Z' fill='#b8917e'/><path d='M-15 80 Q0 76 15 80' fill='none' stroke='#72768b' stroke-width='3' stroke-linecap='round'/>"
+   },
+   "work": {
+    "back": "<g class='wizard-rune'><circle cx='96' cy='-68' r='15' fill='none' stroke='#ffe8a0' stroke-width='2' opacity='.8'/><path d='M96 -80 v24 M86 -68 h20' stroke='#fff5c8' stroke-width='2'/></g>",
+    "front": "<path d='M60 66 Q76 61 84 43' fill='none' stroke='#a98fc0' stroke-width='12' stroke-linecap='round'/><circle cx='84' cy='42' r='7' fill='#ba927d'/>"
+   },
+   "wait": {
+    "back": "<path d='M103 -80 q-10 -10 -19 1 q-3 6 2 11 q6 5 3 10 M89 -50 v2' fill='none' stroke='#ffe5a0' stroke-width='5' stroke-linecap='round'/>",
+    "front": "<path d='M70 67 Q91 49 90 29' fill='none' stroke='#aa92bd' stroke-width='15' stroke-linecap='round'/><path d='M84 31 q-1 -14 8 -13 q10 2 6 16Z' fill='#c29a82'/><path d='M-9 80 Q0 76 9 80' fill='none' stroke='#74788d' stroke-width='3'/>"
+   },
+   "happy": {
+    "back": "<path d='M-105 -48 l-5 -10 -5 10 -10 5 10 5 5 10 5 -10 10 -5Z M96 -27 l-4 -8 -4 8 -8 4 8 4 4 8 4 -8 8 -4Z' fill='#ffe6a3'/>",
+    "front": "<path d='M-72 58 Q-95 37 -98 18 M70 59 Q91 43 91 20' fill='none' stroke='#b49ac5' stroke-width='15' stroke-linecap='round'/><circle cx='-99' cy='17' r='8' fill='#c49d85'/><circle cx='91' cy='19' r='8' fill='#c49d85'/><path d='M-18 79 Q0 94 18 79' fill='none' stroke='#77788e' stroke-width='4' stroke-linecap='round'/>"
+   },
+   "alert": {
+    "back": "<path d='M109 -104 l-4 35 h-8 l-4 -35Z' fill='#ffe4a0'/><circle cx='101' cy='-58' r='5' fill='#ffe4a0'/>",
+    "front": "<path d='M-72 58 Q-91 72 -98 65 M71 56 Q91 67 99 56' fill='none' stroke='#b29ac2' stroke-width='14' stroke-linecap='round'/><path d='M-6 77 q6 -7 12 0 q4 8 -6 11 q-10 -3 -6 -11Z' fill='#6a647b'/>"
+   },
+   "sad": {
+    "back": "<path d='M83 -106 q-12 -12 -24 0 q-12 0 -12 13 q5 10 17 8 h24 q12 -5 8 -14 q-2 -7 -13 -7Z' fill='#7d8195'/><path d='M67 -78 l-4 11 M83 -77 l-4 11' stroke='#a7cad8' stroke-width='3' stroke-linecap='round'/>",
+    "front": "<path d='M-18 75 Q0 73 18 75 L20 91 Q0 95 -20 91Z' fill='url(#wizard-beard)'/><path d='M-12 86 Q0 77 12 86' fill='none' stroke='#72788e' stroke-width='3' stroke-linecap='round'/><path d='M-75 65 Q-80 84 -72 90 M75 65 Q80 84 72 90' fill='none' stroke='#a68db6' stroke-width='12' stroke-linecap='round'/>"
+   },
+   "sleep": {
+    "back": "<path d='M69 -111 q-12 12 -5 23 q8 10 20 4 q-15 1 -15 -13Z' fill='#f8e5ac'/>",
+    "front": "<path d='M-78 10 Q-33 22 5 12 Q47 4 79 20 L81 94 Q2 112 -80 93Z' fill='url(#wizard-robe)'/><path d='M-78 13 Q-24 26 27 13 Q57 7 79 22' fill='none' stroke='#bdaac8' stroke-width='7' opacity='.7'/><path d='M92 -51 l10 -7 -9 13 h10 M105 -72 l9 -6 -8 12 h9' fill='none' stroke='#eee4c6' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
+   },
+   "busy": {
+    "back": "<path d='M105 -25 q6 10 0 16 q-7 4 -10 -3 q0 -5 10 -13Z M116 -3 q5 8 0 12 q-6 4 -8 -3 q1 -4 8 -9Z' fill='#a6d9e8'/>",
+    "front": "<g class='wizard-fan'><path d='M-96 59 L-113 20 Q-82 18 -75 50Z' fill='#e7d9b4'/><path d='M-100 25 l16 25 M-91 21 l13 30' stroke='#bfae92' stroke-width='2'/></g><path d='M-67 68 Q-85 70 -91 54' fill='none' stroke='#ae95bd' stroke-width='14' stroke-linecap='round'/><path d='M-11 80 Q0 85 11 80' fill='none' stroke='#74788d' stroke-width='3'/>"
+   },
+   "boop": {
+    "back": "<path d='M-103 -88 q-12 -9 -13 2 q-1 7 13 17 q14 -10 13 -17 q-2 -11 -13 -2Z M107 -43 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#f2c3b8'/>",
+    "front": "<path d='M-16 81 Q0 94 16 81' fill='none' stroke='#72768a' stroke-width='4' stroke-linecap='round'/><circle cx='-44' cy='47' r='5' fill='#e6a7a4' opacity='.7'/><circle cx='44' cy='47' r='5' fill='#e6a7a4' opacity='.7'/>"
+   }
+  }
+ },
+ "duck": {
+  "defs": "",
+  "css": ".c-duck .whole{transform-box:fill-box;transform-origin:center bottom}.c-duck.s-think .duck-bubble,.c-duck.s-busy .duck-fan{transform-box:fill-box;transform-origin:center center}.c-duck.s-think .duck-bubble{animation:duck-thought 2.6s ease-in-out infinite}.c-duck.s-sleep .whole{transform:rotate(-14deg) translateY(10px)}.c-duck.s-sad .whole{transform:translateY(8px) scaleY(.94)}.c-duck.s-alert .whole{transform:rotate(-10deg) translateY(4px)}.c-duck.s-busy .duck-fan{animation:duck-fanning 1.1s ease-in-out infinite}.c-duck.s-boop .whole{animation:duck-boop 1s ease-out 1}@keyframes duck-thought{50%{transform:translateY(-7px)}}@keyframes duck-fanning{50%{transform:rotate(20deg)}}@keyframes duck-boop{22%{transform:scale(1.12,.85)}52%{transform:scale(.94,1.1) translateY(-8px)}80%{transform:scale(1.03,.97)}}",
+  "poses": {
+   "think": {
+    "back": "<g class='duck-bubble'><circle cx='106' cy='-35' r='12' fill='#d9f4fa' opacity='.75'/><circle cx='107' cy='-36' r='5' fill='none' stroke='#fff' stroke-width='2'/><circle cx='89' cy='-19' r='4' fill='#d9f4fa'/></g>",
+    "front": "<path d='M-69 51 Q-55 67 -31 60 Q-24 58 -20 54' fill='none' stroke='url(#duck-wing)' stroke-width='15' stroke-linecap='round'/><path d='M-27 54 q6 -6 12 -1' fill='none' stroke='#f7d676' stroke-width='7' stroke-linecap='round'/>"
+   },
+   "work": {
+    "back": "<circle cx='105' cy='32' r='9' fill='#d9f7fb' opacity='.65'/><circle cx='115' cy='16' r='4' fill='#e9fbff'/>",
+    "front": "<path d='M-75 61 Q-58 72 -39 63' fill='none' stroke='#fff0a0' stroke-width='7' stroke-linecap='round'/><path d='M-47 69 q13 5 24 0' fill='none' stroke='#e9b545' stroke-width='3'/>"
+   },
+   "wait": {
+    "back": "<path d='M106 -80 q-10 -9 -17 1 q-3 6 2 10 q5 5 1 9 M93 -50 v2' fill='none' stroke='#d78935' stroke-width='5' stroke-linecap='round'/>",
+    "front": "<path d='M-72 51 Q-97 30 -105 18 Q-107 12 -99 12 Q-87 23 -67 36Z' fill='url(#duck-wing)'/><path d='M-100 18 q-4 -9 4 -11 q8 0 7 13' fill='#ffe696'/><path d='M-25 51 Q0 58 25 51' fill='none' stroke='#9e5826' stroke-width='2'/>"
+   },
+   "happy": {
+    "back": "<path d='M-104 -37 l-4 -9 -4 9 -9 4 9 4 4 9 4 -9 9 -4Z M103 -69 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#fff0aa'/>",
+    "front": "<path d='M-66 52 Q-94 38 -105 14 Q-108 8 -99 11 Q-82 24 -60 32Z M65 51 Q94 36 105 15 Q108 8 100 11 Q82 23 60 32Z' fill='url(#duck-wing)'/><path d='M-21 53 Q0 64 21 53' fill='none' stroke='#a86128' stroke-width='3' stroke-linecap='round'/>"
+   },
+   "alert": {
+    "back": "<path d='M107 -102 l-4 34 h-8 l-4 -34Z' fill='#e9863e'/><circle cx='99' cy='-57' r='5' fill='#e9863e'/>",
+    "front": "<path d='M-72 47 Q-98 56 -107 43 M70 47 Q98 56 107 42' fill='none' stroke='#f3c14d' stroke-width='13' stroke-linecap='round'/><path d='M-22 43 Q0 39 22 43 Q27 52 16 61 Q0 67 -16 61 Q-27 52 -22 43Z' fill='url(#duck-beak)'/><ellipse cx='0' cy='54' rx='7' ry='5' fill='#a45a2e'/>"
+   },
+   "sad": {
+    "back": "<path d='M94 -92 q-10 5 -6 13 q5 6 13 0 q8 -6 1 -15 q-4 -4 -8 2Z' fill='#a9d6e5'/>",
+    "front": "<path d='M-77 49 Q-61 74 -36 76 Q-47 59 -69 44Z' fill='url(#duck-wing)'/><path d='M-29 42 Q0 35 29 42 Q37 49 27 60 Q0 68 -27 60 Q-37 49 -29 42Z' fill='url(#duck-beak)'/><path d='M-17 57 Q0 51 17 57' fill='none' stroke='#9d5729' stroke-width='3' stroke-linecap='round'/>"
+   },
+   "sleep": {
+    "back": "<path d='M88 -102 q-13 11 -7 24 q8 10 21 3 q-17 1 -16 -15Z' fill='#f7e6b1'/>",
+    "front": "<path d='M-83 11 Q-27 20 26 12 Q71 8 94 22 L92 83 Q57 106 -47 94 Q-80 76 -83 11Z' fill='#9ac5cc'/><path d='M-82 12 Q-27 23 26 14 Q70 8 93 22' fill='none' stroke='#e1f3e9' stroke-width='7'/><path d='M100 -45 l9 -7 -8 13 h9 M110 -64 l8 -6 -7 12 h8' fill='none' stroke='#e1edf0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
+   },
+   "busy": {
+    "back": "<path d='M107 -17 q7 10 0 16 q-7 3 -9 -3 q-1 -5 9 -13Z M116 6 q5 8 0 12 q-6 3 -8 -3 q0 -4 8 -9Z' fill='#9ed7e8'/>",
+    "front": "<g class='duck-fan'><path d='M-102 49 Q-115 26 -108 17 Q-87 16 -77 47Z' fill='#a7d7dc'/><path d='M-107 21 l23 27 M-98 19 l17 28' stroke='#dff3ee' stroke-width='2'/></g><path d='M-70 53 Q-86 62 -100 50' fill='none' stroke='#f5ce5d' stroke-width='12' stroke-linecap='round'/><path d='M-20 52 Q0 57 20 52' fill='none' stroke='#a76129' stroke-width='2'/>"
+   },
+   "boop": {
+    "back": "<path d='M-106 -85 q-11 -9 -13 1 q-1 7 13 16 q14 -9 13 -16 q-2 -10 -13 -1Z M108 -46 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#f5b7a7'/>",
+    "front": "<path d='M-26 43 Q0 35 26 43 Q33 49 23 58 Q0 70 -23 58 Q-33 49 -26 43Z' fill='url(#duck-beak)'/><path d='M-12 52 Q0 63 12 52' fill='none' stroke='#9f5628' stroke-width='3' stroke-linecap='round'/><circle cx='-50' cy='43' r='5' fill='#f5a59b' opacity='.7'/><circle cx='50' cy='43' r='5' fill='#f5a59b' opacity='.7'/>"
+   }
+  }
+ },
+ "cat": {
+  "defs": "",
+  "css": ".c-cat .whole{transform-box:fill-box;transform-origin:center bottom}.c-cat.s-think .cat-note,.c-cat.s-busy .cat-fan{transform-box:fill-box;transform-origin:center center}.c-cat.s-think .cat-note{animation:cat-thought 2.6s ease-in-out infinite}.c-cat.s-sleep .whole{transform:rotate(-11deg) translateY(8px)}.c-cat.s-sad .whole{transform:translateY(7px) scaleY(.96)}.c-cat.s-alert .whole{transform:rotate(8deg) translateY(3px)}.c-cat.s-busy .cat-fan{animation:cat-fanning 1s ease-in-out infinite}.c-cat.s-boop .whole{animation:cat-boop 1s ease-out 1}@keyframes cat-thought{50%{transform:translateY(-6px) rotate(-8deg)}}@keyframes cat-fanning{50%{transform:rotate(-18deg)}}@keyframes cat-boop{25%{transform:scale(1.1,.88)}55%{transform:scale(.95,1.08)}80%{transform:scale(1.02,.99)}}",
+  "poses": {
+   "think": {
+    "back": "<g class='cat-note'><path d='M101 -47 l14 3 -4 20 -14 -3Z' fill='#f7e5bd'/><path d='M102 -40 l8 2 M101 -34 l8 2' stroke='#a99475' stroke-width='2'/></g>",
+    "front": "<path d='M-49 70 Q-38 56 -19 55' fill='none' stroke='#e6a367' stroke-width='12' stroke-linecap='round'/><ellipse cx='-17' cy='54' rx='9' ry='7' fill='#f3b878'/><path d='M-8 56 Q0 60 8 56' fill='none' stroke='#7e4a43' stroke-width='2'/>"
+   },
+   "work": {
+    "back": "<path d='M-9 72 l4 -6 4 6 -4 5Z M11 70 l3 -5 3 5 -3 4Z' fill='#f8e5a3'/>",
+    "front": "<path d='M-56 76 l7 4 7 -4 M40 77 l7 4 7 -4' fill='none' stroke='#ffe0a6' stroke-width='2' stroke-linecap='round'/>"
+   },
+   "wait": {
+    "back": "<path d='M103 -87 q-9 -10 -18 0 q-4 6 2 11 q6 5 2 10 M89 -57 v2' fill='none' stroke='#f4d49a' stroke-width='5' stroke-linecap='round'/>",
+    "front": "<path d='M52 70 Q78 55 88 31' fill='none' stroke='#d99459' stroke-width='14' stroke-linecap='round'/><ellipse cx='90' cy='28' rx='11' ry='9' fill='#f1b579'/><path d='M84 25 l2 6 m5-8 l2 8' stroke='#c2794e' stroke-width='2'/><path d='M-9 57 Q0 60 9 57' fill='none' stroke='#7d4a42' stroke-width='2'/>"
+   },
+   "happy": {
+    "back": "<path d='M-108 -35 l-4 -8 -4 8 -8 4 8 4 4 8 4 -8 8 -4Z M104 -64 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#ffe3a3'/>",
+    "front": "<path d='M-51 68 Q-83 49 -88 23 M51 68 Q83 49 88 23' fill='none' stroke='#e4a066' stroke-width='15' stroke-linecap='round'/><ellipse cx='-90' cy='22' rx='10' ry='8' fill='#f4b578'/><ellipse cx='90' cy='22' rx='10' ry='8' fill='#f4b578'/><path d='M-15 54 Q0 68 15 54' fill='none' stroke='#7e4942' stroke-width='3' stroke-linecap='round'/>"
+   },
+   "alert": {
+    "back": "<path d='M108 -103 l-4 32 h-8 l-4 -32Z' fill='#f2c17d'/><circle cx='100' cy='-61' r='5' fill='#f2c17d'/>",
+    "front": "<path d='M-55 72 Q-81 78 -91 63 M55 72 Q81 78 91 63' fill='none' stroke='#e6a168' stroke-width='14' stroke-linecap='round'/><path d='M-8 54 q8 -7 16 0 q4 9 -8 12 q-12 -3 -8 -12Z' fill='#7c4a43'/>"
+   },
+   "sad": {
+    "back": "<path d='M-92 -114 q-12 12 -5 24 q7 8 17 4' fill='none' stroke='#a96048' stroke-width='5' stroke-linecap='round'/><path d='M92 -114 q12 12 5 24 q-7 8 -17 4' fill='none' stroke='#a96048' stroke-width='5' stroke-linecap='round'/>",
+    "front": "<path d='M-23 43 Q0 34 23 43 L21 67 Q0 72 -21 67Z' fill='#f4c49d'/><path d='M-8 45 L0 51 L8 45Z' fill='#8d4b4c'/><path d='M-13 62 Q0 52 13 62' fill='none' stroke='#7a4b45' stroke-width='3' stroke-linecap='round'/><path d='M-54 70 Q-66 83 -59 89 M54 70 Q66 83 59 89' fill='none' stroke='#d9925a' stroke-width='12' stroke-linecap='round'/>"
+   },
+   "sleep": {
+    "back": "<path d='M95 -99 q-13 10 -7 22 q8 9 20 2 q-15 1 -15 -12Z' fill='#f6e6b5'/>",
+    "front": "<path d='M-83 11 Q-26 22 26 11 Q64 7 84 19 L84 94 Q0 112 -84 94Z' fill='#7294a8'/><path d='M-83 13 Q-25 24 25 13 Q64 8 84 20' fill='none' stroke='#b6d1d6' stroke-width='7'/><path d='M96 -44 l9 -7 -8 13 h9 M106 -63 l8 -6 -7 12 h8' fill='none' stroke='#e7e9dc' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
+   },
+   "busy": {
+    "back": "<path d='M104 -18 q7 10 0 16 q-7 3 -9 -3 q-1 -5 9 -13Z M114 6 q5 8 0 12 q-6 3 -8 -3 q0 -4 8 -9Z' fill='#a2d9e8'/>",
+    "front": "<g class='cat-fan'><path d='M-91 60 L-112 24 Q-86 17 -72 49Z' fill='#e9d29c'/><path d='M-108 27 l29 27 M-99 23 l24 29' stroke='#b99a75' stroke-width='2'/></g><path d='M-49 69 Q-73 72 -89 59' fill='none' stroke='#e5a166' stroke-width='13' stroke-linecap='round'/><path d='M-9 57 Q0 61 9 57' fill='none' stroke='#7c4a42' stroke-width='2'/>"
+   },
+   "boop": {
+    "back": "<path d='M-104 -98 q-10 -9 -12 1 q-1 7 12 16 q13 -9 12 -16 q-2 -10 -12 -1Z M106 -41 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#f0b0a4'/>",
+    "front": "<path d='M-13 56 Q0 68 13 56' fill='none' stroke='#784941' stroke-width='3' stroke-linecap='round'/><circle cx='-43' cy='44' r='5' fill='#eda69b' opacity='.7'/><circle cx='43' cy='44' r='5' fill='#eda69b' opacity='.7'/>"
+   }
+  }
+ },
+ "pup": {
+  "defs": "",
+  "css": ".c-pup .whole{transform-box:fill-box;transform-origin:center bottom}.c-pup.s-think .pup-ball,.c-pup.s-busy .pup-fan{transform-box:fill-box;transform-origin:center center}.c-pup.s-think .pup-ball{animation:pup-thought 2.4s ease-in-out infinite}.c-pup.s-sleep .whole{transform:rotate(15deg) translateY(9px)}.c-pup.s-sad .whole{transform:translateY(8px) scaleY(.95)}.c-pup.s-sad .pup-tail{opacity:.3}.c-pup.s-alert .whole{transform:rotate(-8deg) translateY(4px)}.c-pup.s-busy .pup-fan{animation:pup-fanning 1.1s ease-in-out infinite}.c-pup.s-boop .whole{animation:pup-boop 1s ease-out 1}@keyframes pup-thought{50%{transform:translateY(-8px) rotate(10deg)}}@keyframes pup-fanning{50%{transform:rotate(22deg)}}@keyframes pup-boop{25%{transform:scale(1.12,.85)}55%{transform:scale(.94,1.1) translateY(-7px)}80%{transform:scale(1.03,.98)}}",
+  "poses": {
+   "think": {
+    "back": "<g class='pup-ball'><circle cx='104' cy='-37' r='13' fill='#d99360'/><path d='M94 -34 q10 -10 20 -3 M103 -49 q-2 12 9 18' fill='none' stroke='#f8db9d' stroke-width='3'/></g>",
+    "front": "<path d='M-80 53 Q-59 80 -26 63' fill='none' stroke='#dbab70' stroke-width='16' stroke-linecap='round'/><ellipse cx='-22' cy='60' rx='11' ry='9' fill='#f1c787'/><path d='M-11 63 Q0 65 11 63' fill='none' stroke='#956c53' stroke-width='2'/>"
+   },
+   "work": {
+    "back": "<path d='M99 36 q9 -10 15 -4 q4 8 -7 13' fill='none' stroke='#f8d995' stroke-width='4' stroke-linecap='round'/>",
+    "front": "<path d='M-7 76 Q0 83 7 76' fill='none' stroke='#ba6970' stroke-width='2'/><path d='M75 43 Q91 29 98 28' fill='none' stroke='#f6cd8e' stroke-width='5' stroke-linecap='round'/>"
+   },
+   "wait": {
+    "back": "<path d='M102 -88 q-10 -10 -18 0 q-4 6 2 11 q6 5 2 10 M88 -57 v2' fill='none' stroke='#eac68e' stroke-width='5' stroke-linecap='round'/>",
+    "front": "<path d='M-67 50 Q-90 39 -95 18' fill='none' stroke='#ddb077' stroke-width='17' stroke-linecap='round'/><ellipse cx='-96' cy='17' rx='12' ry='10' fill='#f2c88d'/><path d='M-103 14 l3 7 m4-10 l2 9' stroke='#bf8b5e' stroke-width='2'/><path d='M-12 62 Q0 64 12 62' fill='none' stroke='#8d6255' stroke-width='2'/>"
+   },
+   "happy": {
+    "back": "<path d='M-108 -35 l-4 -8 -4 8 -8 4 8 4 4 8 4 -8 8 -4Z M106 -48 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#ffe2a0'/>",
+    "front": "<path d='M-68 52 Q-96 36 -101 10 M68 52 Q96 36 101 10' fill='none' stroke='#e5b57b' stroke-width='17' stroke-linecap='round'/><ellipse cx='-102' cy='9' rx='12' ry='10' fill='#f3c98e'/><ellipse cx='102' cy='9' rx='12' ry='10' fill='#f3c98e'/><path d='M-21 62 Q0 82 21 62' fill='none' stroke='#9c6355' stroke-width='4' stroke-linecap='round'/>"
+   },
+   "alert": {
+    "back": "<path d='M108 -107 l-4 34 h-8 l-4 -34Z' fill='#d98658'/><circle cx='100' cy='-62' r='5' fill='#d98658'/>",
+    "front": "<path d='M-70 50 Q-95 72 -103 60 M70 50 Q95 72 103 60' fill='none' stroke='#ddb077' stroke-width='16' stroke-linecap='round'/><path d='M-25 43 Q0 36 25 43 L25 69 Q0 75 -25 69Z' fill='url(#pup-muzzle)'/><path d='M-12 44 Q0 39 12 44 Q11 53 0 55 Q-11 53 -12 44Z' fill='#5f4b48'/><ellipse cx='0' cy='65' rx='7' ry='8' fill='#865450'/>"
+   },
+   "sad": {
+    "back": "<path d='M-75 -68 Q-112 -73 -110 -36 Q-103 -18 -88 -25Z M75 -68 Q112 -73 110 -36 Q103 -18 88 -25Z' fill='url(#pup-ear)'/>",
+    "front": "<path d='M-31 42 Q-17 35 0 41 Q17 35 31 42 Q40 57 22 70 Q0 77 -22 70 Q-40 57 -31 42Z' fill='url(#pup-muzzle)'/><path d='M-13 44 Q0 39 13 44 Q12 54 0 55 Q-12 54 -13 44Z' fill='#5f4b48'/><path d='M-16 65 Q0 55 16 65' fill='none' stroke='#8d6255' stroke-width='3' stroke-linecap='round'/><path d='M-72 54 Q-80 75 -73 82 M72 54 Q80 75 73 82' fill='none' stroke='#ddb078' stroke-width='14' stroke-linecap='round'/>"
+   },
+   "sleep": {
+    "back": "<path d='M-103 -95 Q-78 -116 -50 -96 L-50 -75 Q-78 -89 -105 -71Z' fill='#8ca9b7'/><circle cx='-105' cy='-70' r='9' fill='#e4e8d5'/>",
+    "front": "<path d='M-81 12 Q-24 24 27 12 Q66 5 84 20 L82 94 Q0 112 -82 94Z' fill='#90aeb2'/><path d='M-81 14 Q-22 25 27 14 Q65 7 83 21' fill='none' stroke='#d9e9d4' stroke-width='7'/><path d='M98 -41 l9 -7 -8 13 h9 M108 -61 l8 -6 -7 12 h8' fill='none' stroke='#e5ebdf' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
+   },
+   "busy": {
+    "back": "<path d='M105 -19 q7 10 0 16 q-7 3 -9 -3 q-1 -5 9 -13Z M115 5 q5 8 0 12 q-6 3 -8 -3 q0 -4 8 -9Z' fill='#a0d8e7'/>",
+    "front": "<g class='pup-fan'><path d='M-106 53 L-114 24 Q-87 18 -75 50Z' fill='#e3d2a9'/><path d='M-110 29 l27 22 M-101 24 l22 26' stroke='#b4a083' stroke-width='2'/></g><path d='M-70 52 Q-87 64 -105 53' fill='none' stroke='#ddb079' stroke-width='16' stroke-linecap='round'/><path d='M-13 64 Q0 70 13 64' fill='none' stroke='#996c56' stroke-width='2'/>"
+   },
+   "boop": {
+    "back": "<path d='M-104 -93 q-11 -9 -13 1 q-1 7 13 17 q14 -10 13 -17 q-2 -10 -13 -1Z M107 -48 l-3 -7 -3 7 -7 3 7 3 3 7 3 -7 7 -3Z' fill='#f0b5aa'/>",
+    "front": "<path d='M-23 43 Q0 37 23 43 Q34 56 19 68 Q0 77 -19 68 Q-34 56 -23 43Z' fill='url(#pup-muzzle)'/><path d='M-12 44 Q0 39 12 44 Q11 54 0 55 Q-11 54 -12 44Z' fill='#5f4b48'/><path d='M-15 61 Q0 76 15 61' fill='none' stroke='#965d54' stroke-width='3' stroke-linecap='round'/><circle cx='-43' cy='47' r='5' fill='#eaa7a2' opacity='.7'/><circle cx='43' cy='47' r='5' fill='#eaa7a2' opacity='.7'/>"
+   }
+  }
+ },
+ "notes": "The wizard gestures with his staff, the duck uses bath bubbles and wings, the cat responds around its laptop, and the pup leads with paws and ears. I reused the first set\u2019s shading, left the shared eyes to the page, and did not check the poses in the mockup; their final placement remains unverified."
+}
