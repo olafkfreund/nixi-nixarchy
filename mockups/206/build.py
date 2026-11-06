@@ -64,13 +64,12 @@ def check(s):
 
 
 sets = {}
-for name in ("agy", "codex", "claude"):
+for name in ("claude",):                       # the user chose this set (2026-11-06)
     f = HERE / f"{name}-react.json"
-    if not f.exists():
-        print(f"{name}: no file")
-        sets[name] = None
-        continue
     s = repair(json.loads(f.read_text()))
+    # email and message are drawn by the page: the real envelope, and a bubble with the words in it
+    s["props"]["email"] = {"sky": "", "back": "", "front": "", "css": ""}
+    s["props"]["message"] = {"sky": "", "back": "", "front": "", "css": ".r-message .whole{transform-origin:0 84px;animation:fxMsgW 3s ease-in-out infinite}@keyframes fxMsgW{15%,85%{transform:translateX(3px) rotate(5deg)}}"}
     errs = check(s)
     sizes = {k: len(json.dumps(s.get(k, ""))) for k in ("me", "props", "touch")}
     print(f"{name}: {'ok' if not errs else errs[:6]}; bytes {sizes}; touches {[len((s.get('touch') or {}).get(c, {})) for c in CHARS]}")

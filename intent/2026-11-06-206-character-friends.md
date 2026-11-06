@@ -53,6 +53,12 @@ no art from either.
   | Weather | rain, snow, hot and sunny, windy |
   | Breaks | workout, drink water |
 
+- **The art is Claude's set,** chosen by the user on 2026-11-06.
+- **New email keeps today's envelope exactly:** it pops out beside him, opens and raises the
+  letter, with the same parts and timing as `mailPop`. The user says it works perfectly.
+- **New message shows the words in the bubble,** with who sent it, after a moment of typing dots.
+  It uses the same privacy rule as today: words appear only if `notify_details` is on, and rows
+  with a one-time code or secret stay blank, so the bubble then shows only who it's from.
 - **Reactions build on what's there, and don't duplicate it.** Nixi already has a tie for
   meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
   chat bubble and a mail envelope. An event plays a short reaction, then settles into the
@@ -120,7 +126,7 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 
 ## Open questions
 
-1. **Which art?** See the mockup page: agy, Codex or Claude, or a mix. Your choice.
+1. **Decided: Claude's art,** with today's email envelope and the message's words in the bubble.
 2. **Who may read your mail?** Recommended: a local model through Ollama by default, as `agent-say`
    does, with cloud models and the cloud voice only if you switch them on. **Which accounts?**
 3. **How does approving Codex and agy work?** Both run a blocking `PreToolUse` hook on this system, so
