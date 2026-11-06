@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 207
 spec: spec/2026-11-06-207-character-voice.md
 coders:
