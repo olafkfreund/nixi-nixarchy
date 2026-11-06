@@ -57,20 +57,26 @@ no art from either.
 - **The art is Claude's set,** chosen by the user on 2026-11-06.
 - **New email keeps today's envelope exactly:** it pops out beside him, opens and raises the
   letter, with the same parts and timing as `mailPop`. The user says it works perfectly.
-- **New message shows the words in the bubble,** with who sent it, after a moment of typing dots.
-  It uses the same privacy rule as today: words appear only if `notify_details` is on, and rows
-  with a one-time code or secret stay blank, so the bubble then shows only who it's from.
+- **Messages stay exactly as they are today (the user, 2026-11-06).** A new message keeps today's whole
+  behaviour: he hops and looks curious, the chat bubble with the app's icon and its ×N, and the caption
+  row with who sent it and the first words. The earlier idea of words inside the bubble after typing dots
+  is dropped. No art, timing or text here changes unless the user asks.
 - **While an agent codes, a small terminal pops out beside him,** with code scrolling and the
   agent's name on it, and he types at a small keyboard. The scrolling code is decoration, never
   the agent's real code, so nothing private shows on a shared screen. Today only his own turns
   show this; for other agents he hears only "asks" and "finished", so knowing they're working needs
   a new signal.
-- **Rich notification cards (added by the user after approval, #214).** While Nixi is on screen he
-  takes over every app's notifications, as he can today, and shows them himself: a bell rings, he hops
-  and presents a card with the app's icon, rich text, a small image preview and buttons, one at a time,
-  with +N for the rest. Anything he can't show still goes back to the shell after 5 seconds. Today's
-  takeover gets plain text, cut to 120 characters, and an icon. Whether the shell can also hand over
-  markup, images and actions isn't verified, and the slice starts by finding out.
+- **Rich notification cards (added by the user after approval, #214) only add.** Today's caption row stays
+  what every plain notification gets. A card appears only for a notification carrying something the row
+  can't show: an image or buttons. Anything he can't show still goes back to the shell after 5 seconds.
+  Whether the shell can hand over markup, images and actions isn't verified, and the slice starts by
+  finding out. If it can't, the slice adds nothing.
+- **A click opens the right app, and starts it if it's closed (added by the user, 2026-11-06).** Clicking a
+  message or an email notification brings up the app it came from. The row and the envelope already ask the
+  shell to do this, using the sender's own action, then its window, then its web address. Three gaps remain:
+  the chat bubble isn't clickable; an app with no window isn't started; and the shell answers "ok" whatever
+  happened, so Nixi can't tell when nothing opened. Only apps installed on this machine are ever started,
+  matched from their `.desktop` files, and never from a command in the notification.
 - **Reactions build on what's there, and don't duplicate it.** Nixi already has a tie for
   meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
   chat bubble and a mail envelope. An event plays a short reaction, then settles into the
@@ -136,6 +142,13 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
   and reset links are removed first. Nothing is logged, including transcripts and model requests.
 - **Must:** what he reads aloud respects who may be listening: nothing sensitive while locked or
   in a meeting, and a clear rule for which model and voice may receive it (see open question 2).
+- **Must: nothing that exists today is removed or changed by accident.** That includes the message and mail
+  path: the takeover and the 5-second hand-back to the shell, the `notify_details`, secret and one-time-code
+  checks, app names and icons, the queue of 8, grouping of 3 or more into one counted row, updates in
+  place, the hop, mood, burst lines and sound for each kind, the chat bubble with ×N, the feed TV, the
+  envelope, opening by clicking the row or the envelope, Esc, and spoken categories. Today's moods,
+  fidgets, props, nudges and settings stay too. A reaction adds to these and never takes their place. The
+  first slice that touches this path starts by adding tests that pin it, and they pass before any change.
 - **Must: notification content is untrusted.** Markup is limited to bold, italic, underline, code and links,
   drawn as text and never as HTML. Images come only as local files from the shell or the app, never fetched
   from the network, and are size-limited. The existing `notify_details` switch and the one-time-code and
@@ -147,7 +160,7 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 
 ## Open questions
 
-1. **Decided: Claude's art,** with today's email envelope and the message's words in the bubble.
+1. **Decided: Claude's art,** with today's email envelope and today's message display, both unchanged.
 2. **Who may read your mail?** Recommended: a local model through Ollama by default, as `agent-say`
    does, with cloud models and the cloud voice only if you switch them on. **Which accounts?**
 3. **How does approving Codex and agy work?** Both run a blocking `PreToolUse` hook on this system, so
@@ -173,7 +186,8 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
    5. approval for other agents, after the spike, with approved and denied;
    6. chat replies, only for apps with a safe way to send;
    7. the "You" character and plugin reactions;
-   8. rich notification cards.
+   8. rich notification cards;
+   9. a click opens the right app, which is small and could go right after the voice slice.
 
 ## Approval (2026-11-06)
 
