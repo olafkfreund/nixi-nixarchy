@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 215
 spec: spec/2026-11-06-215-click-opens-app.md
 coders:
