@@ -20,8 +20,8 @@ and this slice doesn't change it.
 
 That order is good, so it stays. Three gaps remain:
 
-- **The chat bubble can't be clicked.** `#guy` has `pointer-events:none`, and `sendRegion` adds only the row and the
-  envelope for a notification.
+- **The chat bubble doesn't open anything.** It's inside `#body`, so where a click reaches it, it counts as a click on
+  him, which starts listening (`startRec('auto')`). `sendRegion` adds only the row and the envelope for a notification.
 - **A closed app doesn't start.** `omarchy-hyprland-focus-app` only focuses a window, and exits 1 if there's none.
 - **Nixi can't tell.** `activateKey` returns `ok` as long as the key is live, whatever happened after it.
 
@@ -47,14 +47,17 @@ GPU off, driving `notifyIn` with fake rows:
 ### 2. The bubble opens the app too
 
 Clicking the bubble does exactly what clicking the caption row does: `notifyAct('open')`, for the row on screen. It
-uses the page's existing pattern for clickable marks, as `AMX.mk` does:
+uses the page's existing pattern for clickable marks, as `AMX.mk` does, and acts only while the bubble shows and a row
+is up. Otherwise the click carries on to him, as today:
 
 ```js
-SIT_P.chat.g.style.cursor='pointer';
-SIT_P.chat.g.addEventListener('click',e=>{ e.stopPropagation(); notifyAct('open'); });
+SIT_P.chat.g.addEventListener('click',e=>{
+  if(!(propOn&&propOn.cat==='chat'&&performance.now()<propOn.until&&notifyRow)) return;
+  e.stopPropagation(); notifyAct('open'); });
 ```
 
-- The draw code sets the group's `pointer-events` attribute to `all` only while the bubble shows, and `none` otherwise.
+- The bubble keeps its `opacity:0` state when hidden and gets no `pointer-events` change, so its empty spot behaves as
+  it does today.
 - `sendRegion` adds the group while the bubble shows, so the native window lets the click through.
 - With ×3, it opens the message the row is showing. The bubble tracks no key of its own, so nothing already queued
   can be opened and then shown again.
@@ -132,8 +135,8 @@ app is already open, the shell's existing focus does the job and `follow_up` doe
 - **Keeping the row on screen longer, so it's easier to click.** It changes today's display, which the user ruled out.
 - **Preferring an installed web app over the shell opening `https://<host>/`.** When a browser sends the notification,
   its own action goes to the right tab, which is better than a blank web app. Revisit only if the user finds a case.
-- **Hit testing the bubble inside the body's click handler.** The bubble isn't what `#body`'s pointer rule covers, and
-  the page already has a pattern for clickable marks.
+- **Hit testing the bubble inside the body's click handler.** The bubble has its own element, so its own listener is
+  simpler, and the page already has that pattern.
 - **Tracking the newest message's key on the bubble.** That key may still be queued, so opening it would show it
   again later. Following the row on screen avoids that.
 
@@ -150,7 +153,9 @@ app is already open, the shell's existing focus does the job and `follow_up` doe
   notification naming an installed app. A click then starts or raises that app with no arguments. This needs the user's
   click, can start only installed, visible apps, and passes nothing from the notification. Accepted. Exact matching
   stops wrong matches, not spoofing.
-- **Clicking the bubble.** It's small, and sways. A near miss does what a click near him does today.
+- **Clicking the bubble instead of talking to him.** While the bubble shows, a click on it now opens the app and no
+  longer starts listening. That's the point of this slice, and it lasts under 3 seconds. A near miss does what a click
+  on him does today.
 - **`sendRegion` on a moving bubble.** The region uses a 16-pixel grid and is sent when something opens or closes, so
   it adds no constant repainting.
 - **Other compositors.** Without Hyprland nothing starts, so nothing gets worse.
@@ -170,8 +175,8 @@ app is already open, the shell's existing focus does the job and `follow_up` doe
   Existing icon behaviour is unchanged.
 - A real `gtk-launch` run isn't in these tests, because `_spawn` is mocked, so the by-hand check below covers it.
 - `notify_fit.mjs`: a real click at the bubble's position through CDP `Input.dispatchMouseEvent`, not a synthetic event,
-  posts the on-screen row's key and leaves his own click handler unrun; a click on him elsewhere does what it does
-  today; once the bubble has gone, its spot doesn't take clicks.
+  posts the on-screen row's key and doesn't start listening; a click on him elsewhere starts listening, as today; once
+  the bubble has gone, a click at its spot does what it does today.
 - On p620, from the user, by hand, in the real native window, so the click region is tested too: clicking the moving
   bubble, the row and the envelope, with a native chat app open and behind others, then closed; a closed mail app; and
   a browser message, which must open its tab and start nothing else.
@@ -189,8 +194,8 @@ against the code.
 - Codex: `setdefault` makes the first file win on a shared name. A collision now maps to nothing.
 - Codex: `follow_up`'s call and signature disagreed. The route is now spelled out.
 - Codex: a headless test can't prove the native click region, so the by-hand check covers it.
-- agy: `#guy` has `pointer-events:none`, so the body handler would never see a click on the bubble. It now has its own
-  listener, like `AMX.mk`.
+- agy: a left click on him starts listening and doesn't open his menu, which the draft had wrong. A right click opens
+  the menu. The simpler design of a listener on the bubble, like `AMX.mk`, is taken.
 - agy: `Icons._build` lowercases `fid`, and `gtk-launch` would fail on mixed-case ids.
 - agy: `_find`'s `s.split(".")[-2]` could start an app from a website's name. It isn't used now.
 - agy: an open window behind others stayed hidden. It's now focused.
@@ -198,9 +203,13 @@ against the code.
 - agy: every other row would have got a false toast, so only mail and chat follow up.
 - agy: only `Type=Application`. The queue description was wrong by one.
 
-**Refuted:** agy's quoted body handler (`S.state`, `startRec('auto')`) isn't the code at `index.html:4001`, so that quote
-is invented, although its point about pointer events holds. Also refuted: a `--` for `gtk-launch`, because skipping ids
-starting with `-` is enough.
+**Refuted:**
+
+- agy said `#sitFront` is a sibling of `#body`, so the bubble's clicks would never reach it. A parse of the markup shows
+  it's inside `#body`. It also proposed `pointer-events:all`, which isn't needed for the same reason.
+- agy's quote of the click handler (`S.state`, `finishFollow`) isn't the real text at `index.html:4001`, though it does
+  end in `startRec('auto')`.
+- A `--` for `gtk-launch` isn't needed, since ids starting with `-` are skipped.
 
 **Not taken:** Codex's direction that the shell should report what it did. It would be more exact, but that's upstream
 code. It's the better long-term fix if Omarchy adds it.
