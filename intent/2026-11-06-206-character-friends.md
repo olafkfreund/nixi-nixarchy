@@ -40,7 +40,7 @@ no art from either.
 - **The Devil becomes red,** with a tail that visibly sticks out and a small fork at his side.
   Today his colour follows the body colour, so he's navy by default, and his tail is hidden
   behind him. His red is his own, so the body colour picker doesn't change him.
-- **Eighteen reactions, each with a prop, a body movement and each character's own touch,**
+- **Twenty-one reactions, each with a prop, a body movement and each character's own touch,**
   readable from across the room with the sound off:
 
   | Group | Reactions |
@@ -50,6 +50,7 @@ no art from either.
   | Messages | new message, new email |
   | Agents | needs approval, approved, denied, finished |
   | Apps | opening an app |
+  | Media | music playing (a boombox), YouTube or a movie (popcorn and a screen), news update (a newspaper) |
   | Weather | rain, snow, hot and sunny, windy |
   | Breaks | workout, drink water |
 
@@ -63,12 +64,16 @@ no art from either.
   meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
   chat bubble and a mail envelope. An event plays a short reaction, then settles into the
   existing look. Weather, load and meetings can last for hours, so he doesn't keep acting
-  through them.
+  through them. Music and video are the exception, at the user's request: the boombox and popcorn
+  stay while they play, calmly, and can be turned off. The boombox replaces the music headphones,
+  and the popcorn replaces the small TV for video.
 - **You can act on them,** from a small chip beside him, which opens a card only when you
   click it or ask, so nothing covers your work or an open board unasked:
   - hear a message, or a summary of an email;
   - reply to an email, and later to chat apps that have a safe way to send;
   - approve or deny for Claude, Codex and agy, not only his own turns;
+  - control media: pause, next and volume;
+  - hear new headlines, or open the news board;
   - open an app, which already works;
   - snooze or dismiss a reminder, or join a meeting, which already exists on the day board.
 - **A new character, "You":** a small, cute version of the user with Nixi's big eyes. How it looks is kept out of this repo (#213).
@@ -145,9 +150,9 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 8. **How is this split?** Recommended: separate issues, each with its own intent, spec and plan,
    because this is too large for one:
    1. the voice link, on its own;
-   2. reactions, using signals that exist today, with chips;
-   3. wiring what's already collected (services, disk, network, hosts, heat, storm), plus DND, snooze
-      and a workout schedule, with their reactions;
+   2. reactions, using signals that exist today, with chips, including the boombox and its controls;
+   3. wiring what's already collected (services, disk, network, hosts, heat, storm), plus DND, snooze,
+      a workout schedule, telling video from music, and noticing new headlines, with their reactions;
    4. reading mail aloud and email replies;
    5. approval for other agents, after the spike, with approved and denied;
    6. chat replies, only for apps with a safe way to send;
