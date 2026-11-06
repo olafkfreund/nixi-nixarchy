@@ -35,8 +35,11 @@ no art from either.
 
 ## Proposed outcome
 
-- **Today's characters look as they do today.** Snowflake's resting look is untouched. No
-  new eye system, no mouths they don't have.
+- **Today's characters look as they do today,** with one change. Snowflake's resting look is
+  untouched, and there's no new eye system and no mouths they don't have.
+- **The Devil becomes red,** with a tail that visibly sticks out and a small fork at his side.
+  Today his colour follows the body colour, so he's navy by default, and his tail is hidden
+  behind him. His red is his own, so the body colour picker doesn't change him.
 - **Eighteen reactions, each with a prop, a body movement and each character's own touch,**
   readable from across the room with the sound off:
 
@@ -81,8 +84,8 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 
 ## Constraints
 
-- **Must:** today's art and eyes stay as they are, and Snowflake's resting look stays
-  pixel-identical. Reactions are added on top, and go away when they end.
+- **Must:** apart from the Devil, today's art and eyes stay as they are, and Snowflake's resting
+  look stays pixel-identical. Reactions are added on top, and go away when they end.
 - **Must:** he stays calm. A new gate has to check Do Not Disturb, because today Nixi's reactions
   and speech don't look at it. Reactions also respect fullscreen, a meeting, the lock screen and
   reduced motion. They don't appear in the notch, bar and pop-out modes unless they can be drawn
@@ -90,7 +93,7 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 - **Must:** performance stays as today: no SVG filters and no constant heavy repainting. Reaction
   art animates only `transform` and `opacity`.
 - **Must:** props respect each body's `fits`: nothing through Robot's antenna or over the "You"
-  hat. Sunglasses keep meaning fullscreen, so "hot and sunny" and "finished" need another look on
+  cap. Sunglasses keep meaning fullscreen, so "hot and sunny" and "finished" need another look on
   today's characters.
 - **Must: a voice yes never sends anything.** Sends stay click-to-confirm, as #95 decided. The card
   binds the verified account, recipients, thread and exact words to that one action, and a newer
