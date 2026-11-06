@@ -67,9 +67,9 @@ sets = {}
 for name in ("claude",):                       # the user chose this set (2026-11-06)
     f = HERE / f"{name}-react.json"
     s = repair(json.loads(f.read_text()))
-    # email and message are drawn by the page: the real envelope, and a bubble with the words in it
+    # email and message are today's: the page draws the envelope and caption row; the chat bubble is copied from index.html
     s["props"]["email"] = {"sky": "", "back": "", "front": "", "css": ""}
-    s["props"]["message"] = {"sky": "", "back": "", "front": "", "css": ".r-message .whole{transform-origin:0 84px;animation:fxMsgW 3s ease-in-out infinite}@keyframes fxMsgW{15%,85%{transform:translateX(3px) rotate(5deg)}}"}
+    s["props"]["message"] = {"sky": "", "back": "", "front": '<g class="cBub"><path d="M-88 -73H-60Q-56 -73 -56 -69V-55Q-56 -51 -60 -51H-72L-80 -43L-79 -51H-88Q-92 -51 -92 -55V-69Q-92 -73 -88 -73Z" fill="#fff" stroke="#2f8f66" stroke-width="3"/><circle class="cD" cx="-82" cy="-62" r="2.9" fill="#2f8f66"/><circle class="cD" style="animation-delay:.12s" cx="-74" cy="-62" r="2.9" fill="#2f8f66"/><circle class="cD" style="animation-delay:.24s" cx="-66" cy="-62" r="2.9" fill="#2f8f66"/></g>', "css": ".r-message .whole{transform-origin:0 84px;animation:fxMsgW 3s ease-in-out infinite}@keyframes fxMsgW{15%,85%{transform:rotate(-5deg)}}.r-message .cD{animation:fxMsgD .7s ease-in-out infinite}@keyframes fxMsgD{50%{transform:translateY(-3px)}}"}
     errs = check(s)
     sizes = {k: len(json.dumps(s.get(k, ""))) for k in ("me", "props", "touch")}
     print(f"{name}: {'ok' if not errs else errs[:6]}; bytes {sizes}; touches {[len((s.get('touch') or {}).get(c, {})) for c in CHARS]}")
