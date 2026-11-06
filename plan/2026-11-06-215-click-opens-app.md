@@ -270,6 +270,13 @@ Hyprland really prints `{}` with nothing focused. No code has been written or ru
 - Step 3: the first file with a given id wins across `XDG_DATA_DIRS`, and later copies are ignored. NixOS really does ship
   `firefox.desktop` in two of those folders, so counting copies as a collision would have told the user the app wasn't
   found. A `Hidden=true` file earlier in the path now hides the app, as desktop files are meant to work.
+- Step 3: a file's own id beats another file's `Name` or `StartupWMClass`. On p620, `discord.desktop` and
+  `omarchy-Discord.desktop` share a name, so the plan's rule would have told the user Discord wasn't found.
+- Step 3: `_window_for` sorts focus-history `-1` last and skips unmapped windows.
+- Step 3: `_focus` falls back on the output as well as the exit code. On this Hyprland, a failed dispatch exits 0, the
+  `hl.dsp.focus` form works, and `focuswindow address:` fails.
+- Step 3: a native app with a dotted name still follows up; a host counts only when the source differs from the app.
+- Step 2: the bubble ignores a drag and the second click of a double click, and acts only if the row is really on screen.
 
 ## Rollback
 
