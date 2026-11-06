@@ -265,6 +265,12 @@ points above were confirmed separately.
 **Not verified:** `gtk-launch` in the service's environment, real window classes, the native click region, and whether
 Hyprland really prints `{}` with nothing focused. No code has been written or run.
 
+## Deviations during implementation
+
+- Step 3: the first file with a given id wins across `XDG_DATA_DIRS`, and later copies are ignored. NixOS really does ship
+  `firefox.desktop` in two of those folders, so counting copies as a collision would have told the user the app wasn't
+  found. A `Hidden=true` file earlier in the path now hides the app, as desktop files are meant to work.
+
 ## Rollback
 
 Revert the code PR and bump the flake again. `origin` is memory only, and no setting or file is added, so nothing needs
