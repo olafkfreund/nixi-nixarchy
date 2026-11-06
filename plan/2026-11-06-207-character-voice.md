@@ -252,6 +252,18 @@ It's the voice you tapped, and it's what speaks. The plan now says so, and its t
 
 **Not verified:** no code has been written or run, and agy didn't read `test_character_fit` or `test_settings_fit`.
 
+## Deviations during implementation (from the Opus diff review, 2026-11-06)
+
+- `otherVoiceLine()` also returns `''` while the cloud or a pinned voice is what speaks, except for Robot, because "speaks
+  as Deep" would be false. Chips then play their sample, as today.
+- `diagnostics` says `character: Y` rather than `speaking: Y`, for the same reason.
+- `voice_key` doesn't read the look when the map is empty, so that path is exactly today's.
+- The fetch after a save runs for a look change only if some character has a voice, so a colour change can't retry a
+  failed download of your own voice.
+- The select rebuilds its options only when they change, so a redraw during a download can't close an open list.
+- Choosing an undownloaded preset ticks the same "downloading that voice" line as a chip.
+- Added tests: `synth` really uses espeak for Robot under pins; the select's node is kept.
+
 ## Rollback
 
 Revert the code PR and bump the flake again. A saved `voice_by_character` becomes an ignored key, and `voice` and
