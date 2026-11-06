@@ -40,20 +40,26 @@ no art from either.
 - **The Devil becomes red,** with a tail that visibly sticks out and a small fork at his side.
   Today his colour follows the body colour, so he's navy by default, and his tail is hidden
   behind him. His red is his own, so the body colour picker doesn't change him.
-- **Twenty-three reactions, each with a prop, a body movement and each character's own touch,**
+- **Thirty-one reactions, each with a prop, a body movement and each character's own touch,**
   readable from across the room with the sound off:
 
   | Group | Reactions |
   |---|---|
-  | Machine | high load, low memory, system error |
-  | Calendar | meeting soon, in a meeting |
+  | Machine | high load, low memory, system error, another machine comes online, rebuild succeeded |
+  | Calendar | meeting soon, in a meeting, meeting's over |
   | Messages | any notification, new message, new email |
-  | Agents | coding, needs approval, approved, denied, finished |
-  | Apps | opening an app |
-  | Media | music playing (a boombox), YouTube or a movie (popcorn and a screen), news update (a newspaper) |
-  | Weather | rain, snow, hot and sunny, windy |
+  | Agents | coding, needs approval, approved, denied, finished, git commit |
+  | Apps | opening an app, only when you asked him to |
+  | Media | music playing (a boombox), YouTube or a movie (popcorn and a screen), news update (a newspaper), only from feeds you chose |
+  | Weather | rain, snow, hot and sunny, windy, storm |
   | Breaks | workout, drink water |
+  | You | stroked with the pointer, welcome back after unlocking, dragged across screens |
 
+  The last eight, added on 2026-11-06, came from Codex and agy, and whether a commit reaches Nixi isn't verified.
+- **The calm rules (approved 2026-11-06).** High load plays once, then he holds a still prop. Music bops for a few
+  seconds on a track change, then he stays still. Break reminders wait for the first idle pause, never during
+  typing, a meeting or fullscreen. When idle he breathes slowly and his eyes drift to the focused window, with a
+  bigger fidget at most every 10 to 15 minutes. He never reacts to every click, tool call or burst of network.
 - **The art is Claude's set,** chosen by the user on 2026-11-06.
 - **New email keeps today's envelope exactly:** it pops out beside him, opens and raises the
   letter, with the same parts and timing as `mailPop`. The user says it works perfectly.
@@ -61,6 +67,7 @@ no art from either.
   behaviour: he hops and looks curious, the chat bubble with the app's icon and its ×N, and the caption
   row with who sent it and the first words. The earlier idea of words inside the bubble after typing dots
   is dropped. No art, timing or text here changes unless the user asks.
+- **The coding terminal shrinks after about a minute,** so a long session shows it's working without staying big.
 - **While an agent codes, a small terminal pops out beside him,** with code scrolling and the
   agent's name on it, and he types at a small keyboard. The scrolling code is decoration, never
   the agent's real code, so nothing private shows on a shared screen. Today only his own turns
