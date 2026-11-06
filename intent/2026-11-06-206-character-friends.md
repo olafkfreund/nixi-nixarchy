@@ -40,7 +40,7 @@ no art from either.
 - **The Devil becomes red,** with a tail that visibly sticks out and a small fork at his side.
   Today his colour follows the body colour, so he's navy by default, and his tail is hidden
   behind him. His red is his own, so the body colour picker doesn't change him.
-- **Twenty-one reactions, each with a prop, a body movement and each character's own touch,**
+- **Twenty-two reactions, each with a prop, a body movement and each character's own touch,**
   readable from across the room with the sound off:
 
   | Group | Reactions |
@@ -48,7 +48,7 @@ no art from either.
   | Machine | high load, low memory, system error |
   | Calendar | meeting soon, in a meeting |
   | Messages | new message, new email |
-  | Agents | needs approval, approved, denied, finished |
+  | Agents | coding, needs approval, approved, denied, finished |
   | Apps | opening an app |
   | Media | music playing (a boombox), YouTube or a movie (popcorn and a screen), news update (a newspaper) |
   | Weather | rain, snow, hot and sunny, windy |
@@ -60,6 +60,11 @@ no art from either.
 - **New message shows the words in the bubble,** with who sent it, after a moment of typing dots.
   It uses the same privacy rule as today: words appear only if `notify_details` is on, and rows
   with a one-time code or secret stay blank, so the bubble then shows only who it's from.
+- **While an agent codes, a small terminal pops out beside him,** with code scrolling and the
+  agent's name on it, and he types at a small keyboard. The scrolling code is decoration, never
+  the agent's real code, so nothing private shows on a shared screen. Today only his own turns
+  show this; for other agents he hears only "asks" and "finished", so knowing they're working needs
+  a new signal.
 - **Reactions build on what's there, and don't duplicate it.** Nixi already has a tie for
   meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
   chat bubble and a mail envelope. An event plays a short reaction, then settles into the
@@ -147,8 +152,8 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
    you use most?** Not checked yet: which ones allow it.
 7. **What can plugins do?** Recommended: let a plugin fire a reaction, so a service like your
    media stack can have its own, under the existing consent rules.
-8. **How is this split?** Recommended: separate issues, each with its own intent, spec and plan,
-   because this is too large for one:
+8. **Decided: this splits into separate issues,** under this one approved intent, each with its own
+   spec and plan, because this is too large for one:
    1. the voice link, on its own;
    2. reactions, using signals that exist today, with chips, including the boombox and its controls;
    3. wiring what's already collected (services, disk, network, hosts, heat, storm), plus DND, snooze,
@@ -157,6 +162,13 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
    5. approval for other agents, after the spike, with approved and denied;
    6. chat replies, only for apps with a safe way to send;
    7. the "You" character and plugin reactions.
+
+## Approval (2026-11-06)
+
+Approved by the user, who also asked for the coding terminal. Taken as decided, with the recommended
+answers: "You" stays private (question 4), reactions are on for the user and off for a new install
+(question 5), plugins can fire reactions (question 7), and the split (question 8). Questions 2, 3 and
+6, on mail, approval and chat apps, stay open until their slices.
 
 ## Reviews (2026-11-06)
 

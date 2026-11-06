@@ -6,7 +6,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 BAD = re.compile(r"<\s*(script|image|foreignObject|iframe|use|a|style)\b|\son\w+\s*=|https?:|javascript:|@import|expression\(|\bfilter\s*[=:]|</style", re.I)
-REACTIONS = "load memory error soon meeting message email ask approved denied done open music watch news rain snow sun wind workout water".split()
+REACTIONS = "load memory error soon meeting message email coding ask approved denied done open music watch news rain snow sun wind workout water".split()
 CHARS = "snowflake terminal robot devil me".split()
 
 
