@@ -1,61 +1,84 @@
 #!/usr/bin/env python3
-"""Build characters.html from template.html and each direction's art. The SVG is checked first, because it came from a model."""
-import base64
+"""Build characters.html from template.html, Nixi's real art and eye code, and each direction's reactions. Art is checked first, because it came from a model."""
 import json
 import re
 from pathlib import Path
 
 HERE = Path(__file__).parent
 BAD = re.compile(r"<\s*(script|image|foreignObject|iframe|use|a|style)\b|\son\w+\s*=|https?:|javascript:|@import|expression\(|\bfilter\s*[=:]|</style", re.I)
-NEW = ("laptop", "girl", "man")
-OLD = ("snowflake", "terminal", "robot", "devil")
-MOODS = ("think", "work", "wait", "happy", "alert", "sad", "sleep", "busy", "boop", "talk")
+REACTIONS = "load memory error soon meeting message email ask approved denied done open rain snow sun wind workout water".split()
+CHARS = "snowflake terminal robot devil me".split()
 
 
-def scan(where, text, errs):
-    for m in BAD.finditer(text if isinstance(text, str) else json.dumps(text)):
-        errs.append(f"{where}: {m.group(0)!r}")
+def unstack(svg):
+    """A CSS animation's transform replaces a transform attribute on the same element, so the art jumps. Put the attribute on a wrapper."""
+    out, i = [], 0
+    tag = re.compile(r'<(\w+)((?:\s+[\w:-]+=(?:"[^"]*"|\'[^\']*\'))*)\s*(/?)>')
+    pending = []                                   # depth at which each wrapper closes
+    depth = 0
+    for m in re.finditer(r'<(/?)(\w+)((?:\s+[\w:-]+=(?:"[^"]*"|\'[^\']*\'))*)\s*(/?)>', svg):
+        out.append(svg[i:m.start()])
+        i = m.end()
+        closing, name, attrs, selfc = m.groups()
+        if closing:
+            depth -= 1
+            out.append(m.group(0))
+            while pending and pending[-1] == depth:
+                pending.pop()
+                out.append("</g>")
+            continue
+        cl = re.search(r'\sclass=', attrs)
+        tr = re.search(r'\stransform=("[^"]*"|\'[^\']*\')', attrs)
+        if cl and tr:
+            out.append(f"<g transform={tr.group(1)}>")
+            out.append(f"<{name}{attrs.replace(tr.group(0), '')}{' /' if selfc else ''}>")
+            if selfc:
+                out.append("</g>")
+            else:
+                pending.append(depth)
+                depth += 1
+            continue
+        out.append(m.group(0))
+        if not selfc:
+            depth += 1
+    out.append(svg[i:])
+    return "".join(out)
 
 
-def check(chars, errs):
-    for i, a in chars.items():
-        if not re.fullmatch(r"\s*[Mm][-\d\s,.A-Za-z]+[Zz]\s*", str(a.get("ball", ""))):
-            errs.append(f"{i}: no closed ball path")
-        for k in ("defs", "back", "front", "css", "defs2", "eye"):
-            scan(f"{i}.{k}", a.get(k, ""), errs)
-        for mood, layers in (a.get("poses") or {}).items():
-            if mood not in MOODS:
-                errs.append(f"{i}: unknown mood {mood}")
-            scan(f"{i}.{mood}", layers, errs)
+def repair(node):
+    if isinstance(node, dict):
+        return {k: (unstack(v) if k in ("sky", "back", "front", "lashes") and isinstance(v, str) else repair(v)) for k, v in node.items()}
+    return node
 
 
-base = json.loads((HERE / "existing-base.json").read_text())
+def check(s):
+    errs = []
+    for m in BAD.finditer(json.dumps(s)):
+        errs.append(repr(m.group(0)))
+    if not re.fullmatch(r"\s*[Mm][-\d\s,.A-Za-z]+[Zz]\s*", str(s.get("me", {}).get("ball", ""))):
+        errs.append("me: no closed ball path")
+    missing = [r for r in REACTIONS if r not in s.get("props", {})]
+    if missing:
+        errs.append(f"missing props {missing}")
+    return errs
+
+
 sets = {}
 for name in ("agy", "codex", "claude"):
-    s, errs = {}, []
-    f, g = HERE / f"{name}-anime.json", HERE / f"{name}-existing.json"
-    if f.exists():
-        d = json.loads(f.read_text())
-        s = {i: {**d[i], "eyesOnTop": name in ("agy", "codex")} for i in NEW if i in d}      # their front art paints over the eyes
-        s["notes"] = d.get("notes", "")
-    if g.exists():
-        d = json.loads(g.read_text())
-        for i in OLD:
-            if i in d:
-                s[i] = {**base[i], "defs2": d[i].get("defs", ""), "css": d[i].get("css", ""), "poses": d[i].get("poses") or {}}
-        s["notesE"] = d.get("notes", "")
-    else:
-        for i in OLD:
-            s[i] = dict(base[i])
-    check({k: v for k, v in s.items() if k in NEW + OLD}, errs)
-    size = {i: sum(len(str(s[i].get(k, ""))) for k in ("defs", "back", "ball", "front")) for i in NEW if i in s}
-    print(f"{name}: {'ok' if not errs else errs}; new art bytes {size}; moods {[len(s[i].get('poses') or {}) for i in NEW + OLD if i in s]}")
+    f = HERE / f"{name}-react.json"
+    if not f.exists():
+        print(f"{name}: no file")
+        sets[name] = None
+        continue
+    s = repair(json.loads(f.read_text()))
+    errs = check(s)
+    sizes = {k: len(json.dumps(s.get(k, ""))) for k in ("me", "props", "touch")}
+    print(f"{name}: {'ok' if not errs else errs[:6]}; bytes {sizes}; touches {[len((s.get('touch') or {}).get(c, {})) for c in CHARS]}")
     sets[name] = None if errs else s
 
-data = json.dumps(sets, separators=(",", ":")).replace("</", "<\\/")
-page = (HERE / "template.html").read_text().replace("/*ART_JSON*/null", data)
-for who in ("girl", "man"):
-    img = base64.b64encode((HERE / f"painted-{who}.webp").read_bytes()).decode()
-    page = page.replace(f"PAINTED_{who.upper()}", f"data:image/webp;base64,{img}")
+page = (HERE / "template.html").read_text()
+page = page.replace("/*NIXI_FACE*/", (HERE / "nixi-face.js").read_text())
+page = page.replace("/*BASE_JSON*/null", json.dumps(json.loads((HERE / "existing-base.json").read_text()), separators=(",", ":")).replace("</", "<\\/"))
+page = page.replace("/*ART_JSON*/null", json.dumps(sets, separators=(",", ":")).replace("</", "<\\/"))
 (HERE / "characters.html").write_text(page)
 print(f"characters.html {len(page)} bytes")

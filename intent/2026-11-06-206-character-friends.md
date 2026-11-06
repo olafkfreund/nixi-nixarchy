@@ -4,193 +4,173 @@ issue: 206
 author: olafkfreund
 ---
 
-# Intent: anime characters with moods and voices
+# Intent: Nixi reacts to what is happening, and lets you act on it
 
 ## Problem
 
-Nixi's characters are Snowflake, Terminal, Robot and Devil (#178). Their eyes are
-expressive, but their bodies stay still, so you can't tell what he's doing with the
-sound off unless you read his eyes. The user wants more personality, in a more
-grown-up style. They liked the motion in the first mockups, but found round toy
-characters "a bit too simple and childish", and asked for "more anime like" instead.
+The user likes today's characters, Snowflake, Terminal, Robot and Devil: cute, with big
+eyes. They rejected new toy animals and anime redesigns: "I like our version that exists
+much more". What they want is more animation and more reactions to what's happening on the
+machine and in connected services, and more that they can do from there.
 
-The voice is also separate from the character. A voice is chosen once in the Voice
-tab, and Settings says a character "changes his body, not his voice". So a user can't
-give the robot a robot voice and have it stick.
+An audit of the code on 2026-11-06, corrected by review, found three problems.
 
-Two projects inspired this, and we take ideas from them, not art:
+1. **He senses a lot but barely shows it.** High load is a squint and sweat. A meeting soon
+   is a small 📅 on one tip of his crown. A new message is a curious look. Most of it is
+   off until `proactive` and its own setting are switched on.
+2. **He announces, but you can't act.** He can't reply to a message or read an email out
+   loud; the most he does is open the app. Approve and deny work only for his own turns. For
+   Claude, Codex and agy running elsewhere he says "needs you" and jumps to the pane, and
+   there is no approved or denied state.
+3. **Much of what's collected never reaches him.**
+   - Failed system services, disk, network and whether another host is up are collected
+     for boards you ask for, but he doesn't react to them.
+   - Heat shows only as a warm tint, and a storm counts as rain.
+   - The break reminder is one fixed 60-minute stretch, with no workout schedule and no snooze.
+   - Nothing reads the journal.
+   - Plugins can't trigger a mood, a nudge or a prop, so nobody can add a reaction.
 
-- [desk-pets](https://github.com/V2-VanishsVault/desk-pets): characters who visibly do
-  something while Claude works. Its art licence is unclear for four of six pets; Clawde
-  imitates Claude's branding, and V2 Ninja carries the author's brand and an Apple logo.
-- [familiar](https://github.com/bdehooge/familiar): a persona with nine moods, each a
-  different pose, face and prop. 28 MB of AI-made raster frames, with a fixed look.
+desk-pets and familiar inspired the idea of reactions that read with the sound off. We take
+no art from either.
 
 ## Proposed outcome
 
-- **Three new characters in Settings → Look,** next to today's four:
-  - a **Laptop**, a sleek unbranded machine with its screen as the face;
-  - an **anime girl's face**, a young woman in her twenties, head and shoulders;
-  - an **anime man's face**, an adult in his late twenties, head and shoulders.
-- **Today's four get moods too.** Snowflake, Terminal, Robot and Devil keep their art
-  and gain a pose, face and prop per mood.
-- **Everything Nixi does keeps working on all seven:** blinking, gaze, moods, swelling
-  or moving with the voice, listening and sleep, plus props where they fit, stage cards
-  and the click area.
-- **Each character can have its own eyes and mouth.** Anime faces need their own eye
-  shape, iris and lashes, and a mouth that moves when he talks. The code still drives
-  them, so they blink, follow you and react. This is new work in the face engine,
-  not just settings: today every character shares one eye size (`EYE`), and one flat
-  pupil with no iris or lashes. Characters that gain a mouth talk with it, and their
-  eyes stop morphing through the `t_*` faces. Devil keeps the mouth it has.
-- **Each mood has its own pose, face and prop,** so you can tell what he's doing from
-  across the room with the sound off. Nixi's moods fold into these groups:
+- **Today's characters look as they do today.** Snowflake's resting look is untouched. No
+  new eye system, no mouths they don't have.
+- **Eighteen reactions, each with a prop, a body movement and each character's own touch,**
+  readable from across the room with the sound off:
 
-  | Group | Nixi moods | What you see |
-  |---|---|---|
-  | Resting | idle, bored | nearly still, breathing, hair drifts |
-  | Thinking | thinking, reading, searching, looking, curious, confused | hand to the chin, something small floating beside him |
-  | Working | editing, running | busy: code reflected, keys lit |
-  | Needs you | pleading | looks at you, a small mark |
-  | Pleased | happy, joy, excited, wink | a cheer, `^ ^` eyes |
-  | Alert | error, surprised, scared | wide eyes, a sharp mark |
-  | Sad | sad, worried | downcast, a tear |
-  | Asleep | sleepy | eyes closed, head tilted, small z's |
-  | Hot machine | the machine is hot, while he's `idle` (`SIT.cpu_hot`) | flushed, sweat, fanning |
-  | Booped | purr, love, when you stroke him with the pointer | flustered, a small heart |
-  | Talking | talking, listening, the eleven `t_*` faces | the resting pose, with the mouth moving where he has one |
+  | Group | Reactions |
+  |---|---|
+  | Machine | high load, low memory, system error |
+  | Calendar | meeting soon, in a meeting |
+  | Messages | new message, new email |
+  | Agents | needs approval, approved, denied, finished |
+  | Apps | opening an app |
+  | Weather | rain, snow, hot and sunny, windy |
+  | Breaks | workout, drink water |
 
-  - `shy` and `annoyed` stay on the resting pose: their half-lidded eyes already say it.
-  - **A left click stays what it is today: talk.** Booping uses the stroke gesture he
-    already purrs at, and four quick clicks still make him dodge.
-  - Motion stops under reduced motion, and props that fight a pose hide during it.
-  - **In the notch, bar and pop-out modes there are no poses.** He's too small or
-    reshaped there, so only the eyes show the mood.
-  - **The small previews in Settings show the resting art,** so the Look tab stays light.
-  - **Headphones and glasses that appear by themselves** for music and the like bypass
-    today's `fits` check and are sized for a ball-shaped head. They stay off the Laptop
-    and the faces until they've been fitted.
-- **Any character can have its own voice,** all seven:
-  - each has a voice picker in Look, showing "My voice" by default;
-  - choosing a preset means that character always speaks with it, on the computer's own
-    voices (see open question 5 for the cloud voice). It wins over the language's saved
-    preset, and speaks through that language's voices;
-  - going back to a character on "My voice" uses the Voice tab's choice, untouched;
-  - this applies wherever Nixi speaks with those voices, including agent announcements,
-    which reach the same `voice_preset()` through the page;
-  - a pinned English Piper voice (`piper_voice`) is the user's own file, and stays in
-    charge in English, as it does today;
-  - the Voice tab says so when a character's voice is in charge, for example "The laptop
-    speaks as Robot", so changing it there never seems to do nothing;
-  - choosing a character whose voice isn't downloaded fetches it, as the Voice tab does
-    today.
+- **Reactions build on what's there, and don't duplicate it.** Nixi already has a tie for
+  meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
+  chat bubble and a mail envelope. An event plays a short reaction, then settles into the
+  existing look. Weather, load and meetings can last for hours, so he doesn't keep acting
+  through them.
+- **You can act on them,** from a small chip beside him, which opens a card only when you
+  click it or ask, so nothing covers your work or an open board unasked:
+  - hear a message, or a summary of an email;
+  - reply to an email, and later to chat apps that have a safe way to send;
+  - approve or deny for Claude, Codex and agy, not only his own turns;
+  - open an app, which already works;
+  - snooze or dismiss a reminder, or join a meeting, which already exists on the day board.
+- **A new character, "You":** a small, cute version of the user with Nixi's big eyes. How it looks is kept out of this repo (#213).
+- **Any character can have its own voice:** a picker per character, "My voice" by default,
+  worked out when he speaks, never overwriting the Voice tab or `voice_by_lang`. A character's
+  preset wins over the language's saved preset, and speaks through that language's voices. A
+  pinned Piper voice and the cloud voice stay in charge, and the picker says so. The Voice tab
+  says when a character's voice is in charge. Agent announcements follow it too.
 
-Mockups: `mockups/206/characters.html`, with three drawn directions, a painted test,
-every mood, boop and the voice picker.
+Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
 
 ## Affected users and systems
 
-- Fork `olafkfreund/nixoarchy-snowflake`:
-  - `app/static/index.html`: the `CHARACTERS` registry, the eyes, which today have one
-    shape for all (`EYE`), a new mouth, and the Look tab;
-  - `app/server.py`: the `CHARACTERS` tuple, a new voice setting, and every place that
-    reads the voice (`voice_preset`, `lang_voice_name`, the info payload);
-  - `tests/character_fit.mjs`: the new characters and poses must pass the same contract.
+- Fork `olafkfreund/nixoarchy-snowflake`: `app/static/index.html`, `app/server.py`,
+  `app/approve.py`, `app/plugins.py`, `tests/character_fit.mjs`, and new sensors and routes.
+- `olafkfreund/nixos_config`: the Claude, Codex and agy hooks, for approval.
+- External services: Google through `gog`, and any chat app with a safe way to send.
 - Everyone who uses the companion, on p620 and razer.
 
 ## Constraints
 
-- **Must:** original art only. Nothing traced or copied from desk-pets or familiar, no
-  logos, and no existing anime, game or mascot character.
-- **Must:** both anime characters are adults, drawn with adult proportions, and nothing
-  sexualised. Only faces, necks and clothed shoulders. "Anime girl" is the working name;
-  Settings could say "Anime woman". Their eyes must be smaller than today's, which are
-  half the character's height and would read as a child on a human face.
-- **Must:** one code-driven face. Mood, gaze, blink and talk logic isn't copied per
-  character. A character supplies only its art and its eye and mouth settings. This
-  changes #178's rule that every character shares one eye shape.
-- **Must:** Snowflake stays the default. Its resting look stays pixel-identical, but its
-  other moods will change if it gains poses, so the #178 pixel test needs updating (see
-  open question 3).
-- **Must:** performance stays as today. No SVG filters and no constant heavy repainting.
-  New pose art animates only `transform` and `opacity`; the eyes keep drawing as they do.
-  Animated Chrome pages have hung the AMD GPU before (#138), so tests and previews use
-  headless Chromium with the GPU off.
-- **Must:** a chosen voice never overwrites the user's Voice tab choice or `voice_by_lang`.
-  It is worked out when he speaks.
-- **Must:** the user's settings stay valid. An unknown character or voice falls back
-  quietly.
-- **Must:** Norwegian and Polish keep working. They have fewer voices, so some presets
-  will sound alike there, and the picker should say so.
-- **Must:** a pose never draws anything broken with #203's props on. The `fits` check
-  today is per character and knows nothing about poses, so a prop that fights a pose
-  hides during it.
-- If painted art is chosen: each image is generated by us, with a model whose licence
-  allows it (Flux Schnell is described as Apache 2.0, to confirm), its prompt, seed and
-  settings recorded next to the file, and no third-party art as input. That doesn't
-  prove an image resembles nothing, so each gets a look for lookalikes, and its copyright
-  is unsettled, so anyone could reuse it. Binary images enter the repo for the first time.
+- **Must:** today's art and eyes stay as they are, and Snowflake's resting look stays
+  pixel-identical. Reactions are added on top, and go away when they end.
+- **Must:** he stays calm. A new gate has to check Do Not Disturb, because today Nixi's reactions
+  and speech don't look at it. Reactions also respect fullscreen, a meeting, the lock screen and
+  reduced motion. They don't appear in the notch, bar and pop-out modes unless they can be drawn
+  there. Approval requests keep getting through, as they do today.
+- **Must:** performance stays as today: no SVG filters and no constant heavy repainting. Reaction
+  art animates only `transform` and `opacity`.
+- **Must:** props respect each body's `fits`: nothing through Robot's antenna or over the "You"
+  hat. Sunglasses keep meaning fullscreen, so "hot and sunny" and "finished" need another look on
+  today's characters.
+- **Must: a voice yes never sends anything.** Sends stay click-to-confirm, as #95 decided. The card
+  binds the verified account, recipients, thread and exact words to that one action, and a newer
+  notification can't change it. Reply-all and `Reply-To` differences are shown.
+- **Must: approving another agent is click-only at first.** The microphone isn't gated on media,
+  so a video or a call saying "okay" could approve something while you're away. "Always" is never
+  available by voice.
+  - The card shows the real command, never the agent's own description of it, because a compromised
+    agent could describe `curl … | sh` as "run the tests".
+  - Each answer goes to one specific request in one specific session. A second card can't catch it.
+  - "Approved" and "denied" show the agent's actual result, not the click.
+  - No answer, an unknown agent or a lost connection means no approval. The agent's own guards still run.
+  - He asks only when the agent itself would ask, or every edit would stop for a card. Answering in
+    the terminal dismisses his card.
+- **Must: mail and message text is data, never instructions.** Summaries run in a separate
+  stateless call with no tools, never in his session and never in `history.json` or recall, and they
+  can't trigger an action. A summary states who wrote it and that it's a summary, and one-time codes
+  and reset links are removed first. Nothing is logged, including transcripts and model requests.
+- **Must:** what he reads aloud respects who may be listening: nothing sensitive while locked or
+  in a meeting, and a clear rule for which model and voice may receive it (see open question 2).
+- **Must:** the "You" character is the user's own likeness, used with their consent, and is a
+  personal option, not a default for other users (see open question 4).
+- **Must:** original art only, with no logos, brands or existing characters.
 
 ## Open questions
 
-1. **How should the anime faces be drawn?** See the mockup page.
-   - **Hand-written SVG:** moves freely, recolours, small and fully original, but looks
-     like a flat vector avatar. All three drawn sets stop short of real anime.
-   - **Painted art with live eyes and mouth:** looks far more like anime, but one picture
-     can't tilt its head or raise a hand. The outcome's poses would need about ten images
-     per character (roughly 250 KB per face before decoding), or simple overlays such as
-     tears and blush, as in the mockup. Painted eyes and mouth must be removed from each
-     image, Nixi's squish must be switched off for it because it would warp a face, and it
-     blurs when enlarged. Theme colours can't reach it.
-   - **Recommended:** decide after one tryout. Build one painted face in the real page, in
-     the first face slice, with overlays for the moods. Keep SVG for the Laptop and today's
-     characters, where it already looks good. If the tryout fails, fall back to the best
-     SVG face. **Your choice, since anime was the request.** The mockup's painted test is
-     simpler than the real thing: it has no squish, and it covers the painted eyes.
-2. **Which drawn direction for the SVG characters?** Recommended: agy's. Your choice.
-3. **Does Snowflake get poses?** Recommended: yes, and its pixel test stays for the resting
-   pose only, so it looks the same when resting.
-4. **What should a new character's voice default to?** Recommended: "My voice" for all,
-   with a suggested preset shown next to the picker, so nothing changes until you choose.
-5. **Per-character cloud voices?** Recommended: not now. When ElevenLabs is speaking,
-   every character uses the cloud voice, and the picker says so. The character's preset
-   takes over only if it falls back to local speech.
-6. **All at once?** Recommended: slices of this one task, each a normal reviewed PR, and
-   each character arrives with its poses:
-   1. the voice link alone;
-   2. the pose engine and per-character eye settings, with the Laptop;
-   3. irises, lashes and mouths, with the two faces, including the painted tryout;
-   4. poses for today's four.
-
-   The task isn't done until all seven ship.
-7. **Should each character have its own phrases,** as familiar's persona does?
-   Recommended: not now. Nixi's lines are translated into three languages, so
-   per-character lines would multiply that work.
+1. **Which art?** See the mockup page: agy, Codex or Claude, or a mix. Your choice.
+2. **Who may read your mail?** Recommended: a local model through Ollama by default, as `agent-say`
+   does, with cloud models and the cloud voice only if you switch them on. **Which accounts?**
+3. **How does approving Codex and agy work?** Both run a blocking `PreToolUse` hook on this system, so
+   a yes or no can be returned. Not verified: whether that also answers their own terminal prompt, or
+   only runs before it. Recommended: a spike first, and "open the session" for anything that can't be
+   answered safely.
+4. **Does "You" ship in the public repo?** Recommended: no. It goes in a private plugin or your
+   nixos_config, once a character can come from a plugin.
+5. **Should reactions be on by default?** Recommended: on for you, off for a new install, as
+   today, with one simple switch instead of many flags.
+6. **Which chat apps?** The notification bridge has no reply action, and web apps have no shared way to
+   send, so each is its own integration. Recommended: email through `gog` first. **Which chat app do
+   you use most?** Not checked yet: which ones allow it.
+7. **What can plugins do?** Recommended: let a plugin fire a reaction, so a service like your
+   media stack can have its own, under the existing consent rules.
+8. **How is this split?** Recommended: separate issues, each with its own intent, spec and plan,
+   because this is too large for one:
+   1. the voice link, on its own;
+   2. reactions, using signals that exist today, with chips;
+   3. wiring what's already collected (services, disk, network, hosts, heat, storm), plus DND, snooze
+      and a workout schedule, with their reactions;
+   4. reading mail aloud and email replies;
+   5. approval for other agents, after the spike, with approved and denied;
+   6. chat replies, only for apps with a safe way to send;
+   7. the "You" character and plugin reactions.
 
 ## Reviews (2026-11-06)
 
-Their findings don't approve anything. Codex reported `gpt-6-sol`; agy reported no model.
-Codex's first run couldn't read the files, because the prompt forbade the shell it reads
-with, so its second run is the one recorded. The review of the earlier wizard, duck, cat
-and pup draft is in this file's git history.
+Their findings don't approve anything. Codex reported `gpt-6-sol`; agy reported no model. Earlier
+drafts and their reviews are in this file's git history.
 
-**Confirmed and applied:**
+**Confirmed against the code and applied:**
 
-- Both: per-character eyes are engine work, not settings (`EYE`, `PUP`, `index.html:1317`).
-- Both: recommending painted faces was premature. A fixed picture contradicts the poses, and
-  squish and tilt would warp it. It's now a tryout.
-- agy: painted eyes and mouth must be removed from the image.
-- agy: `t_*` eye shapes would fight a real mouth; Devil's mouth needed stating; automatic
-  headphones and glasses bypass `fits`; adult faces need smaller eyes; the precedence over
-  `voice_by_lang` wasn't stated.
-- Codex: the rollout never said when the new characters get poses; "only `transform` and
-  `opacity`" didn't match how the eyes draw; provenance records can't prove an image is
-  unique; "anime girl" sits awkwardly beside the adult requirement.
+- Both: voice can't safely approve another agent. `voiceAnswer` accepts "okay" and "sure", and the mic
+  isn't gated on media (`index.html:2885`).
+- Both: approval needs a real decision path with a request ID and the agent's real result.
+- agy: spoken approvals use the agent's own `description`, not the command (`server.py:725`).
+- Both: sends must stay click-only (`index.html:2890`, #95), bound to an exact destination.
+- Both: summaries need isolation; "untrusted" alone isn't enough.
+- Both: the audit overstated what's unsensed. Services, disk, network and hosts are collected but
+  only shown on boards (`plugins.py:722`, `peers.py`). This makes that slice smaller.
+- Both: reactions duplicated existing props and could clobber an open board, so they now extend, and
+  a chip opens the card.
+- agy: nothing in Nixi checks Do Not Disturb; a search of `server.py` and `index.html` finds no `isDnd`.
+- agy: Codex and agy do have blocking `PreToolUse` hooks here (`claude-code-managed.nix:1031`, `:1067`).
+- agy: sunglasses already mean fullscreen.
+- Codex: the voice link doesn't depend on reactions, so it's now its own slice.
+- agy: approved and denied have no signal yet, so they move to the approval slice.
+- agy: chat replies are a separate, harder problem, with no reply action in the notification bridge.
 
-**Refuted:**
+**Corrected:** Codex said a Codex connection has no approval hook, citing the guide's notify line. That
+line is about notifications; the separate `PreToolUse` hook exists, as agy found. Whether it also
+answers Codex's terminal prompt is unverified.
 
-- agy said the character must also be saved on the server for agent speech to find its voice.
-  It already is: `look()` in `server.py` validates and reads `look.character` from `CFG`.
-
-**Not verified:** `tests/character_fit.mjs` beyond its start, the real memory cost of images,
-and Flux Schnell's licence terms, which I recalled but didn't check.
+**Not verified:** Codex's and agy's terminal prompt behaviour, chat app APIs, live config flags, and
+whether the mic picks up speaker audio on your hardware.
