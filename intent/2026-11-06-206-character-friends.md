@@ -40,14 +40,14 @@ no art from either.
 - **The Devil becomes red,** with a tail that visibly sticks out and a small fork at his side.
   Today his colour follows the body colour, so he's navy by default, and his tail is hidden
   behind him. His red is his own, so the body colour picker doesn't change him.
-- **Twenty-two reactions, each with a prop, a body movement and each character's own touch,**
+- **Twenty-three reactions, each with a prop, a body movement and each character's own touch,**
   readable from across the room with the sound off:
 
   | Group | Reactions |
   |---|---|
   | Machine | high load, low memory, system error |
   | Calendar | meeting soon, in a meeting |
-  | Messages | new message, new email |
+  | Messages | any notification, new message, new email |
   | Agents | coding, needs approval, approved, denied, finished |
   | Apps | opening an app |
   | Media | music playing (a boombox), YouTube or a movie (popcorn and a screen), news update (a newspaper) |
@@ -65,6 +65,12 @@ no art from either.
   the agent's real code, so nothing private shows on a shared screen. Today only his own turns
   show this; for other agents he hears only "asks" and "finished", so knowing they're working needs
   a new signal.
+- **Rich notification cards (added by the user after approval, #214).** While Nixi is on screen he
+  takes over every app's notifications, as he can today, and shows them himself: a bell rings, he hops
+  and presents a card with the app's icon, rich text, a small image preview and buttons, one at a time,
+  with +N for the rest. Anything he can't show still goes back to the shell after 5 seconds. Today's
+  takeover gets plain text, cut to 120 characters, and an icon. Whether the shell can also hand over
+  markup, images and actions isn't verified, and the slice starts by finding out.
 - **Reactions build on what's there, and don't duplicate it.** Nixi already has a tie for
   meetings, headphones for music, shades for fullscreen, a beanie, a scarf, weather marks, a
   chat bubble and a mail envelope. An event plays a short reaction, then settles into the
@@ -130,6 +136,11 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
   and reset links are removed first. Nothing is logged, including transcripts and model requests.
 - **Must:** what he reads aloud respects who may be listening: nothing sensitive while locked or
   in a meeting, and a clear rule for which model and voice may receive it (see open question 2).
+- **Must: notification content is untrusted.** Markup is limited to bold, italic, underline, code and links,
+  drawn as text and never as HTML. Images come only as local files from the shell or the app, never fetched
+  from the network, and are size-limited. The existing `notify_details` switch and the one-time-code and
+  secret checks still apply, including to images, which stay hidden when the text is. Nothing is logged or
+  sent to an agent, as today.
 - **Must:** the "You" character is the user's own likeness, used with their consent, and is a
   personal option, not a default for other users (see open question 4).
 - **Must:** original art only, with no logos, brands or existing characters.
@@ -161,7 +172,8 @@ Mockups: `mockups/206/characters.html`, using Nixi's real art and real eye code.
    4. reading mail aloud and email replies;
    5. approval for other agents, after the spike, with approved and denied;
    6. chat replies, only for apps with a safe way to send;
-   7. the "You" character and plugin reactions.
+   7. the "You" character and plugin reactions;
+   8. rich notification cards.
 
 ## Approval (2026-11-06)
 
