@@ -1,65 +1,61 @@
 #!/usr/bin/env python3
-"""Build characters.html from template.html, each set's art and its per-mood poses. The SVG is checked first, because it came from a model."""
+"""Build characters.html from template.html and each direction's art. The SVG is checked first, because it came from a model."""
+import base64
 import json
 import re
 from pathlib import Path
 
 HERE = Path(__file__).parent
 BAD = re.compile(r"<\s*(script|image|foreignObject|iframe|use|a|style)\b|\son\w+\s*=|https?:|javascript:|@import|expression\(|\bfilter\s*[=:]|</style", re.I)
-IDS = ("wizard", "duck", "cat", "pup")
-POSES = ("think", "work", "wait", "happy", "alert", "sad", "sleep", "busy", "boop")
-MAX = 7 * 1024
+NEW = ("laptop", "girl", "man")
+OLD = ("snowflake", "terminal", "robot", "devil")
+MOODS = ("think", "work", "wait", "happy", "alert", "sad", "sleep", "busy", "boop", "talk")
 
 
 def scan(where, text, errs):
-    for m in BAD.finditer(str(text)):
+    for m in BAD.finditer(text if isinstance(text, str) else json.dumps(text)):
         errs.append(f"{where}: {m.group(0)!r}")
 
 
-def check(s):
-    errs = []
-    for i in IDS:
-        a = s.get(i)
-        if not isinstance(a, dict) or not re.fullmatch(r"[Mm][-\d\s,.A-Za-z]+[Zz]\s*", str(a.get("ball", ""))):
+def check(chars, errs):
+    for i, a in chars.items():
+        if not re.fullmatch(r"\s*[Mm][-\d\s,.A-Za-z]+[Zz]\s*", str(a.get("ball", ""))):
             errs.append(f"{i}: no closed ball path")
-            continue
-        for k in ("defs", "back", "front", "css", "defs2", "css2"):
+        for k in ("defs", "back", "front", "css", "defs2", "eye"):
             scan(f"{i}.{k}", a.get(k, ""), errs)
-        new = 0
         for mood, layers in (a.get("poses") or {}).items():
-            if mood not in POSES:
+            if mood not in MOODS:
                 errs.append(f"{i}: unknown mood {mood}")
-            for k, v in layers.items():
-                scan(f"{i}.{mood}.{k}", v, errs)
-                new += len(str(v))
-        if new > MAX * 1.3:      # a brief's limit, with some room: past this it would weigh on the real page
-            errs.append(f"{i}: {new} bytes of poses")
-    return errs
+            scan(f"{i}.{mood}", layers, errs)
 
 
-def merge(base, poses):
-    for i in IDS:
-        p = poses.get(i) or {}
-        base[i]["poses"] = p.get("poses") or {}
-        base[i]["defs2"] = p.get("defs", "")
-        base[i]["css2"] = p.get("css", "")
-    if poses.get("notes"):
-        base["notes"] = poses["notes"]
-    return base
-
-
+base = json.loads((HERE / "existing-base.json").read_text())
 sets = {}
-for name in ("claude", "codex", "agy"):
-    f, g = HERE / f"{name}-art.json", HERE / f"{name}-poses.json"
-    s = json.loads(f.read_text())
+for name in ("agy", "codex", "claude"):
+    s, errs = {}, []
+    f, g = HERE / f"{name}-anime.json", HERE / f"{name}-existing.json"
+    if f.exists():
+        d = json.loads(f.read_text())
+        s = {i: {**d[i], "eyesOnTop": name in ("agy", "codex")} for i in NEW if i in d}      # their front art paints over the eyes
+        s["notes"] = d.get("notes", "")
     if g.exists():
-        s = merge(s, json.loads(g.read_text()))
-    errs = check(s)
-    moods = {i: sorted((s[i].get("poses") or {})) for i in IDS}
-    print(f"{name}: {'ok' if not errs else errs}; moods per character {[len(v) for v in moods.values()]}")
+        d = json.loads(g.read_text())
+        for i in OLD:
+            if i in d:
+                s[i] = {**base[i], "defs2": d[i].get("defs", ""), "css": d[i].get("css", ""), "poses": d[i].get("poses") or {}}
+        s["notesE"] = d.get("notes", "")
+    else:
+        for i in OLD:
+            s[i] = dict(base[i])
+    check({k: v for k, v in s.items() if k in NEW + OLD}, errs)
+    size = {i: sum(len(str(s[i].get(k, ""))) for k in ("defs", "back", "ball", "front")) for i in NEW if i in s}
+    print(f"{name}: {'ok' if not errs else errs}; new art bytes {size}; moods {[len(s[i].get('poses') or {}) for i in NEW + OLD if i in s]}")
     sets[name] = None if errs else s
 
 data = json.dumps(sets, separators=(",", ":")).replace("</", "<\\/")
 page = (HERE / "template.html").read_text().replace("/*ART_JSON*/null", data)
+for who in ("girl", "man"):
+    img = base64.b64encode((HERE / f"painted-{who}.webp").read_bytes()).decode()
+    page = page.replace(f"PAINTED_{who.upper()}", f"data:image/webp;base64,{img}")
 (HERE / "characters.html").write_text(page)
 print(f"characters.html {len(page)} bytes")
