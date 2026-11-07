@@ -192,7 +192,7 @@ in
           { src = ./my-plugin; pname = "my-plugin"; }`, which checks the
           manifest and fails the build if it is wrong.
 
-          Every plugin starts off. Turn it on in Settings > More > Plugins;
+          Every plugin starts off. Turn it on in Settings > Plugins;
           plugins that run programs also ask for your permission there, and
           run in a sandbox. Nixi never downloads a plugin or an update.
           Plugins you copy by hand into
