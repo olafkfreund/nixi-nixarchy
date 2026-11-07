@@ -15,7 +15,7 @@ import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret } from "./trust-policy.js";
-import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
+import { isHerdrWrite, herdrWriteDetail } from "./send-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
