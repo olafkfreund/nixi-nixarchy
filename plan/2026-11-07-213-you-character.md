@@ -64,6 +64,13 @@ reviewers:
 - **The likeness itself** is never printed, described, committed or put in a PR, log or screenshot. The user's
   appearance stays out of every message.
 
+## Changes from the spec, for approval
+
+- **Slice B's reaction list is smaller at first.** The spec allows a notification, music, video and news. #208
+  ships `notice` and `music` only; `video` and `news` (and Do Not Disturb) come with #209's media and quiet-gate
+  slices. So slice B starts with `notice` and `music`, adds `video` and `news` when #209 has them, and its live
+  check uses `notice` and leaves DND to #209. The alternative is to wait for #209 before slice B at all.
+
 ## Where the work happens
 
 - Slice A: nixoarchy-snowflake, a new worktree `/mnt/code/Source-home/GitHub/nixi-213-code`, branch
@@ -87,12 +94,19 @@ reviewers:
    - `check_dir` (`945`) refuses `private`.
    - For a private plugin, every error kept for it is one of the fixed strings; sanitiser reasons (`446`, `466`,
      `478`) are never stored.
+   - Errors raised before the manifest is read can't know `private`, so for a folder plugin
+     (`plugin_dirs()[1]`) they never carry a name or message either: `scan` (`263-272`) says "contains a
+     symlink" (not `_symlink(d)`'s path) and "plugin.json unreadable" (not the exception text). Nix plugins keep
+     today's detail. Settings shows these through `plugins_api` (`server.py:1905-1909`).
    - Tests in `tests/test_plugins.py`: a valid manifest passes; a bad `template`, `fits` outside the template, a bad
      `fill`, a missing art file, art with a gradient or `class`, an unknown key, and art with `<script>`, `onload`,
      `href` or `url()` each reject it; `private` from the package directory, with a group-readable file, and with a
      file owned by someone else (simulate `st_uid` with a mock) are refused; `check_dir` fails on `private`; a
-     private plugin's errors are fixed strings.
-   → verify: `cd tests && python -m unittest test_plugins test_plugin_sandbox`.
+     private plugin's errors are fixed strings; a folder plugin with a symlink named with a marker string, and one
+     with an unreadable manifest, show no marker through `plugins_api`.
+   → verify: `cd tests && python -m unittest test_plugins test_plugin_sandbox`, and the Nix build of a synthetic
+   private plugin fails: `nix build --impure --expr` over `mkCompanionPlugin` with a temp folder whose manifest has
+   `"private": true` (local only, not in CI; nothing of "You" is used).
    Traps: fail closed on any `stat` error; never put file content or a tag name in a private plugin's error.
 
 2. **`app/server.py`: load, accept and send it** (coder).
@@ -105,11 +119,13 @@ reviewers:
      `voice_by_character`.
    - `state_info` (`6170`) sends `plugin_characters` next to `plugin_props`.
    - `plugin_caps` (`1868`) adds "Adds a character (pick it in Look)".
-   - `_json` (`6216-6222`) sends `Cache-Control: no-store`.
+   - `_json` (`6216-6222`) sends `Cache-Control: no-store`. That covers every JSON answer, which is where
+     `state_info` and the art travel. Binary routes keep their own headers (`/api/icon/` keeps `max-age=86400`,
+     `6247-6252`); none carries character art.
    - Tests: `tests/test_look_character.py` (accepts a loaded `plug:` character, falls back to snowflake when the
      plugin is off, deleted or its art breaks); `tests/test_character_voice.py` (a loaded `plug:` ID is accepted, an
-     unknown one refused); a new `tests/test_plugin_character.py` for `no-store` on every API answer and the no-log
-     test: a valid private fixture and a malformed one whose tag and attribute names carry a marker string, after a
+     unknown one refused); a new `tests/test_plugin_character.py` for `no-store` on `/api/state` and two other JSON
+     routes, and the no-log test: a valid private fixture and a malformed one whose tag and attribute names carry a marker string, after a
      reload, leave neither the `d` values nor the marker in `server.log`, Settings or `diagnostics()` (`6002`).
    → verify: `cd tests && python -m unittest test_look_character test_character_voice test_plugin_character`.
    Traps: import `server` only under `tests/nixi_env.py`'s throwaway HOME (#176); the fixture lives in the test's
@@ -124,8 +140,9 @@ reviewers:
    - The Look grid (`3547`) shows a plugin label through `esc()` (`1045`).
    - Frost, glint and `touch` stay built-in only.
    - A synthetic fixture for the page tests: a plain circle with two dots, served by the test server only.
-   - Tests: `tests/character_fit.mjs` with `char plug:fixture` (the face box, the surface, the bar state, as #178's
-     cases); in a page test, a label `<b>x</b>` shows as text, art drawn outside the limits is clipped, and after a
+   - Tests: `tests/character_fit.mjs`'s registry check (`103`) requires `back` and `front` strings; for a `plug:`
+     entry it checks `nodes` instead, and every built-in check stays as it is. Then `char plug:fixture` (the face
+     box, the surface, the bar state, as #178's cases); in a page test, a label `<b>x</b>` shows as text, art drawn outside the limits is clipped, and after a
      reload without the plugin no `plug:` entry is left in `CHARACTERS` or the grid.
    → verify: `cd tests && python -m unittest test_character_fit test_accessories_fit` and the new page test.
    Traps: headless Chromium with `--disable-gpu` only; never `innerHTML` for plugin art; Snowflake's pixels stay
@@ -134,7 +151,8 @@ reviewers:
 4. **Docs and the Settings line** (coder). The plugin section of `docs/GUIDE.md` documents the `character` key and
    the private rules, with the rule in bold: never name a private folder in any Nix expression. In Settings, a
    private plugin's row shows "Private: keep this folder out of Nix and out of any repo."
-   → verify: `cd tests && python -m unittest test_docs_names`.
+   → verify: `cd tests && python -m unittest test_docs_names` (names and links), plus one new assertion in it that
+   `docs/GUIDE.md` contains the sentence "never name a private folder in any Nix expression".
    Traps: no example in the docs looks like a real person; the fixture is the circle with two dots.
 
 5. **Review and PR, slice A** (me). Full suite from `tests/`. A fresh Opus reviewer on this plan and the diff, then
@@ -164,15 +182,18 @@ reviewers:
 8. **Server and page** (coder). `Inbox.rows` (`server.py:2240`) drops any `reaction` key from the shell's output;
    `Inbox.tick` (`2265`) sets `reaction` from the first matching plugin, once per row key, at most one per plugin
    every 5 minutes, counted when sent. The page plays it after today's handling through #208's `rxPlay`/`rxOk`.
+   A row that carries `reaction` plays that reaction **instead of** #208's `notice` for an `other` row, never both:
+   #208's gate plays one at a time and drops what can't play, so `notice` first would swallow it.
    Tests: literal app and host and `*.suffix` match; a reaction outside the allowlist is refused; a shell
    `reaction` key is dropped; the same row key twice reacts once; two matching plugins give one; the 5-minute
-   limit; the row's category and text unchanged; #215's message pinning tests pass unchanged; in `react_fit`, a
+   limit; the row's category and text unchanged; an `other` row mapped to `music` plays `music`, not `notice`;
+   #215's message pinning tests pass unchanged; in `react_fit`, a
    plugin reaction doesn't play under fullscreen, a meeting, the lock or reduced motion.
    → verify: `cd tests && python -m unittest test_plugin_maps test_react_fit test_notify_fit`.
    Traps: only app and host are read; never the summary or body.
 
 9. **Review, PR, deploy, check, slice B** (me). As step 5. Then, with the user on p620, a test plugin mapping
-   `notify-send -a nixi-test` to `notice` plays once, not again within 5 minutes, and not while fullscreen or
+   `notify-send -a nixi-test` to `notice` (the spec's `news` once #209 adds it) plays once, not again within 5 minutes, and not while fullscreen or
    locked; a message and an email still show exactly as before.
 
 ## Tests
