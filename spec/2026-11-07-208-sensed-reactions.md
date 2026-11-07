@@ -60,8 +60,7 @@ exists. The art is silent: no reaction adds a sound or a spoken word.
 | Any notification | a row of category `other` is drawn | the bell once | today's row |
 | Needs approval | `attention` with `kind: ask` | the sign bounces once | today's mark, clickable as today |
 | Finished | `attention` with `kind: done` | the trophy once | today's mark |
-| Coding | his own turn is working (§4) | the small terminal | it shrinks after 60 s |
-| Opening an app | `quick._open_app` succeeded | the window pops once | nothing |
+| Opening an app | `quick._open_app` asked for a launch (it returned its "Opening …" reply; it can't know the app opened) | the window pops once | nothing |
 | Music | `sitOn.music` | the boombox bops for 4 s on start and on a track change | a still boombox, which replaces the headphones (§5) |
 | Rain, snow, wind | `sitOn.rain`, `.snow`, `.windy` turn on | once | today's weather look |
 | Break | the `break` nudge | the workout headband with today's stretch | nothing |
@@ -86,7 +85,10 @@ see Open questions, Meeting.s over).
   When it ends, the groups are emptied and the classes go, so nothing animates at rest.
 - **Body gestures.** The art's hop, droop and lean animate `.whole`. `#body` gets its transform from the frame loop
   every frame (`index.html:1760`), and a CSS transform on the same element would replace it. So a new `<g class="whole">`
-  wraps `#body`'s children. With no reaction it has no transform, so Snowflake's pixels don't change.
+  wraps `#body` itself, as its parent. `#body`'s children stay where they are, so every `#body>…` selector keeps
+  matching: `setCharacter` (`index.html:1309-1312`), the notch and snap CSS (`index.html:40`, `84-97`) and the
+  measures of `#body > .ball` (`index.html:2871`, `4066`). With no reaction `.whole` has no transform, so Snowflake's pixels don't
+  change.
 - **Eyes.** The page keeps drawing them. A reaction sets its mood with today's `poke(mood, ms)`.
 - **Fits.** A prop or touch that doesn't fit a body, by `CHARACTERS[].fits`, is left out, as `applyAnchors` does for
   looks (`index.html:1302`). Sunglasses keep meaning fullscreen: no in-scope reaction uses them.
@@ -102,17 +104,21 @@ One check, `rxOk(id)`, before anything is drawn:
 - the same reaction at most once every 10 minutes, except "needs approval" and music's track bop;
 - one at a time: a new one ends the one playing. A sustained prop (load, memory, the boombox) stays underneath.
 
+The check also runs on every change it depends on, not only at the start: a situation event, a meeting starting,
+fullscreen, the lock, `body.bar`, `.hover`, `.calm`, `.peek` and the page hiding. When it fails while something
+shows, the playing reaction ends, the sustained props hide until it passes again, and the music card closes, so a
+track title doesn't stay on a shared screen.
+
 A reaction that can't play is dropped, not queued. The sustained ones show as soon as the check passes, because their
 signal is still on. With reduced motion (`REDUCED`, `index.html:1603`) a reaction shows its prop still, with no
 keyframes. Approval requests keep every behaviour they have today, whatever this check says.
 
-### 4. The coding terminal
+### 4. No new coding terminal
 
-While his own turn works (`busy`, with mood `editing`, `running`, `reading` or `searching`), a small terminal pops out
-beside him, on the side with more room, as `mailPop` chooses (`index.html:2471`). It shows the harness's name and
-scrolling lines of made-up code from a fixed list in the page, never the agent's real output. After 60 s it shrinks to
-a small badge, and it goes when the turn ends. It yields to the envelope and to an open board: hidden while either
-shows. `SIT.coding`, which means the user's own editor has focus, keeps its glasses and isn't used here.
+The intent's "coding terminal" already exists: `#code` (`index.html:692`) opens beside him while his own turn runs
+tools and shows the real commands, edits and output (`index.html:4057-4060`, `4150-4162`). A second, decorative
+terminal with made-up code would show next to it, at the same time. This slice adds none and leaves `#code` as it
+is. What `#code` shows on a shared screen is today's behaviour and not changed here.
 
 ### 5. The boombox and its controls
 
@@ -121,14 +127,19 @@ shows. `SIT.coding`, which means the user's own editor has focus, keeps its glas
   headphones stay as today. Turning off "Music look" removes both.
 - **It bops** for 4 s when music starts and when the track changes, then stands still. With `look_beat` on, its
   speakers pulse with the beat, as the headphone cups do today.
-- **The track change** needs a new signal. While music plays and reactions are on, `Ambient.sense` also runs
-  `playerctl metadata --format '{{mpris:trackid}}{{title}}'` in the same 5 s step, and keeps a counter, `track`, that
-  goes up when the output changes. Only the counter goes in `situation`. No title or artist is sent or kept.
+- **The track change** needs a new signal. Music is "any player says Playing" (`playerctl -a status`,
+  `server.py:1729`), so the track must come from one of those players, not playerctl's default one. While music plays
+  and reactions are on, `Ambient.sense` runs `playerctl -a metadata --format
+  '{{playerName}}\t{{status}}\t{{mpris:trackid}}{{title}}'` instead of the status call, in the same 5 s step, and
+  takes music from it. The first `Playing` line's player is followed; the counter, `track`, goes up when that
+  player's third field changes, and not when a different player starts. Only the counter goes in `situation`. No title or artist is sent or kept.
 - **The chip.** While the boombox shows, a small round ♪ button sits beside him. A click opens a card. Nothing opens
   by itself.
 - **The card** is a small HTML panel beside him, on the side away from an open board, built with `textContent` only.
   Its first line is what's playing, asked for when the card opens. Its buttons are Pause or Play, Next, Quieter and
-  Louder. It closes on Esc, ×, a click elsewhere, the music stopping, or 15 s without use. `sendRegion` adds the chip
+  Louder. It closes on Esc, ×, a click elsewhere, or 15 s without use. Music stopping closes it too, unless the card's
+  own Pause stopped it: then the card and the chip stay, showing Play, until it closes by one of the other rules. So
+  Play stays reachable after Pause. `sendRegion` adds the chip
   and the card while they show, so the native window lets clicks through.
 - **Each button posts a fixed phrase to `/api/quick`**, the route voice commands already use: `pause`, `play`,
   `next song`, `quieter`, `louder` and `what's playing`. The page never sends anything else, and the card shows the
@@ -137,10 +148,11 @@ shows. `SIT.coding`, which means the user's own editor has focus, keeps its glas
 
 ### 6. The red Devil
 
-- His ball and wings use their own gradients, `#devBallG` and `#devWingG`, with fixed reds (`#e0334f`, `#c81e3a`,
-  `#7a0f24`), so the body colour picker doesn't change him. A custom property set on `#body` wouldn't reach the stops
-  in `<defs>`, which is why these are separate gradients. `setCharacter` sets the ball's fill to `#devBallG` for him
-  and back to `#ballG` for the others. His rim is `#5c0a1c`.
+- His art already has its own gradients, `#devBody` and `#devWing` (`index.html:758-759`), for the body drawn in his
+  back art and for his wings. Their stops use the theme classes (`b0`, `b1`, `b2`), so today they follow the body
+  colour. They get fixed red stops instead (`#e0334f`, `#c81e3a`, `#7a0f24`), and `setCharacter` sets the ball's fill to
+  `#devBody` for him and back to `#ballG` for the others. His rim is `#5c0a1c`. So the ball, the body in his back art
+  and the wings are all red, whatever the body colour.
 - His tail moves out, so its tip clears the ball's edge, and it swishes as in the mockup.
 - A small fork stands at his left side, in his back art, as `.dFork`. Where a reaction's prop stands on his left (load,
   memory, error, done and workout), the fork fades out, as the mockup's rule does.
@@ -206,15 +218,18 @@ settings stay. Approvals, the agent marks and the chip's click to jump to an age
   - the boombox replaces the headphones with reactions on, and the headphones stay with it off;
   - the chip appears only with the boombox; the card opens only on a click; each button posts its fixed phrase; Esc
     closes it; an unhandled answer says "I couldn't do that.";
-  - the coding terminal shows during a turn, shrinks after 60 s, hides for the envelope and a board, and goes at the
-    end;
-  - the Devil's ball is red with any body colour; the other three characters' fills still follow it; the fork hides for
+  - a meeting, fullscreen, the lock or the notch arriving while a reaction plays ends it, hides the boombox and closes
+    the card; they come back when the check passes again;
+  - after the card's Pause, the card and chip stay with Play, and Play posts `play`;
+  - `setCharacter` to each character and back, and the notch, still work with `.whole` in place;
+  - the Devil's ball, back-art body and wings are red with any body colour; the other three characters' fills still follow it; the fork hides for
     the five left-side props.
 - **Art check:** a Python test runs the `BAD` pattern over every `REACT` string, and checks ids start with `fx-`.
-- **`tests/test_situation.py`:** `track` goes up only when the playerctl output changes, stays put with reactions off,
-  and no title is in the event.
-- **`tests/test_quick*`:** each of the six phrases is handled by `quick.handle` with the expected `playerctl` or
-  `wpctl` call (mocked), and `next song` isn't taken by the stage fast path while a board is open.
+- **`tests/test_situation.py`:** `track` goes up only when the followed player's track changes, not when a second
+  player starts, stays put with reactions off, and no title is in the event.
+- **`/api/quick` tests:** each of the six phrases, posted to the real route, reaches `quick.handle` with the expected
+  `playerctl` or `wpctl` call (mocked), also with a quick-memory answer stored for the same words (`recall.answer` runs
+  first, `server.py:6387`); and `next song` isn't taken by the stage fast path while a board is open.
 - **`tests/test_settings*`:** `reactions` defaults to `False`, saves, and is in `NOTIFY_FLAGS`.
 - **By hand on p620, with the user:** a real track change bops once; Pause and Next work from the card in the native
   window; a meeting, fullscreen and the lock keep him still; the Devil is red and his tail shows.
@@ -234,6 +249,40 @@ settings stay. Approvals, the agent marks and the chip's click to jump to an age
    calendar.
 4. Minor, outside this slice: `#workW` already uses `filter="url(#glow)"` (`index.html:770`), so the no-filter rule
    holds for new art only.
+
+## Reviews (2026-11-07)
+
+Their findings don't approve anything. Codex reported `gpt-6-sol`; agy's JSON reports no model. Both read the
+draft, the intent and the companion at `8f2275e`. Each finding was checked against the code.
+
+**Confirmed and applied (Codex):**
+
+- Wrapping `#body`'s children in `.whole` would break every `#body>…` selector (`index.html:1309-1312`, `84`,
+  `2871`, `4066`). `.whole` now wraps `#body` itself.
+- Pause from the card hid the chip and the card on the next 5 s check (`server.py:1729`), so Play was unreachable.
+  The card's own Pause now keeps both.
+- `rxOk` ran only at a reaction's start, so a meeting, fullscreen or the lock arriving later left props and the
+  card (with a track title) on screen. It now runs on every change it depends on.
+- The Devil's red didn't reach the body in his back art or his wings: `#devBody` and `#devWing` use theme stops
+  (`index.html:758-759`). Those gradients now get the fixed reds.
+- The decorative coding terminal duplicated `#code`, which already shows his real work during a turn
+  (`index.html:4057-4060`). Dropped from this slice.
+- `playerctl metadata` without `-a` could describe a different player than the one playing. The track now comes
+  from the `Playing` player.
+- `_open_app` returns "Opening …" without knowing the app opened (`quick.py:268-281`). The trigger is now "a launch
+  was asked for".
+- The phrase tests now post to the real `/api/quick` route, where `recall.answer` runs first.
+
+**Refuted or not applicable (agy):**
+
+- Do Not Disturb unchecked: true, and the user decided it stays in slice 3.
+- That `rxOk` and the per-signal checks aren't in the code: they're what this spec proposes.
+- That the headband never hides after a break: every reaction empties its groups when it ends (§2).
+- That `quick._open_app`'s "Opening X." is never spoken: today's behaviour, not changed here.
+
+**Agreed:** Codex's answers to the open questions match the recommendations.
+
+**Not verified:** the hand checks on p620 and razer, and what each music player reports over MPRIS.
 
 ## Rollback
 
