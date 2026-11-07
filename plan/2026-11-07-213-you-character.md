@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 213
 spec: spec/2026-11-07-213-you-character.md
 coders:
@@ -210,3 +210,7 @@ idle check can be flaky under load; rerun it alone before treating it as a failu
 Revert the slice's PR and bump back. The private folder is removed by hand (`rm -r
 ~/.local/share/nixi-companion/plugins/you`). An older companion rejects a plugin with an unknown top-level key
 (`plugins.py:114-115`), so after a rollback "You" and any reaction map simply don't load.
+
+## Decided by the user (2026-11-07)
+
+- Slice B starts with `notice` and `music`; `video` and `news` are added when #209 provides them (the recommendation). This changes the spec's first list, as the plan states.
