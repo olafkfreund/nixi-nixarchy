@@ -269,7 +269,8 @@ export function claudePermissions(askBeforeReading, trust = "guide") {
     // ask beats the user's own allow rules (Bash(env:*), Bash(python3:*) ...), which
     // would otherwise let Claude run a herdr write without ever asking the bridge, so
     // the bridge's click-only card (#95) could not be skipped by a standing allow.
-    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)",
+    // The same for a gog send (#219): `env gog gmail send …` matches Bash(env:*).
+    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)", "Bash(*gog *)", "Bash(*gog)",
       ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
     deny: EXEC_WRITES,
   };

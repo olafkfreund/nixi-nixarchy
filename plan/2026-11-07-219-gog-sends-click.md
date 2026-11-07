@@ -159,3 +159,16 @@ nothing else is stored.
   companion's herdr audit regex is generic (`herdr [--session x] agent|pane <word> <pane>`) and still keeps only
   the pane. On review its send-word match was stricter than the bridge's (`(?![\w-])` against `\b`), so
   `send-later` and `--gmail-no-send` counted in the bridge only; it now uses `\b`, with both cases in both tests.
+- **Review fixes (step 5).**
+  - Opus review, critical: Claude Code applies the user's own allow rules (`Bash(env:*)`, `Bash(timeout:*)` …)
+    before the bridge sees a request, so `env gog gmail send …` ran with no card. `claudePermissions` now asks for
+    `Bash(*gog *)` and `Bash(*gog)`, beside the herdr rules (`trust-policy.js:272`), with a test. The companion uses
+    a hook and wasn't affected.
+  - Codex, both repos: a body or subject that looked like `--to=…` or `--bcc=…` was read as a recipient and logged.
+    Value flags (`--body`, `--subject`, `--body-html`, `--body-file`, `--raw-file`, `--text`, `--html`, `--file`,
+    `--attach`) now consume their value, and `to` keeps only email addresses; anything else gives `""`.
+  - Opus review: the gog skill's own form, `gog -a "$ACCT" --no-input gmail send …`, logged `unknown`. gog's global
+    flags before the command words are skipped. `chat dm send|create|post` and `calendar respond|rsvp|reply` are on
+    the list, and `respond`/`rsvp` count as send words.
+  - Opus review: `g$'o'g` and `g${X}og` evaded detection. `${…}` and `$` are removed before matching, in both
+    twins. `isHerdrWrite` stays byte-for-byte as the plan says, so herdr keeps that residual.

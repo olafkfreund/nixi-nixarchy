@@ -27,14 +27,15 @@ export function herdrWriteDetail(toolCall) {
 // A wrapper or alias without the word gog remains a residual hidden send.
 const GOG = /\bgog\b/i;
 const API = /\bapi\b/i;
-const SEND = /\b(?:send|reply-all|replyall|reply|forward|fwd|autoreply|post|create)\b/i;
+const SEND = /\b(?:send|reply-all|replyall|reply|forward|fwd|autoreply|post|create|respond|rsvp)\b/i;
 const DRAFT_ONLY = /\bdrafts\s+(?:create|reply|forward|update)\b/gi;
 
 export function isGogSend(toolCall) {
   let command = toolCall?.rawInput?.command;
   if (Array.isArray(command)) command = command.join(" ");
   if (typeof command !== "string") return false;
-  const words = command.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  // ${…} and $ are removed too: g$'o'g and g${X}og are gog to the shell (#219 review)
+  const words = command.replace(/\\\n/g, "").replace(/\$\{[^}]*\}/g, "").replace(/['"\\$]/g, "");
   return GOG.test(words) && (API.test(words) || SEND.test(words.replace(DRAFT_ONLY, "")));
 }
 
@@ -44,11 +45,17 @@ const GOG_COMMANDS = [
   "chat messages create", "chat messages post", "chat messages send", "gmail drafts post",
   "gmail drafts send", "gmail reply-all", "gmail replyall", "gmail autoreply",
   "gmail forward", "gmail reply", "gmail send", "gmail fwd", "mail send", "send", "api",
+  "chat dm send", "chat dm create", "chat dm post", "calendar respond", "calendar rsvp", "calendar reply",
 ];
 const POSITIONAL_ID = new Set([
   "gmail reply", "gmail reply-all", "gmail replyall", "gmail forward", "gmail fwd",
   "gmail drafts send", "gmail drafts post", "chat messages send", "chat messages create", "chat messages post",
+  "chat dm send", "chat dm create", "chat dm post",
 ]);
+// gog's global flags, which may come before the command words (the gog skill writes `gog -a "$ACCT" --no-input
+// gmail send …`). These take a value; any other leading flag is taken as a switch.
+const GLOBAL_VALUE_FLAGS = new Set(["-a", "--account", "--color", "--home", "--client", "--access-token",
+  "--quota-project", "--enable-commands", "--enable-commands-exact", "--disable-commands", "--select"]);
 
 const VALUE_FLAGS = new Set(["--body", "--body-html", "--body-file", "--raw-file", "--subject", "--text", "--html", "--file", "--attach"]);
 const ADDRESS = /^[^\s@,'"]+@[^\s@,'"]+$/;
@@ -58,7 +65,8 @@ export function gogSendDetail(toolCall) {
   const words = Array.isArray(raw) ? raw : typeof raw === "string"
     ? raw.match(/"(?:\\.|[^"\\])*"|'[^']*'|(?:\\.|[^\s'"\\])+/g) ?? [] : [];
   const start = words.findIndex((word) => /(?:^|\/)gog$/.test(word));
-  const tail = words.slice(start + 1);
+  let tail = words.slice(start + 1);
+  while (tail[0]?.startsWith("-")) tail = tail.slice(GLOBAL_VALUE_FLAGS.has(tail[0]) ? 2 : 1);
   const command = start < 0 ? "unknown" : GOG_COMMANDS.find((entry) =>
     entry.split(" ").every((word, index) => tail[index] === word)) ?? "unknown";
   if (command === "unknown") return { kind: "gog", command, to: "" };

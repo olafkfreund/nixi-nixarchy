@@ -497,6 +497,13 @@ test("herdr commands always ask, whatever the user allows (#95)", () => {
   }
 });
 
+test("gog commands always ask, whatever the user allows (#219)", () => {
+  for (const trust of ["guide", "mechanic"]) for (const askBeforeReading of [true, false]) {
+    const { ask } = claudePermissions(askBeforeReading, trust);
+    assert.ok(ask.includes("Bash(*gog *)") && ask.includes("Bash(*gog)"), `${trust} ${askBeforeReading}`);
+  }
+});
+
 test("secret globs are anchored absolutely as well (#95)", () => {
   const { ask } = claudePermissions(false);
   for (const rule of ["Read(//**/*.age)", "Grep(//**/.env)", "Glob(//**/.env.*)"])
