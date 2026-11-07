@@ -40,6 +40,9 @@ reviewers:
 
 The spec's one unverified point was checked before this plan: with `--permission-mode bypassPermissions` and a
 `PreToolUse` hook on `Bash`, Claude Code ran the hook and obeyed its deny (the command's file was never written).
+Reproducer: a hook script that prints a `deny` decision for any command containing `PROBE_DENY`; `claude -p
+--permission-mode bypassPermissions --settings <hook>.json "run: echo PROBE_DENY > <file>"`. The hook logged the
+command, and `<file>` didn't exist afterwards.
 
 ## Where the work happens
 
@@ -74,10 +77,12 @@ The spec's one unverified point was checked before this plan: with `--permission
    `541` (`herdrWrite`, renamed `clickOnly`, used at `546`, `551` and `580`), `903` (allow all pending), and for the
    audit calls at `536`, `794` and `851`. `auditSend` (`756-768`): for a gog send write `{ts, ...gogSendDetail, cwd,
    decision, optionKind}` with no `text`; the raw-command fallback at `758-759` stays for herdr only. In
-   `bridge/always.js:37`, `rememberable` uses `isClickOnly`. Tests in `bridge/herdr-bridge.test.js`, with its
-   existing harness: a gog send in YOLO isn't auto-approved and its card has `confirm: "click"` and no
+   `bridge/always.js:37`, `rememberable` uses `isClickOnly`. The fake agent needs a gog case: in
+   `bridge/testing/fake-agent.js`, beside `PLEASE_HERDR` (`145-146`), a `PLEASE_GOG` text that makes a `Bash` call
+   `gog gmail send --to me@example.com --subject s --body secret-body`. Tests in `bridge/herdr-bridge.test.js`, with
+   its existing harness (`runBridge`): a gog send in YOLO isn't auto-approved and its card has `confirm: "click"` and no
    `allow_always`; allow-all leaves it pending; a stored `always.json` entry for it doesn't match; Guide cancels it
-   and the audit line has no `text`; a herdr write behaves as before. In `bridge/always.test.js`: `rememberable` is
+   and the audit line has no `text` and doesn't contain `secret-body` or the subject; a herdr write behaves as before. In `bridge/always.test.js`: `rememberable` is
    false for a gog send.
    → verify: `node --test bridge/`.
    Traps: every audit path must keep writing for herdr exactly as today; `#95` tests must stay green.
@@ -85,9 +90,12 @@ The spec's one unverified point was checked before this plan: with `--permission
 3. **The card's `Y`** (coder). `Conversation.qml:1546-1556`: if `root.pendingPermission.confirm === "click"` and the
    key is `Y`, accept the event, answer nothing, and show "click to confirm sends" the way the card shows its other
    ticks. `WindowShortcuts.qml:14-19`: add `&& conversation.pendingPermission.confirm !== "click"` to the `Y`
-   shortcut's `enabled`. `N` unchanged.
-   → verify: `nix flake check` (the QML lint runs there) and, if the repo has a QML test harness for keys, a case for
-   each route; otherwise step 6 checks it by hand.
+   shortcut's `enabled`. `N` unchanged. The hint at `Conversation.qml:1990` ("Clear the message box to answer with Y
+   or N") says "Click yes or no: a send can't be answered by a key" on a click-only card.
+   → verify: `nix flake check` parses the QML only (`flake.nix:36-40`), so the guards are checked as the repo checks
+   the older key guards, by source assertions in `tools/test_nixi.py` (`test_permission_keys_guard`, `622`): the
+   composer's permission branch tests `confirm` before `Qt.Key_Y`, the `Y` shortcut's `enabled` names `confirm`, and
+   the hint has a click-only text. Run `python3 tools/test_nixi.py`. Step 6 checks both routes by hand.
    Traps: `pendingPermission` may be the empty object; guard on `.confirm` only, as `Conversation.qml:968` does.
 
 4. **The companion** (coder), in `/mnt/code/Source-home/GitHub/nixi-219-code`:
@@ -98,8 +106,9 @@ The spec's one unverified point was checked before this plan: with `--permission
      set `can_always = False`, never add to `self.always`, and publish `approve` with `confirm="click"`. When
      `trust()` is `trust` or `root` and the command isn't click-only, or the tool isn't `Bash`, return
      `{"ok": True}` at once with no card.
-   - After a click-only decision, append one JSON line to `DATA_DIR / "sends.log"`, opened with mode `0o600`:
-     `ts`, `send_detail`, and `decision` (`allow`, `deny`, or `timeout` when `item["ans"]` is `None`).
+   - After a click-only decision, append one JSON line to `DATA_DIR / "sends.log"`, created with mode `0o600` and
+     `chmod`ed to `0o600` once per run if it already existed, as the bridge does (`bridge.js:767-770`): `ts`,
+     `send_detail`, and `decision` (`allow`, `deny`, or `timeout` when `item["ans"]` is `None`).
    - `server.py:4923-4926`: for `trust` and `root`, after `bypassPermissions`, add `"--settings",
      send_hooks_file()`, a new function beside `hooks_file()` (`4892`) that writes a `PreToolUse` hook on `Bash`
      only, running the same `approve.py`, to its own file under `DATA_DIR`.
@@ -107,7 +116,7 @@ The spec's one unverified point was checked before this plan: with `--permission
      for `click_only`; Ask mode gives `confirm: "click"`, no always (an `always` answer counts once) and no lookup
      in `self.always`; a plain command is unchanged; Trust and Root allow a plain command with no `approve` event
      and ask for a gog send; `sends.log` has one line each for allow, deny and timeout, with no body or subject
-     from the test command; `send_hooks_file()` names `Bash` only. `BUS.pub` is captured, nothing real runs.
+     from the test command; an existing `sends.log` with mode `0644` ends up `0600`; `send_hooks_file()` names `Bash` only. `BUS.pub` is captured, nothing real runs.
    → verify: `cd tests && python -m unittest test_approvals` and the full suite.
    Traps: never a real `claude`, `gog`, `pactl` or `hyprctl` in a test; import `server` only under the throwaway
    HOME from `nixi_env` (#176); `approve.py` with no Nixi running stays out of the way, as today.
@@ -119,7 +128,8 @@ The spec's one unverified point was checked before this plan: with `--permission
 6. **Deploy and check** (me). Merge both PRs, bump `nixi` and `nixi-companion` in `nixos_config`, CI, merge, post
    on the agent bus, switch p620 from the clean worktree, restart Nixi with the live Hyprland signature. With the
    user, in Mechanic: ask the agent to send a test mail to yourself with gog; "yes" does nothing, `Y` does nothing
-   in the Nixi card, a click sends it. In YOLO the card still appears. `sends.log` has the command and recipient,
+   in the Nixi card, typed in the empty composer and pressed with the window focused (the two routes), a click sends
+   it. In YOLO the card still appears. `sends.log` has the command and recipient,
    not the body. In the companion's Trust mode, a gog send asks and an `ls` doesn't.
 
 ## Tests
