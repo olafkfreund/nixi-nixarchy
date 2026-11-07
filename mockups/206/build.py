@@ -7,7 +7,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 BAD = re.compile(r"<\s*(script|image|foreignObject|iframe|use|a|style)\b|\son\w+\s*=|https?:|javascript:|@import|expression\(|\bfilter\s*[=:]|</style", re.I)
 REACTIONS = "load memory error soon meeting notice message email coding ask approved denied done open music watch news rain snow sun wind workout water".split()
-CHARS = "snowflake terminal robot devil me".split()
+CHARS = "snowflake terminal robot devil".split()
 
 
 def unstack(svg):
@@ -55,8 +55,6 @@ def check(s):
     errs = []
     for m in BAD.finditer(json.dumps(s)):
         errs.append(repr(m.group(0)))
-    if not re.fullmatch(r"\s*[Mm][-\d\s,.A-Za-z]+[Zz]\s*", str(s.get("me", {}).get("ball", ""))):
-        errs.append("me: no closed ball path")
     missing = [r for r in REACTIONS if r not in s.get("props", {})]
     if missing:
         errs.append(f"missing props {missing}")

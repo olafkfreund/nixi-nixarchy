@@ -1,0 +1,248 @@
+<title>Nixi's New Friends</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: a dark desk with all five characters live on it, the card he shows beneath them, then a still grid of every reaction. Nixi lives on a dark desktop, so this page keeps one dark look. */
+:root{color-scheme:dark;--desk:#14161f;--desk2:#1c1f2b;--card:#222634;--line:#343a4d;--ink:#eef0f6;--dim:#a6adc2;--hotb:#7fb4e6;--ok:#5ad19a;--new:#f2b84b;--no:#ef7f7f;
+  --display:'Fraunces',Georgia,serif;--body:'Atkinson Hyperlegible',system-ui,sans-serif;
+  --body0:#24365a;--body1:#1b2a4a;--body2:#142038;--rim:#2d3d61;--acc:#4d6fb7}
+body{background:var(--desk);color:var(--ink);font:15px/1.5 var(--body)}
+main{max-width:1240px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+h1{font:650 clamp(30px,5vw,44px)/1.1 var(--display);margin:0;text-wrap:balance}
+header p{margin:8px 0 0;color:var(--dim);max-width:72ch}
+.bar{display:grid;gap:8px;padding-block:10px;border-bottom:1px solid var(--line)}
+.seg{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.seg b{color:var(--dim);font-weight:400;font-size:13px;margin-right:6px;min-width:76px}
+.seg button{font:inherit;font-size:14px;color:var(--ink);background:var(--desk2);border:1px solid var(--line);border-radius:999px;padding:3px 11px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--hotb);border-color:var(--hotb);color:#0f1420;font-weight:700}
+button:focus-visible,select:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#note{color:var(--dim);margin:0;max-width:75ch}
+#row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.card{min-width:0;background:linear-gradient(180deg,var(--desk2),var(--card));border:1px solid var(--line);border-radius:14px;padding:4px 12px 12px;display:grid;gap:6px;align-content:start}
+.card svg{width:100%;height:auto;display:block;overflow:visible}
+.card h3{font:500 19px/1.2 var(--display);margin:0}
+.card label{display:grid;gap:2px;font-size:13px;color:var(--dim)}
+.card select{font:inherit;font-size:14px;color:var(--ink);background:var(--desk);border:1px solid var(--line);border-radius:8px;padding:4px 6px;width:100%}
+#stage{background:var(--desk2);border:1px solid var(--hotb);border-radius:14px;padding:14px 16px;display:grid;gap:8px;max-width:640px;justify-self:center;width:100%}
+#stage[hidden]{display:none}
+#stage h3{font:500 18px/1.25 var(--display);margin:0}
+#stage p{margin:0;color:var(--dim)}
+#stage .acts{display:flex;flex-wrap:wrap;gap:6px}
+#stage button{font:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}
+#stage button.pri{background:var(--hotb);border-color:var(--hotb);color:#0f1420;font-weight:700}
+#stage button.bad{border-color:var(--no);color:var(--no)}
+#said{color:var(--ink);font-style:italic}
+/* the page's real envelope (#mailPop in Nixi), same parts, colours and easing; only its pixels become a share of the card */
+.pop-host{position:relative;container-type:inline-size;width:100%}
+.pop-host svg{transition:transform .3s}
+.pop-host.haspop>svg{transform:translateX(-23cqw) scale(.72)}
+.notePop .nv svg{min-width:0!important;max-width:none!important}
+#row.big{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.mailPop{--u:calc(100cqw/320);position:absolute;top:30cqw;left:47cqw;width:calc(168*var(--u));z-index:6;opacity:0;pointer-events:none;transform:translateX(-30cqw) scale(.3);transform-origin:left center;transition:transform .36s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+.mailPop{height:calc(112*var(--u));perspective:700px}
+.mailPop.on{opacity:1;transform:none}
+.mailPop .env{position:absolute;inset:0}
+.mailPop .bk,.mailPop .fr,.mailPop .fl{position:absolute;left:0;right:0;border-radius:calc(9*var(--u))}
+.mailPop .bk{top:0;bottom:0;z-index:0;background:#e6ebf5;box-shadow:0 calc(8*var(--u)) calc(22*var(--u)) #0008,0 0 0 calc(2*var(--u)) var(--acc)}
+.mailPop .lt{position:absolute;left:calc(11*var(--u));right:calc(11*var(--u));top:calc(10*var(--u));height:calc(92*var(--u));border-radius:calc(6*var(--u));background:#fffaf0;color:#1d2026;padding:calc(9*var(--u)) calc(10*var(--u));font-size:calc(12*var(--u));line-height:1.3;box-shadow:0 1px 4px #0003;transition:transform .42s cubic-bezier(.3,1.25,.5,1);z-index:1;overflow:hidden}
+.mailPop .lt b{display:block;font-size:calc(10.5*var(--u));letter-spacing:.04em;text-transform:uppercase;color:var(--acc);margin-bottom:calc(4*var(--u))}
+.mailPop .lt span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}
+.mailPop .fr{top:0;bottom:0;background:#fdfdfd;clip-path:polygon(0 30%,50% 66%,100% 30%,100% 100%,0 100%);z-index:2;box-shadow:inset 0 -2px 0 #0001}
+.mailPop .fl{top:0;height:66%;background:linear-gradient(180deg,#f7d56a,#f2c94c);clip-path:polygon(0 0,100% 0,50% 100%);transform-origin:top;transition:transform .38s ease-in-out,z-index 0s .19s;z-index:3}
+.mailPop.open .fl{transform:rotateX(180deg);z-index:0}
+.mailPop.up .lt{transform:translateY(-58%)}
+/* today's caption row: who sent it and the first words, under him, and a click opens the app */
+.capRow{margin:6px auto 0;width:max-content;max-width:100%;box-sizing:border-box;padding:5px 11px;border-radius:12px;background:#10141d;color:#e8edf6;border:1px solid #ffffff2e;font:600 12px/1.3 var(--body);cursor:pointer;animation:capIn .3s ease-out both}
+@keyframes capIn{from{opacity:0;transform:translateY(6px)}}
+/* the terminal that pops out while an agent codes: decoration, not the agent's real code */
+.termPop{--u:calc(100cqw/320);box-sizing:border-box;position:absolute;top:14cqw;left:47cqw;width:calc(168*var(--u));height:calc(128*var(--u));z-index:6;opacity:0;pointer-events:none;transform:translateX(-30cqw) scale(.3);transform-origin:left center;transition:transform .36s cubic-bezier(.34,1.56,.64,1),opacity .2s;border-radius:calc(10*var(--u));background:#10141d;border:calc(2*var(--u)) solid #3b465c;box-shadow:0 calc(8*var(--u)) calc(20*var(--u)) #0008;overflow:hidden}
+.termPop.on{opacity:1;transform:none}
+.termPop .tb{display:flex;align-items:center;gap:calc(4*var(--u));padding:calc(5*var(--u)) calc(8*var(--u));background:#232a39}
+.termPop .tb i{width:calc(8*var(--u));height:calc(8*var(--u));border-radius:50%;background:#ff6b6b}.termPop .tb i:nth-child(2){background:#ffc94a}.termPop .tb i:nth-child(3){background:#5ad19a}
+.termPop .tb b{margin-left:auto;font:600 calc(10.5*var(--u))/1 var(--body);color:#c9d2e0}
+.termPop .tv{position:relative;height:calc(100% - 18*var(--u));overflow:hidden;padding:0 calc(9*var(--u));font:calc(10.5*var(--u))/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c9d2e0;white-space:pre}
+.termPop .ts{animation:termUp 9s linear infinite}
+@keyframes termUp{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.termPop .k{color:#ff8fbf}.termPop .f{color:#7cc4f5}.termPop .s{color:#7dffb4}.termPop .c{color:#6b7488}.termPop .a::after{content:"\2588";color:#7dffb4;animation:termBlink .8s steps(1) infinite}
+@keyframes termBlink{50%{opacity:0}}
+/* the card he presents for any app's notification: icon, rich text, a small image preview, buttons */
+.notePop{--u:calc(100cqw/320);box-sizing:border-box;position:absolute;top:6cqw;left:45cqw;width:calc(176*var(--u));z-index:6;opacity:0;pointer-events:none;transform:translate(-26cqw,8cqw) scale(.3) rotate(-6deg);transform-origin:left center;transition:transform .42s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+.notePop.on{opacity:1;transform:rotate(-1deg)}
+.notePop .nc{position:relative;z-index:2;padding:calc(8*var(--u)) calc(9*var(--u));border-radius:calc(12*var(--u));background:#fbfcfe;color:#1d2026;box-shadow:0 calc(8*var(--u)) calc(20*var(--u)) #0009,0 0 0 calc(2*var(--u)) var(--acc)}
+.notePop .st{position:absolute;left:calc(6*var(--u));right:calc(6*var(--u));height:100%;border-radius:calc(12*var(--u));background:#d9dfea;bottom:calc(-6*var(--u));z-index:1;opacity:.9}
+.notePop .st.s2{left:calc(12*var(--u));right:calc(12*var(--u));bottom:calc(-11*var(--u));background:#b4bdcd;z-index:0}
+.notePop .nh{display:flex;align-items:center;gap:calc(5*var(--u));font-size:calc(10*var(--u));color:#5a6478;margin-bottom:calc(5*var(--u))}
+.notePop .ni{width:calc(16*var(--u));height:calc(16*var(--u));border-radius:calc(4*var(--u));display:grid;place-items:center;color:#fff;font-weight:700;font-size:calc(10*var(--u));flex:none}
+.notePop .nh b{color:#1d2026}.notePop .nh time{margin-left:auto}
+.notePop .nb{display:flex;gap:calc(7*var(--u));align-items:flex-start}
+.notePop .nt{flex:1;min-width:0;font-size:calc(11.5*var(--u));line-height:1.28}
+.notePop .nt strong{display:block;font-size:calc(12.5*var(--u));margin-bottom:calc(2*var(--u))}
+.notePop .nt a{color:#2563c9;text-decoration:underline}
+.notePop .nt code{font:calc(10.5*var(--u)) ui-monospace,Menlo,monospace;background:#e7ebf3;border-radius:3px;padding:0 2px}
+.notePop .nv{width:calc(52*var(--u));height:calc(52*var(--u));border-radius:calc(7*var(--u));overflow:hidden;flex:none;box-shadow:0 0 0 1px #0002}
+.notePop .nv svg{width:100%;height:100%;display:block}
+.notePop .na{display:flex;gap:calc(5*var(--u));margin-top:calc(7*var(--u))}
+.notePop .na span{font-size:calc(10*var(--u));font-weight:700;padding:calc(3*var(--u)) calc(8*var(--u));border-radius:calc(6*var(--u));background:#e7ebf3;color:#26324b}
+.notePop .na span:first-child{background:var(--acc);color:#fff}
+.notePop .nm{position:absolute;right:calc(-6*var(--u));top:calc(-8*var(--u));z-index:3;min-width:calc(20*var(--u));height:calc(20*var(--u));padding:0 calc(4*var(--u));box-sizing:border-box;border-radius:calc(10*var(--u));background:#e5484d;color:#fff;font:700 calc(10.5*var(--u))/calc(20*var(--u)) var(--body);text-align:center}
+.b0{stop-color:var(--body0)}.b1{stop-color:var(--body1)}.b2{stop-color:var(--body2)}
+.tCursor{animation:cursor-blink 1.05s steps(1) infinite}.tAntenna{transform-origin:0px -102px;animation:antenna-pulse 1.8s ease-in-out infinite}.tTail{transform-origin:66px 52px;animation:tail-swish 2.5s ease-in-out infinite}
+.c-devil{--rim:#5c0a1c}
+.c-devil .nub{fill:#c81e3a;stroke:#5c0a1c}
+/* where another reaction's prop stands on his left, the fork steps aside */
+.c-devil:is(.r-load,.r-memory,.r-error,.r-done,.r-sun,.r-wind,.r-workout,.r-approved) .dFork{opacity:0}
+@keyframes cursor-blink{0%,49%{opacity:1}50%,100%{opacity:.12}}@keyframes antenna-pulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.18);opacity:1}}@keyframes tail-swish{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(9deg)}}
+section.sheet{background:var(--desk2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:grid;gap:10px;min-width:0}
+section.sheet h2{font:500 20px/1.2 var(--display);margin:0}
+section.sheet p{margin:0;color:var(--dim);max-width:75ch}
+.gridwrap{overflow-x:auto}
+table{border-collapse:collapse;min-width:760px;width:100%;table-layout:fixed}
+thead th:first-child{width:21%}
+th{font:400 12px/1.3 var(--body);color:var(--dim);padding:4px;text-align:center}
+th[scope=row]{text-align:left;color:var(--ink);font:500 14px var(--display);padding-right:8px;min-width:110px}
+th[scope=row] small{display:block;font:400 11.5px/1.25 var(--body);margin-top:2px}
+.ok{color:var(--ok)}.new{color:var(--new)}
+td{padding:1px;text-align:center}
+td svg{width:100%;min-width:92px;max-width:150px;height:auto;display:block;margin:auto;overflow:visible}
+.matrix *,.still *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.card svg *{animation:none!important;transition:none!important}}
+</style>
+<main>
+  <header>
+    <h1>Nixi's new friends</h1>
+    <p>A mockup for issue #206. Today's characters with far more reactions and a red Devil with a real tail and a small fork. These use <strong>Nixi's real artwork and his real eye code</strong>, so the eyes move as they do on your desktop. Move your pointer and they follow it. New email and new message are exactly what Nixi shows today: his envelope, and his chat bubble with the caption row. Plain notifications keep that row, and a card appears only for an image or buttons. Pick a reaction, and try the buttons on the card he shows: they're only a demonstration.</p>
+  </header>
+  <div class="bar">
+    <div id="groups" style="display:grid;gap:4px"></div>
+    <div class="seg"><b>Motion</b><button type="button" id="pause" aria-pressed="false">Pause motion</button></div>
+  </div>
+  <p id="note"></p>
+  <div id="row"></div>
+  <section id="stage" aria-live="polite" hidden></section>
+  <section class="sheet">
+    <h2>Every reaction at a glance</h2>
+    <p>Held still. Under each name: whether Nixi can sense it today, and what's new. <span class="ok">Green</span> already exists. <span class="new">Amber</span> needs building.</p>
+    <div class="gridwrap"><table id="grid"></table></div>
+  </section>
+  <section class="sheet">
+    <h2>A voice for each character</h2>
+    <p>Each picker is the proposed setting. <strong>My voice</strong> is the default and uses whatever you chose in the Voice tab. Pick a preset and that character always speaks with it on this computer's voices. Going back to a character on My voice leaves your own choice as it was. This page plays no sound.</p>
+  </section>
+</main>
+<script>
+/*NIXI_FACE*/
+const SETS=/*ART_JSON*/null;
+const BASE=/*BASE_JSON*/null;
+const CHARS={snowflake:'Snowflake',terminal:'Terminal',robot:'Robot',devil:'Devil'};
+const SUGGEST={snowflake:'Girl',terminal:'British',robot:'Robot',devil:'Deep'};
+const VOICES=['Girl','Cute','Guy','Deep','British','Storyteller','Robot'];
+const GROUPS=[['Resting',[['idle','Resting']]],['Machine',[['load','High load'],['memory','Low memory'],['error','System error']]],['Calendar',[['soon','Meeting soon'],['meeting','In a meeting']]],['Messages',[['notice','Any notification'],['message','New message'],['email','New email']]],['Agents',[['coding','Coding'],['ask','Needs approval'],['approved','Approved'],['denied','Denied'],['done','Finished']]],['Apps',[['open','Opening an app']]],['Media',[['music','Music playing'],['watch','YouTube or a movie'],['news','News update']]],['Weather',[['rain','Rain'],['snow','Snow'],['sun','Hot and sunny'],['wind','Windy']]],['Breaks',[['workout','Workout break'],['water','Drink water']]]];
+const LABEL=Object.fromEntries(GROUPS.flatMap(g=>g[1]));
+const EYES={idle:'idle',load:'worried',memory:'scared',error:'error',soon:'surprised',meeting:'listening',notice:'curious',message:'curious',email:'reading',coding:'editing',ask:'pleading',approved:'joy',denied:'sad',done:'happy',open:'looking',music:'happy',watch:'listening',news:'reading',rain:'looking',snow:'excited',sun:'happy',wind:'worried',workout:'excited',water:'joy'};
+const STATUS={load:['ok','Senses CPU today','new','bigger reaction'],memory:['ok','Senses memory today','new','bigger reaction'],error:['ok','Senses failed user services; system and hosts only on boards','new','reacting to those; the journal'],soon:['ok','Senses calendar today','new','alarm, snooze, join'],meeting:['ok','Only from Meeting Mode','new','from the calendar too'],notice:['ok','Takes over every app today: short plain text and an icon','new','rich text, image previews, buttons'],message:['ok','Senses notifications','new','the words in the bubble, reply'],email:['ok','Today’s envelope, kept as it is','new','read a summary, reply'],coding:['ok','His own turns show it; others only ask and finish','new','knowing another agent is working'],ask:['ok','Senses Claude, Codex, agy asking','new','approve and deny from Nixi'],approved:['new','New: no such signal today'],denied:['new','New: no such signal today'],done:['ok','Senses agents finishing','new','bigger reaction'],open:['ok','Opens apps by voice today','new','bigger reaction'],music:['ok','Senses music, shown as headphones','new','boombox, controls'],watch:['new','New: nothing tells video from music yet'],news:['ok','A news board you ask for','new','noticing new headlines'],rain:['ok','Senses rain today','new','umbrella'],snow:['ok','Senses snow today','new','snowball, beanie'],sun:['ok','Senses heat, shown only as a warm tint','new','a real reaction'],wind:['ok','Senses wind today','new','leaves'],workout:['ok','A 60-minute stretch reminder today','new','workout schedule, snooze'],water:['ok','Part of the same reminder today','new','its own reaction']};
+const CARDS={
+ load:{t:'Your machine is working hard',b:'nix build has used all cores for 4 minutes.',a:[['Show me','said:Showing the top processes.'],['Leave it','idle']]},
+ memory:{t:'Memory is nearly full',b:'9% free. Chromium is using the most.',a:[['Show me','said:Showing what uses the most.'],['Leave it','idle']]},
+ error:{t:'nginx failed on p510',b:'It stopped 2 minutes ago.',a:[['Show the logs','said:Showing the last 50 log lines.'],['Ask Claude to look','said:Asking Claude to look at it.','pri'],['Dismiss','idle']]},
+ soon:{t:'Team standup in 10 minutes',b:'Google Meet, 3 people.',a:[['Join','meeting','pri'],['Snooze 5 min','said:Reminding you again in 5 minutes.'],['Dismiss','idle']]},
+ meeting:{t:'In a meeting until 10:30',b:'He stays quiet and holds your messages.',a:[['End it','idle']]},
+ notice:{t:'He shows every app’s notifications',b:'While he’s on screen he takes over from the shell, one at a time, with +N for the rest. Anything he can’t show goes back to the shell after 5 seconds, so nothing is lost.',a:[['Open','said:Opening it in its app.','pri'],['Read it to me','said:"Sam says: look at this from the walk."'],['Mute this app','said:He’ll stay quiet about this app until you turn it back on.'],['Dismiss','idle']]},
+ message:{t:'Sam, on Signal',b:'"Are we still on for lunch?"',a:[['Click the row','said:Signal opens, and starts first if it was closed. This works for the bubble, the row and the email envelope.','pri'],['Reply','said:"Say your reply." You say "Yes, 12:30". He shows who it goes to and the exact words, and you click Send: a voice yes never sends.'],['Read it to me','said:"Sam asks, are we still on for lunch?"'],['Later','idle']]},
+ email:{t:'New email from Alex',b:'Subject: Contract renewal',a:[['Read a summary','said:"Alex says the contract renews on the first. They need your signature by Friday."','pri'],['Reply','said:"Say your reply." He drafts it and shows the recipients and exact words. You click Send.'],['Later','idle']]},
+ coding:{agent:1,t:'is coding',b:'Editing server.py, in session nixoarchy-snowflake. 4 files so far.',a:[['Show me','said:Opening that session.','pri'],['Let it work','said:He keeps typing quietly.']]},
+ ask:{agent:1,t:'wants to run a command',b:'nix build .#nixi-companion, in session nixoarchy-snowflake. Click to answer: the exact command is shown, and a voice yes can’t approve another agent.',a:[['Approve','approved','pri'],['Deny','denied','bad'],['Show me','said:Opening that session.']]},
+ approved:{t:'Approved',b:'He tells the agent, and the agent carries on.',a:[['OK','idle']]},
+ denied:{t:'Denied',b:'He tells the agent no.',a:[['OK','idle']]},
+ done:{agent:1,t:'has finished',b:'All tests passed.',a:[['Show me','said:Opening that session.'],['Thanks','idle']]},
+ open:{t:'"Open Firefox"',b:'He finds it and opens it.',a:[['OK','idle']]},
+ music:{t:'Now playing: Rusted Root',b:'Send Me On My Way',a:[['Pause','said:Paused. He stops dancing and waits.','pri'],['Next','said:Next track.'],['Quieter','said:Volume down.'],['Stop','idle']]},
+ watch:{t:'You’re watching a video',b:'He settles in with popcorn and stays quiet until it ends.',a:[['Pause','said:Paused.','pri'],['Leave me be','idle']]},
+ news:{t:'3 new headlines',b:'NixOS, the weather and your local news.',a:[['Read them to me','said:"First, a new NixOS release is out."','pri'],['Show the board','said:Opening the news board.'],['Later','idle']]},
+ workout:{t:'You have sat for 60 minutes',b:'Time for ten squats?',a:[['Start 5 minutes','said:He counts along with you.','pri'],['Snooze 15 min','said:Reminding you again in 15 minutes.'],['Skip','idle']]},
+ water:{t:'Drink some water',b:'It has been two hours.',a:[['Done','approved','pri'],['Later','idle']]}};
+const AGENTS=['Claude','Codex','agy'];
+let dir='claude', react='notice', ptr=null, paused=false, agent=1, clipN=0, popT=[];
+const POPS={email:[{who:'Alex',text:'Contract renewal: they need your signature by Friday'}],coding:[{}],notice:[{}]};
+const PIC={sunset:'<svg viewBox="0 0 60 60" aria-hidden="true"><rect width="60" height="60" fill="#ffb26b"/><circle cx="40" cy="26" r="11" fill="#fff0a8"/><path d="M0 42Q18 28 34 40T60 36V60H0Z" fill="#7a3f6d"/><path d="M0 52Q22 42 60 50V60H0Z" fill="#3e2750"/></svg>',
+ shot:'<svg viewBox="0 0 60 60" aria-hidden="true"><rect width="60" height="60" fill="#1c2233"/><rect x="5" y="7" width="50" height="46" rx="3" fill="#2b3550"/><rect x="5" y="7" width="50" height="7" fill="#46557c"/><path d="M10 21h24M10 28h34M10 35h18M10 42h28" stroke="#7dffb4" stroke-width="3"/></svg>',
+ cover:'<svg viewBox="0 0 60 60" aria-hidden="true"><rect width="60" height="60" fill="#3a2b6b"/><circle cx="30" cy="30" r="22" fill="#14101f"/><circle cx="30" cy="30" r="8" fill="#ff8fbf"/><circle cx="30" cy="30" r="2" fill="#14101f"/></svg>'};
+const NOTES=[{i:'#3f9c6b',l:'S',app:'Signal',title:'Sam',html:'Look at <b>this</b> from the walk: <i>worth the climb</i>',pic:'sunset',acts:['Reply','Open']},
+ {i:'#5c6bc0',l:'▣',app:'Screenshot',title:'Screenshot saved',html:'Saved to <code>~/Pictures</code>. <a>Show in folder</a>',pic:'shot',acts:['Open','Copy']},
+ {i:'#e0569a',l:'♪',app:'Music',title:'Now playing',html:'<b>Send Me On My Way</b> by Rusted Root',pic:'cover',acts:['Pause','Next']}];
+let noteI=0;
+function noteCard(n,left){return `<i class="st s2"></i><i class="st"></i><div class="nc"><div class="nh"><span class="ni" style="background:${n.i}">${n.l}</span><b>${n.app}</b><time>now</time></div><div class="nb"><div class="nt"><strong>${n.title}</strong>${n.html}</div><div class="nv">${PIC[n.pic]}</div></div><div class="na">${n.acts.map(a=>`<span>${a}</span>`).join('')}<span>Dismiss</span></div></div>${left?`<span class="nm">+${left}</span>`:''}`;}
+const CODE=['<span class="c"># making it nicer</span>','<span class="k">def</span> <span class="f">react</span>(event):','    mood = <span class="f">pick</span>(event)','    <span class="k">if</span> mood == <span class="s">"happy"</span>:','        <span class="f">hop</span>()','    <span class="k">return</span> mood','','<span class="k">for</span> test <span class="k">in</span> tests:','    <span class="f">run</span>(test)','<span class="c"># 12 passed</span>','<span class="f">save</span>(<span class="s">"draft"</span>)<span class="a"></span>',''].join('\n');
+function popHtml(r,still){const p=POPS[r];if(!p)return '';const c=still?' on open up txt':'';
+  if(r==='notice')return `<div class="notePop${c}" aria-hidden="true">${noteCard(NOTES[0],2)}</div>`;
+  if(r==='coding')return `<div class="termPop${c}" aria-hidden="true"><div class="tb"><i></i><i></i><i></i><b class="tname">${AGENTS[agent]}</b></div><div class="tv"><div class="ts">${CODE}\n${CODE}</div></div></div>`;
+  return r==='email'?`<div class="mailPop${c}" aria-hidden="true"><div class="env"><div class="bk"></div><div class="lt"><b>${p[0].who}</b><span>${p[0].text}</span></div><div class="fr"></div><div class="fl"></div></div></div>`:'';}
+function host(id,r,defs){return `<div class="pop-host${POPS[r]?' haspop':''}">${art(id,r,defs)}${popHtml(r,!defs)}${r==='message'?'<div class="capRow">\u{1F4AC} New message in Signal \u00b7 Sam \u00b7 Are we still on for lunch?</div>':''}</div>`;}
+// the real envelope's timeline (mailPop in Nixi): pop out, open, raise the letter, then back in; here it repeats
+function popRun(){popT.forEach(clearTimeout);popT=[];popT.push(setTimeout(()=>document.querySelectorAll('#row .termPop').forEach(e=>e.classList.add('on')),60));const notes=document.querySelectorAll('#row .notePop');
+  if(notes.length){const showN=()=>{const k=noteI++%NOTES.length;notes.forEach(n=>{n.classList.remove('on');n.innerHTML=noteCard(NOTES[k],NOTES.length-1-k);});popT.push(setTimeout(()=>notes.forEach(n=>n.classList.add('on')),120));popT.push(setTimeout(showN,4200));};
+    if(paused||calm)notes.forEach(n=>n.classList.add('on'));else showN();}
+  const els=[...document.querySelectorAll('#row .mailPop')];if(!els.length)return;
+  const set=(c,v)=>els.forEach(e=>e.classList.toggle(c,v));
+  if(paused||calm){['on','open','up','txt'].forEach(c=>set(c,true));return;}
+  const at=(ms,f)=>popT.push(setTimeout(f,ms));
+  at(60,()=>set('on',true));at(420,()=>set('open',true));at(720,()=>set('up',true));at(1100,()=>set('txt',true));
+  at(4300,()=>set('up',false));at(4650,()=>set('open',false));at(5000,()=>{set('on',false);set('txt',false);});at(6200,popRun);}
+const pick={}, calm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const toD=pts=>'M'+pts.map(p=>p[0].toFixed(2)+' '+p[1].toFixed(2)).join('L')+'Z';
+const val=(v,i)=>Array.isArray(v)?v[i]:(v==null?0:v);
+const KEYS=['top','sl','tc','bot','bow','sq','shut','es','cup'];
+function target(id){const M=MOODS[EYES[id]||'idle']||MOODS.idle,pu=PUP[M.pu==='rest'||!M.pu?'slit':M.pu]||PUP.slit;
+  return [0,1].map(i=>{const o={sz:M.sz||1};for(const k of KEYS)o[k]=M[k]==null?(k==='sq'||k==='es'?1:0):val(M[k],i);for(const k of PUP_KEYS)o['p'+k]=val(pu[k],i);return o;});}
+function eyePaths(c,side,gx,gy,blink){const z=c.sz*c.es,top=c.top+(1-c.top)*blink*.97,shut=Math.min(1,Math.max(0,c.shut));
+  const cx=side*Math.max(EYE.cx,EYE_HALFW*z+2.6),cy=EYE.cy,sq=c.sq;
+  const d=toD(eyePts(z,{top,sl:c.sl,tc:c.tc,bot:c.bot,bow:c.bow,sq,shut,cup:Math.min(1,Math.max(0,c.cup))},side).map(([x,y])=>[cx+x,cy+y]));
+  const pw=Math.max(.3,c.pw*z*(1-shut)),ph=Math.max(.3,c.ph*z*(1-shut));
+  let qx=-side*c.pdx*z+gx*1.25,qy=c.pdy*z+gy*1.5;const rt=-side*EYE.tilt,rc=Math.cos(rt),rs=Math.sin(rt);let ux=qx*rc+qy*rs,uy=-qx*rs+qy*rc;
+  const ax=Math.max(1,EYE.rx*z-pw-1.5),ay=Math.max(1,EYE.ry*z*sq-ph-1.5),k=Math.hypot(ux/ax,uy/ay);if(k>1){ux/=k;uy/=k;}qx=ux*rc-uy*rs;qy=ux*rs+uy*rc;
+  const hr=Math.min(1,Math.max(0,c.phr)),st=Math.min(1-hr,Math.max(0,c.pst));
+  return {d,h:toD(pupilPts(pw,ph,-side*c.pr,hr,st).map(([x,y])=>[cx+qx+x,cy+qy+y]))};}
+function eyeMarkup(id,r){const T=target(r),n=++clipN,line=id==='me'?' stroke="#3a2a22" stroke-width="2"':'';
+  return [-1,1].map((side,i)=>{const p=eyePaths(T[i],side,0,0,0);return `<clipPath id="ec${n}${i}"><path class="ecp" d="${p.d}"/></clipPath><path class="ew" data-i="${i}" d="${p.d}" fill="#fff"${line}/><g clip-path="url(#ec${n}${i})"><path class="eh" d="${p.h}" fill="#3e5993"/></g>`;}).join('');}
+function art(id,r,defs){const S=SETS[dir],a=id==='me'?S.me:BASE[id],P=(S.props||{})[r]||{},U=((S.touch||{})[id]||{})[r]||{};
+  const fid=`${dir}-me-fill`,fill=id==='me'?`url(#${fid})`:`url(#${a.bodyFill})`;
+  const body=`<path d="${a.ball}" fill="${fill}"/>`,baseB=`<g class="base-back">${a.back||''}</g>`;
+  const gloss=a.gloss?`<ellipse cx="-30" cy="-46" rx="38" ry="15" transform="rotate(-30 -30 -46)" fill="url(#glossG)"/><ellipse cx="34" cy="50" rx="18" ry="6" transform="rotate(-40 34 50)" fill="url(#glossG)" opacity=".45"/>`:'';
+  const rim=id==='me'?'':`<path d="${a.ball}" fill="none" stroke="var(--rim)" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const order=id==='me'?baseB+body:body+baseB;
+  const d=defs?`<defs>${S.defs||''}${Object.values(BASE).map(b=>b.defs).join('')}${(S.me||{}).defs||''}<linearGradient id="${fid}" x1="0" y1="-110" x2="0" y2="105" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${((S.me||{}).meFill||['#fff'])[0]}"/><stop offset=".55" stop-color="${((S.me||{}).meFill||['#fff','#fff'])[1]}"/><stop offset="1" stop-color="${((S.me||{}).meFill||['#fff','#fff','#fff'])[2]}"/></linearGradient><radialGradient id="${dir}-sh"><stop offset="0" stop-color="#000" stop-opacity=".6"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>`:'';
+  return `<svg viewBox="-150 -150 300 280" role="img" aria-label="${CHARS[id]}">${d}<g class="sky">${P.sky||''}${U.sky||''}</g><ellipse cx="0" cy="112" rx="84" ry="10" fill="url(#${dir}-sh)"/><g class="whole">${P.back||''}${U.back||''}${order}${eyeMarkup(id,r)}${a.front||''}${gloss}${rim}${P.front||''}${U.front||''}</g></svg>`;}
+function draw(){const S=SETS[dir];clipN=0;
+  const css=[(S.me||{}).css||'',...Object.values(S.props||{}).map(p=>p.css||''),...Object.values(S.touch||{}).flatMap(t=>Object.values(t).map(u=>u.css||''))].join('');
+  document.getElementById('art-css').textContent=css;
+  document.getElementById('note').textContent=S.notes||'';
+  const row=document.getElementById('row');row.innerHTML='';row.classList.toggle('big',!!POPS[react]);
+  for(const id of Object.keys(CHARS)){const c=document.createElement('article');c.className=`card c-${id} r-${react}`;c.dataset.id=id;
+    c.innerHTML=host(id,react,true)+`<h3>${CHARS[id]}</h3><label for="v-${id}">Voice<select id="v-${id}"><option value="">My voice</option>${VOICES.map(v=>`<option${pick[id]===v?' selected':''}>${v}</option>`).join('')}</select></label>`;
+    row.append(c);c.querySelector('select').onchange=e=>pick[id]=e.target.value;c._eye=target(react).map(o=>({...o}));}
+  const heads=Object.keys(CHARS);
+  document.getElementById('grid').innerHTML=`<thead><tr><th></th>${heads.map(h=>`<th scope="col">${CHARS[h]}</th>`).join('')}</tr></thead><tbody>${GROUPS.flatMap(g=>g[1]).map(([r,l])=>{const s=STATUS[r];return `<tr><th scope="row">${l}${s?`<small class="${s[0]}">${s[1]}</small>${s[2]?`<small class="${s[2]}">New: ${s[3]}</small>`:''}`:''}</th>${heads.map(h=>`<td class="matrix c-${h} r-${r}">${host(h,r,false)}</td>`).join('')}</tr>`;}).join('')}</tbody>`;
+  stage();popRun();}
+function stage(said){const st=document.getElementById('stage'),C=CARDS[react];st.hidden=!C;if(!C)return;
+  const who=C.agent?`${AGENTS[agent]} `:'';
+  st.innerHTML=`<h3>${who}${C.t}</h3><p>${C.b}</p>${said?`<p id="said">${said}</p>`:''}<div class="acts">${C.a.map(([l,to,k],i)=>`<button type="button" data-i="${i}" class="${k||''}">${l}</button>`).join('')}${C.agent?`<button type="button" data-next="1">Try: ${AGENTS[(agent+1)%3]}</button>`:''}</div>`;
+  st.querySelectorAll('button').forEach(b=>b.onclick=()=>{if(b.dataset.next){agent=(agent+1)%3;document.querySelectorAll('.tname').forEach(n=>n.textContent=AGENTS[agent]);return stage();}const to=C.a[+b.dataset.i][1];if(to.startsWith('said:'))return stage(to.slice(5));setReact(to);});}
+function setReact(r){react=r;syncChips();draw();}
+function syncChips(){document.querySelectorAll('#groups button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===react));}
+const gh=document.getElementById('groups');
+GROUPS.forEach(([name,items])=>{const s=document.createElement('div');s.className='seg';s.setAttribute('role','group');s.setAttribute('aria-label',name);s.innerHTML=`<b>${name}</b>`;items.forEach(([k,l])=>{const b=document.createElement('button');b.type='button';b.textContent=l;b.dataset.k=k;b.onclick=()=>setReact(k);s.append(b);});gh.append(s);});
+document.getElementById('pause').onclick=e=>{paused=!paused;e.target.setAttribute('aria-pressed',paused);document.getElementById('row').classList.toggle('still',paused);popRun();};
+const st=document.createElement('style');st.id='art-css';document.head.append(st);
+addEventListener('pointermove',e=>ptr=[e.clientX,e.clientY]);
+syncChips();draw();
+let next=performance.now()+1500,blinkAt=-1e9;
+function tick(ts){
+  if(ts>next){blinkAt=ts;next=ts+(Math.random()<.18?320:2600+Math.random()*4200);}
+  const bp=(ts-blinkAt)/240,ss=x=>x*x*(3-2*x),blink=paused||bp<0||bp>=1?0:bp<.38?ss(bp/.38):1-ss((bp-.38)/.62);
+  document.querySelectorAll('#row .card').forEach(card=>{const T=target(react),r=card.querySelector('svg').getBoundingClientRect();
+    let gx=0,gy=0;if(ptr){const dx=ptr[0]-(r.left+r.width/2),dy=ptr[1]-(r.top+r.height/2),d=Math.hypot(dx,dy)||1,k=Math.min(1,d/280);gx=dx/d*k*9;gy=dy/d*k*11;}
+    const ws=card.querySelectorAll('.ew'),cp=card.querySelectorAll('.ecp'),hs=card.querySelectorAll('.eh');
+    [-1,1].forEach((side,i)=>{const c=card._eye[i];for(const k in T[i])c[k]+=(T[i][k]-c[k])*.16;const p=eyePaths(c,side,gx,gy,blink);ws[i].setAttribute('d',p.d);cp[i].setAttribute('d',p.d);hs[i].setAttribute('d',p.h);});});
+  if(!calm)requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
