@@ -573,6 +573,14 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   agent turn. `mail_scrub` takes and returns a list, with a `mail_otp(fields)` helper that step 3 uses for the model's
   answer. `mail_reset()` runs after `save_config`, so a list in flight sees `mail_on` already off under the lock.
 
+- **Step 3 (Codex):** Codex's sandbox can't read this plan, which sits in another worktree. Its first pass reported
+  "the supplied plan path does not exist in this workspace" and missed the system prompt, the 8,000-byte cap, the
+  synchronous reply and the exact `mail_may_speak`. The second pass got the plan text inside its prompt and matched it.
+  `agent-run` also refuses a dirty worktree ("worktree is dirty; commit or discard first"), so the first pass was held
+  in a local commit and squashed. Later handoffs get the plan inline. Mail sids count up from 1,000,000,000, above the
+  page's speech ids, so a summary never plays ahead of queued page lines. A speech error for a mail sid prints only the
+  class name.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
