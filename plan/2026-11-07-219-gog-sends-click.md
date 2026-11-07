@@ -180,3 +180,6 @@ nothing else is stored.
     heredoc lines were read as recipient flags. Rather than chase shell syntax, two blunt rules in both twins:
     a gog command containing `$` or a backtick counts as a send, and a command with `<<` or a newline logs no
     recipient (the command name only). False positives cost a card.
+  - Codex, round four: brace expansion (`s{e..e}nd`) also builds a send word, and the bridge read a recipient from
+    inside `$(…)`. The rule now counts any gog command with `$`, a backtick, `{`, `*`, `?` or `[`, and logs no
+    recipient when the command holds `$`, a backtick, `<<` or a newline.
