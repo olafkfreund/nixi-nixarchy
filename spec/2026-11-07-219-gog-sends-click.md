@@ -23,7 +23,18 @@ guards a click-only command instead. Nothing else in the approval flow changes.
   send word: `send`, `reply`, `reply-all`, `replyall`, `forward`, `fwd`, `autoreply`, `post`, `create`.
   Any word in the command counts, not a parsed subcommand: `gog gmail search 'forward'` is a false positive,
   which costs a card and nothing else. So is `gog calendar create`, which can email invitations, so a card
-  there is welcome.
+  there is welcome. One exception, because the intent keeps drafts free: `drafts create`, `drafts reply`,
+  `drafts forward` and `drafts update` save a draft and send nothing. The words of that one phrase don't count;
+  any send word elsewhere in the command still does, and `drafts send`/`drafts post` always count.
+- `isClickOnly(toolCall) = isHerdrWrite(toolCall) || isGogSend(toolCall)`.
+- `gogSendDetail(toolCall)` for the audit line: `{ kind: "gog", command, to }`. It reads only fixed places and
+  nothing else in the command. `command` is the gog words before the first flag, kept only if they are on a
+  fixed list (`send`, `gmail send`, `gmail reply`, `gmail reply-all`, `gmail forward`, `gmail autoreply`,
+  `gmail drafts send`, `chat messages send`, `api`, and their aliases), else `"unknown"`. `to` is the values of
+  `--to`, `--cc` and `--bcc`, in both `--to x` and `--to=x` forms; for `reply`, `reply-all`, `forward`,
+  `drafts send` and `chat messages send` with no `--to`, the one positional right after those words (the message,
+  draft or space id). Anything ambiguous gives `""`. No other argument is ever read, so `--body`,
+  `--body-html`, `--body-file`, `--raw-file`, `--subject`, `--text` and stdin can't reach it.
 - `isClickOnly(toolCall) = isHerdrWrite(toolCall) || isGogSend(toolCall)`.
 - `gogSendDetail(toolCall)` for the audit line: `{ kind: "gog", command, to }`. `command` is the gog words up to
   the first flag or value, from a fixed list (`gmail send`, `gmail reply`, `chat messages send`, `api`, …);
@@ -60,14 +71,19 @@ herdr write.
 
 ### 3. The Nixi card's `Y`
 
-`Conversation.qml:1546-1556`: when `root.pendingPermission.confirm === "click"`, a bare `Y` is swallowed
-(accepted, no answer) and a tick says "click to confirm sends", as the companion's page does. `N` still
+The card has two `Y` routes, and both approve today without looking at `confirm`: the composer's key handler
+(`Conversation.qml:1546-1556`) and the window shortcut (`WindowShortcuts.qml:14-19`). When
+`pendingPermission.confirm === "click"`, the composer swallows a bare `Y` (accepted, no answer) and the
+shortcut's `enabled` is false; a tick says "click to confirm sends", as the companion's page does. `N` still
 answers no. Enter already doesn't answer a card. This also covers herdr writes.
 
 ### 4. The companion's own agent mode
 
 When the companion runs its agent without the nixi bridge, approvals come from the agent's permission hook
-through `/api/approve` (`server.py:6650`) to `Approvals.ask` (`server.py:830`). There is no YOLO there.
+(`hooks_file()`, `server.py:4892`, which runs `approve.py`) through `/api/approve` (`server.py:6650`) to
+`Approvals.ask` (`server.py:830`). That is only in Ask mode. In Trust and Root (`server.py:4923-4926`), Claude runs
+with `bypassPermissions` and no hook, so nothing is ever asked; Read-only runs in `plan` mode and can't run a
+command at all.
 
 - A new `CLICK_ONLY_RE` next to `CHAINED_RE` (`server.py:796`) with the same two rules as the bridge: the word
   `herdr`, or the word `gog` with `api` or a send word, after removing quotes and backslashes. Its comment
@@ -75,6 +91,15 @@ through `/api/approve` (`server.py:6650`) to `Approvals.ask` (`server.py:830`). 
 - In `ask()`, for Bash: `click = bool(CLICK_ONLY_RE.search(...))`. A click-only command is never looked up in
   or added to `self.always`, `can_always` is false, and the `approve` event carries `confirm="click"`. The
   page already refuses the voice, Enter and `y` for that (`index.html:2882-2894`, 4027).
+- **Trust and Root** pass a hook too, `send_hooks_file()`: `PreToolUse` on `Bash` only, the same `approve.py`.
+  `/api/approve` answers allow at once, with no card, for anything that isn't click-only while trust is Trust or
+  Root, and asks with `confirm="click"` for a click-only one. This is the companion's YOLO rule: everything runs
+  except a send. Not verified: that Claude Code runs `PreToolUse` hooks and obeys a deny under
+  `bypassPermissions`. The plan's first step checks it with a throwaway hook; if it doesn't, Trust and Root need
+  `acceptEdits` plus that hook instead.
+- **Audit.** Every click-only decision in the companion appends one line to `DATA_DIR/sends.log` (mode `0600`):
+  time, the same `command` and `to` fields as the bridge (a Python twin of `gogSendDetail`, or the herdr pane),
+  and the decision (`allow`, `deny`, `timeout`). No body, no raw command.
 - Herdr writes in this mode get the same guard. They had none; it's the same predicate, so they aren't
   split out.
 
@@ -108,14 +133,36 @@ bridge does. Click-only is a client rule, as the intent says.
 - `bridge/herdr-bridge.test.js` (its existing harness drives the bridge end to end): a gog send in YOLO is not auto-approved and its card has
   `confirm: "click"`; "allow all pending" leaves it; the card offers no "always"; a stored entry for it isn't
   matched; Guide cancels it and the audit line has no `text`.
-- QML: the existing card tests, plus `Y` on a `confirm: "click"` card answers nothing. If there's no QML test
+- QML: the existing card tests, plus `Y` on a `confirm: "click"` card answers nothing, through both the composer
+  and the window shortcut. If there's no QML test
   harness for keys, by hand on p620.
 - Companion: `tests/test_approvals.py` (new, via `tests/nixi_env.py`): a gog send gets `confirm: "click"`, no
-  "always" (an `always` answer counts once), and isn't found in `self.always`; a plain command is unchanged.
-  The same command table as the JS test.
+  "always" (an `always` answer counts once), and isn't found in `self.always`; a plain command is unchanged. In
+  Trust and Root, a plain command is allowed with no card and a gog send asks. `sends.log` gets one line each for
+  allow, deny and timeout, with no body. The same command table as the JS test.
+- Audit extraction, both languages: `--to x`, `--to=x`, `--body`, `--body=…`, `--body-html`, `--body-file`,
+  `--raw-file`, `--subject` and a quoted body with a send word in it; the line never contains the body or subject
+  text.
+- `drafts create`, `drafts reply`, `drafts forward` and `drafts update` don't count; `drafts send` and
+  `drafts create … ; gog gmail send …` do.
 - By hand on p620, in Mechanic: ask the agent to send yourself a test mail with gog. Say "yes": nothing
   happens. Click yes: it sends. In YOLO, the card still appears. `sends.log` has the command and recipient,
   not the body.
+
+## Reviews (2026-11-07)
+
+Their findings don't approve anything. Codex reported `gpt-6-sol`; agy's JSON reports no model.
+
+**Confirmed and applied (Codex):** the window shortcut's `Y` (`WindowShortcuts.qml:14-19`) also approved a
+click-only card; Trust and Root run with `bypassPermissions` and no hook, so the companion never asked
+(`server.py:4923-4926`); the companion had no audit; the send words caught `drafts create/reply/forward`, which the
+intent keeps free; and the audit extraction could reach body flags such as `--body-html` and `--body-file`. Codex
+found no other `isHerdrWrite` caller with a different purpose, and no gog send form the word list misses.
+
+**Refuted (agy):** its findings describe today's code as missing the changes this spec proposes (no `isGogSend`,
+no `send-policy.js`, `confirm` only for herdr). Its `Y` finding is the one Codex made and is applied.
+
+**Not verified:** `PreToolUse` hooks under `bypassPermissions` (the plan checks it first); runtime key handling.
 
 ## Rollback
 
