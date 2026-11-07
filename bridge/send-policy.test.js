@@ -50,7 +50,7 @@ test("the audit detail is the pane and the text (#95)", () => {
 
 test("gog sends need a click, as strings and argv", () => {
   const sends = [
-    "gog send", "gog gmail send", "gog mail send", "gog gmail reply",
+    "gog send", "gog gmail send-later x", "gog --gmail-no-send gmail list", "gog gmail send", "gog mail send", "gog gmail reply",
     "gog gmail reply-all", "gog gmail replyall", "gog gmail forward",
     "gog gmail fwd", "gog gmail autoreply", "gog gmail drafts send",
     "gog gmail drafts post", "gog chat messages send", "gog chat messages create",
