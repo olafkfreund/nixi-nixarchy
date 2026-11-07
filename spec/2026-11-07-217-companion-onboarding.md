@@ -39,12 +39,15 @@ Keep the header (logo, tagline, links row). Then:
    rules.
 2. **Before you start.** A short checklist:
    - NixOS with Home Manager and flakes;
-   - nixi set up with an agent (on nixarchy it already is);
+   - nixi with an agent signed in (on nixarchy it already is);
    - a mic;
    - speakers or headphones.
    Each item has a one-line test command, such as `command -v nixi` for nixi, or the check nixi's README gives.
 3. **Onboarding.** Numbered steps. Each step has the same three parts: **Do** (a copyable block), **You should see**,
    and **If not** (the likely cause and fix).
+   0. **Not on nixarchy: nixi first.** Add nixi's flake input, import its Home Manager module, set
+      `services.nixi.enable = true`, and sign in an agent. The snippet is copied from nixi's README (`README.md:54`
+      there) and checked at the same commit. Readers on nixarchy skip this step.
    1. Add the flake input `nixoarchy-snowflake`.
    2. Turn it on: `services.nixi.companion.enable` and `.package`.
    3. Switch: `nixos-rebuild switch` or `nh os switch`. The check is `command -v nixi-companion`.
@@ -52,12 +55,13 @@ Keep the header (logo, tagline, links row). Then:
       the trap the intent names. The examples are nixarchy's `o.exec_on_start` and `o.bind` in a lua file, and a plain
       Hyprland `exec-once` and `bind` line.
    5. Type to him first. It needs no mic, so it shows the agent link works before sound is involved.
-   6. Pick the mic: right-click, Settings, Microphone. If he can't hear you, run `nixi-companion doctor`.
+   6. Pick the mic: right-click, settings, the **Voice** tab, **Microphone**. If he can't hear you, run `nixi-companion doctor`.
       - Speakers on the desk: a short note that an echo-cancelled source helps, linking to GETTING-STARTED.
    7. Say "hey Nixi". On by default (`wake_word`).
    8. His voice. A local voice works out of the box, with `tts` set to `auto`: Kokoro, then piper, then espeak.
       ElevenLabs is optional, and the details are in GETTING-STARTED.
-   9. Messages through him. Turn on the first two switches in Settings → Desktop. It needs the nixarchy shell's
+   9. Messages through him. Turn on the first two switches in the **Nixi card's** Settings → Desktop. That's the
+      card, not the companion's own settings, which have no Desktop tab. It needs the nixarchy shell's
       notification patch, and without it the shell's popups stay. Clicking a message opens its app.
    10. Trust: Guide or Mechanic, switched in the card. Then `nixi-companion restart` (#146), the trap the intent names.
 4. **What stays on your machine, and what doesn't.** It replaces the "everything runs on your computer" line:
@@ -79,8 +83,12 @@ Sections, in the order a new user meets them:
 - **Choosing a character, and its voice.** Settings, Look: the character grid and the voice for each character.
 - **ElevenLabs.**
   - What it costs, and the daily character cap (1,000 to 500,000).
-  - The key is a file. It must be under `/run/agenix`, `/run/agenix.d`, `/run/secrets` or a systemd credentials
-    folder, owned by root or you, 16 to 128 key characters. Anything else is refused (`app/eleven.py:36-50`).
+  - The key is a file. It must be under `/run/agenix`, `/run/agenix.d` or `/run/secrets`, owned by root or you,
+    **readable by you** (the companion runs as you), and hold 16 to 128 key characters. Anything else is refused
+    (`app/eleven.py:36-50`).
+    - The agenix and sops examples set the secret's `owner` to the user, or `mode = "0440"` with the user's group.
+    - The code also accepts `$CREDENTIALS_DIRECTORY`, but only a systemd service has one, and the companion isn't a
+      service, so the docs leave it out.
   - The default path is `/run/agenix/api-elevenlabs`, and `eleven_key_file` changes it.
   - An agenix example and a sops-nix example, both with placeholder names.
   - How to check it worked: Settings, Voice shows the key as present.
@@ -118,8 +126,16 @@ New `tests/test_docs_names.py` in nixoarchy-snowflake:
 - Every `nixi-companion <word>` command in the docs is in the launcher's `case` lists.
 - Every relative link in the three files points at a file that exists.
 
-It's documentation tooling, not app code, so it's within the intent's "must not change code". It fails when a later
-rename leaves the docs behind.
+**This is an exception to the approved intent**, which says "no code". It's one test file and changes no app code,
+default or option, but it is code. **Approving this spec approves that exception.** Without it, the names are checked
+by hand only, at the time of writing. It fails when a later rename leaves the docs behind.
+
+The test catches renames, not wrong labels, defaults, options or install order. Those are covered by the **review
+checklist** in the PR, which is filled in by hand against the documented commit:
+- each UI label and path (tab, button, switch) seen in the running UI;
+- each default compared with `DEFAULTS`;
+- each Nix option evaluated in a test Home Manager config (`nix eval` of the documented snippet, on the host);
+- the install order followed in the runtime test.
 
 ### Images
 
@@ -145,9 +161,13 @@ They're saved as PNGs in `docs/media/`, at most about 150 KB each. No GIF, becau
 
 ## Risks
 
-- **The VM may not be able to run the Home Manager steps** (a flake input and a switch inside a microVM guest). If it
-  can't, steps 1 to 3 are checked by evaluating a Home Manager config with the option on, on the host
-  (`nix eval`/`nix build` of a test config). Only the `nix run` path is run in the VM. The PR says which.
+- **The VM can't prove "he answered me".** No agent is signed in there, and `nix run` has no bridge (companion
+  README). Signing a real account in to a throwaway VM isn't worth the risk. So the VM proves install, switch, first
+  start, the settings and plugins, and that typing reaches the bridge (and he says no agent is signed in, the way the
+  README's "If not" says). The answer itself is proven on p620.
+- **The VM may not be able to switch Home Manager** (a flake input and a switch inside a microVM guest). If it can't,
+  steps 1 to 3 are checked on the host by building a test Home Manager config with the documented snippet, and the
+  PR says so. In that case first start runs with the built package's `nixi-companion` in the VM.
 - **Docs written against main go stale on the next merge.** The names test catches renames, but not changed behaviour.
   GETTING-STARTED avoids details GUIDE already holds.
 - **Placeholder secrets that look real** could be copied verbatim. They use obvious names (`secrets/elevenlabs.age`,
@@ -158,10 +178,11 @@ They're saved as PNGs in `docs/media/`, at most about 150 KB each. No GIF, becau
 
 - `cd tests && python3 -B -m unittest test_docs_names` passes on the docs branch. It fails with a key renamed in a scratch
   copy, which shows the test can fail.
-- **VM run** (`nixarchy-desktop` microVM, through the ai-mirror skill): the README's steps 1 to 5 and the plugins
-  section, followed as written. Each step's "You should see" is compared with what was seen. Failures and fixes are
-  listed in the PR.
-- **p620 checklist for the user**, also in the PR: steps 6 to 10, ElevenLabs, a message click, and the fleet board.
-  Each is ticked or reported.
+- **VM run** (`nixarchy-desktop` microVM, through the ai-mirror skill): the README's steps 0 to 4, step 5 up to the
+  bridge, and the plugins section, followed as written. Each step's "You should see" is compared with what was seen.
+  Failures and fixes are listed in the PR.
+- **p620 checklist for the user**, also in the PR: step 5 with a real answer, steps 6 to 10, ElevenLabs, a message
+  click, and the fleet board. Each is ticked or reported.
+- The review checklist above, filled in, in the PR.
 - Every command in a fenced block is run once, in the VM or on p620, or marked in the PR as not run, with the reason.
 - Rendered on GitHub (the PR's file view): the tables, alerts and images show.
