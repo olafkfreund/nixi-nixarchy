@@ -98,8 +98,8 @@ from `origin/main` `3725751`. Line numbers are from that commit. The art is read
    (`index.html:758` area). Add `<g id="rxSky">` before `<g id="body">` content's first child, `<g id="rxBack">`
    right after `#sitBack` (`775`) and `<g id="rxFront">` right after `#sitFront` (`789`). Wrap `<g id="body">…</g>`
    (`773`) in `<g class="whole">…</g>`. No behaviour yet.
-   New `tests/test_react_art.py`: every `REACT` string passes `build.py`'s `BAD` pattern (copy the regex, cite its
-   source), every `id=` starts `fx-`, only the in-scope ids are present, and the total stays under 40 KB.
+   New `tests/test_react_art.py`: every `REACT` string, as the page holds it (parsed, so `\u003c`-style escapes are
+   already decoded), passes `build.py`'s `BAD` pattern (copy the regex, cite its source), every `id=` starts `fx-`, only the in-scope ids are present, and the total stays under 40 KB.
    → verify: `cd tests && python -m unittest test_react_art test_character_fit test_accessories_fit`.
    Traps: `.whole` must carry no transform at rest; nothing inside `#body` moves; don't edit the art.
 
