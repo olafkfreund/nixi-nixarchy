@@ -46,8 +46,9 @@ reviewers:
   so every `#body>…` selector keeps matching and Snowflake's pixels don't change at rest. Eyes keep their own
   drawing; a reaction sets mood with `poke`. Props and touches that don't fit a body (`CHARACTERS[].fits`) are left
   out.
-- **`rxOk(id)`**: `reactions` on and the page not hidden; not in `bar`, `hover`, `calm` or `peek`; not fullscreen
-  or locked; in a meeting only `meeting` and `ask`; the same reaction at most once per 10 minutes, except `ask` and
+- **`rxOk(id)`**: `proactive` and `reactions` both on and the page not hidden; not in `bar`, `hover`, `calm` or `peek`; not fullscreen
+  or locked; in a meeting only `meeting` and `ask`, where "in a meeting" is `SIT.meeting` as it arrives, not `sitOn.meeting`
+  three seconds later; the same reaction at most once per 10 minutes, except `ask` and
   the music track bop; one at a time, with sustained props (load, memory, the boombox) underneath. It runs again on
   every change it depends on; when it fails, the playing reaction ends, sustained props hide and the music card
   closes. A reaction that can't play is dropped, never queued. Reduced motion shows the prop still. Approval
@@ -70,6 +71,11 @@ reviewers:
 - **One switch:** `reactions`, default `False`, in the defaults and `NOTIFY_FLAGS`, beside "Proactive" in Settings,
   needs `proactive`, turns on the art, chip, card and track counter only; its help names any signal flags that are
   off. Do Not Disturb stays in #209 (the user's decision), so a new install keeps it off.
+- **Media phrases come first on `/api/quick`.** The route answers from quick memory before `quick.handle`
+  (`server.py:6593-6596`), so a stored answer for "pause" would say it was handled and control nothing. The six fixed
+  phrases (exact match, after trimming and lower-casing) go to `quick.handle` before `recall.answer`. This applies to
+  the same words spoken, which is also the right order there. The spec said the phrases add nothing new to trust; this
+  keeps that and only reorders two existing lookups for six exact phrases.
 - **Correction to the spec:** it says the switch "is set on in `nixos_config`". Nothing in `nixos_config` sets
   companion settings; they live in his `config.json`. It's turned on from Settings on p620 in step 7.
 
@@ -104,16 +110,22 @@ from `origin/main` `3725751`. Line numbers are from that commit. The art is read
    Traps: `.whole` must carry no transform at rest; nothing inside `#body` moves; don't edit the art.
 
 3. **The reaction engine** (coder). In `index.html`: `rxPlay(id)`, `rxEnd()`, `rxOk(id)` and the triggers in the
-   decisions table, wired where each signal lands today (the situation handler that sets `sitOn` and `SIT`, the
-   `ambient` and `attention` event handlers, the row drawing for category `other`, the nudge handler for `break`, and
-   the `/api/quick` reply carrying "Opening"). `rxOk` re-runs from the same handlers and from the class changes on
-   `body` (`bar`, `hover`, `calm`, `peek`) and `visibilitychange`. Fits are checked as `applyAnchors` does
+   decisions table, wired where each signal lands today. `sitOn` triggers (music, meeting, rain, snow, wind) fire at the
+   transition in `sitStep` (`index.html:2418-2421`), where `sitOn[k]` turns true three seconds after `SIT` changes,
+   not in the situation handler (`2317-2319`), which only updates `SIT`. `SIT.cpu_hot` and `SIT.ram_low` fire at the
+   situation handler. Also the `ambient` and `attention` event handlers, the row drawing for category `other`, the nudge handler for `break`, and
+   the `/api/quick` reply carrying "Opening"). `rxOk` re-runs from the same handlers, from the situation handler as
+   soon as `SIT.meeting` or `SIT.fullscreen` arrives, from every settings change (so turning Proactive or Reactions off
+   clears at once), from the class changes on `body` (`bar`, `hover`, `calm`, `peek`), and from `visibilitychange`. Fits are checked as `applyAnchors` does
    (`1302`). `REDUCED` (`1603`) gives a still prop.
    New `tests/react_fit.mjs` and `tests/test_react_fit.py`, headless Chromium with `--disable-gpu`, built like
    `notify_fit`: each in-scope reaction on each of the four characters draws inside the viewBox, doesn't cover the
    eyes' boxes, and leaves the three groups empty at the end; nothing shows with `reactions` off, in `bar`, `hover`,
-   `calm`, `peek`, fullscreen or locked, or in a meeting except `meeting` and `ask`; a meeting, fullscreen, the lock
-   or the notch arriving mid-reaction ends it and hides sustained props, which come back after; the same reaction
+   `calm`, `peek`, fullscreen or locked, or in a meeting except `meeting` and `ask`; each of a meeting (`SIT.meeting`, before
+   `sitOn` follows), fullscreen, the lock, the notch, `hover`, `calm`, `peek`, the page hiding, and Proactive or
+   Reactions turned off, arriving mid-reaction and with the music card open, empties the three groups, hides
+   sustained props and closes the card, and they come back when it clears; each `sitOn` reaction fires from a real
+   situation event through `sitStep`'s three-second wait, driven by the page's own clock; the same reaction
    twice in 10 minutes plays once; reduced motion runs no animations; `setCharacter` to each character and back and
    the notch still work.
    → verify: `cd tests && python -m unittest test_react_fit test_notify_fit test_character_fit`.
@@ -121,18 +133,20 @@ from `origin/main` `3725751`. Line numbers are from that commit. The art is read
 
 4. **Music** (coder). Server: in `Ambient.sense` (`server.py:1726-1730`), while `reactions` and `look_music` are on,
    run the `playerctl -a metadata` format above instead of `playerctl -a status`, derive `music` from it, and keep
-   `track` as decided; add `track` to `situation()` (`1648`). Page: the headphones' `put` calls (the `sitMusic`
-   group, `index.html:1905-1909`) get `0` while reactions are on and the boombox stands on his right; the bop on start
+   `track` as decided; add `track` to `situation()` (`1648`). Page: the headphones' `put` calls (the `SIT_P.hb` and `SIT_P.hf`,
+   `index.html:1910`) get `0` while reactions are on and the boombox stands on his right; the bop on start
    and when `track` changes; the chip, the card and the phrases as decided; `sendRegion` (`3921`) includes them.
    Tests: `tests/test_situation.py` gains `track` up on a change of the followed player only, unchanged when a second
    player starts, and stays put with reactions off, with `Ambient.run` mocked and no title in the event. New cases in
    `react_fit`: the boombox replaces the headphones only with reactions on; the chip only with the boombox; the card
    opens only on a click; each button posts its phrase; Esc closes it; after its Pause the card and chip stay with
-   Play; an unhandled answer shows the fixed line; fullscreen closes the card. A server test posts each phrase to the
-   real `/api/quick` route with a quick-memory answer stored for the same words, and checks the mocked
-   `playerctl`/`wpctl` call; `next song` isn't taken by the stage fast path with a board open.
+   Play; an unhandled answer shows the fixed line; fullscreen closes the card. Server: in `/api/quick` (`server.py:6590-6596`), the six
+   phrases go to `quick.handle` before `recall.answer`. A server test posts each phrase to the real route with a
+   quick-memory answer stored for the same words, and checks the mocked `playerctl`/`wpctl` call ran and the memory
+   answer wasn't returned; another phrase with a stored answer still gets the memory answer; `next song` isn't taken by the stage fast path with a board open.
    → verify: `cd tests && python -m unittest test_situation test_react_fit` and the `/api/quick` test.
-   Traps: `/api/quick` checks `recall.answer` before `quick.handle` (`server.py:6387`); never send a title in an event.
+   Traps: the server tests use `tests/test_speakable.py`'s `_ServerEnv` pattern and mock every desktop and media
+   command; never send a title in an event.
 
 5. **The red Devil** (codex). `index.html:758-759`: fixed stops on `#devBody` and `#devWing`; `setCharacter`
    (`1307-1312`) sets the ball's fill as decided; the tail and fork in Devil's `back` art (`1295`), per the mockup;
