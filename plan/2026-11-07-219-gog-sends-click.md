@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 219
 spec: spec/2026-11-07-219-gog-sends-click.md
 coders:
