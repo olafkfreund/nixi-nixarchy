@@ -172,3 +172,7 @@ nothing else is stored.
     the list, and `respond`/`rsvp` count as send words.
   - Opus review: `g$'o'g` and `g${X}og` evaded detection. `${…}` and `$` are removed before matching, in both
     twins. `isHerdrWrite` stays byte-for-byte as the plan says, so herdr keeps that residual.
+  - Codex on the PR: removing `${…}` also removed a send inside `${UNSET:-$(gog …)}`. Detection now checks both the
+    quote-stripped text and the `${…}`-removed text. And the audit tokenizer split one shell argument
+    (`--body="a "--bcc=x`) into several, so a body part could be logged as a recipient; it now keeps whole shell
+    words. The Python twin already did both (raw text, `shlex`); both tests are in both repos.

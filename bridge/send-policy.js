@@ -34,9 +34,11 @@ export function isGogSend(toolCall) {
   let command = toolCall?.rawInput?.command;
   if (Array.isArray(command)) command = command.join(" ");
   if (typeof command !== "string") return false;
-  // ${…} and $ are removed too: g$'o'g and g${X}og are gog to the shell (#219 review)
-  const words = command.replace(/\\\n/g, "").replace(/\$\{[^}]*\}/g, "").replace(/['"\\$]/g, "");
-  return GOG.test(words) && (API.test(words) || SEND.test(words.replace(DRAFT_ONLY, "")));
+  // Two readings, and either counts: quotes removed (keeps a send inside ${UNSET:-$(gog …)}), and also ${…} and
+  // $ removed (g$'o'g and g${X}og are gog to the shell) (#219 reviews).
+  const plain = command.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  return [plain, plain.replace(/\$\{[^}]*\}/g, "").replace(/\$/g, "")].some((words) =>
+    GOG.test(words) && (API.test(words) || SEND.test(words.replace(DRAFT_ONLY, ""))));
 }
 
 export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall);
@@ -60,10 +62,14 @@ const GLOBAL_VALUE_FLAGS = new Set(["-a", "--account", "--color", "--home", "--c
 const VALUE_FLAGS = new Set(["--body", "--body-html", "--body-file", "--raw-file", "--subject", "--text", "--html", "--file", "--attach"]);
 const ADDRESS = /^[^\s@,'"]+@[^\s@,'"]+$/;
 
+const unquote = (word) => word.replace(/"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g, (_, d, s, e) =>
+  d !== undefined ? d.replace(/\\(.)/g, "$1") : s !== undefined ? s : e);
+
 export function gogSendDetail(toolCall) {
   const raw = toolCall?.rawInput?.command;
   const words = Array.isArray(raw) ? raw : typeof raw === "string"
-    ? raw.match(/"(?:\\.|[^"\\])*"|'[^']*'|(?:\\.|[^\s'"\\])+/g) ?? [] : [];
+    // whole shell words: adjacent quoted and unquoted parts are one argument (--body="a "--bcc=x is one)
+    ? (raw.match(/(?:"(?:\\.|[^"\\])*"|'[^']*'|\\.|[^\s'"\\])+/g) ?? []).map(unquote) : [];
   const start = words.findIndex((word) => /(?:^|\/)gog$/.test(word));
   let tail = words.slice(start + 1);
   while (tail[0]?.startsWith("-")) tail = tail.slice(GLOBAL_VALUE_FLAGS.has(tail[0]) ? 2 : 1);
