@@ -116,7 +116,8 @@ command, and `<file>` didn't exist afterwards.
      for `click_only`; Ask mode gives `confirm: "click"`, no always (an `always` answer counts once) and no lookup
      in `self.always`; a plain command is unchanged; Trust and Root allow a plain command with no `approve` event
      and ask for a gog send; `sends.log` has one line each for allow, deny and timeout, with no body or subject
-     from the test command; an existing `sends.log` with mode `0644` ends up `0600`; `send_hooks_file()` names `Bash` only. `BUS.pub` is captured, nothing real runs.
+     from the test command, and its `to` is the test's `--to` recipient; an existing `sends.log` with mode `0644`
+     ends up `0600`; `send_hooks_file()` names `Bash` only. `BUS.pub` is captured, nothing real runs.
    → verify: `cd tests && python -m unittest test_approvals` and the full suite.
    Traps: never a real `claude`, `gog`, `pactl` or `hyprctl` in a test; import `server` only under the throwaway
    HOME from `nixi_env` (#176); `approve.py` with no Nixi running stays out of the way, as today.
