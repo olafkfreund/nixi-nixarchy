@@ -84,6 +84,13 @@ test("gog audit detail reads only fixed command and recipient places", () => {
     { kind: "gog", command: "gmail send", to: "a@b" });
   assert.deepEqual(gogSendDetail(call("gog gmail reply 123")),
     { kind: "gog", command: "gmail reply", to: "123" });
+  for (const command of [["gog", "gmail", "send", "--to", "a@b", "--body", "--bcc=private body"],
+    ["gog", "gmail", "send", "--to", "a@b", "--body", "--to=confidential"],
+    ["gog", "gmail", "send", "--to", "a@b", "--subject", "--cc", "secret"],
+    ["gog", "gmail", "send", "--to=private words here"]]) {
+    const detail = gogSendDetail(call(command));
+    assert.ok(!/private|confidential|secret/.test(JSON.stringify(detail)), command.join(" "));
+  }
   assert.deepEqual(gogSendDetail(call("gog gmail reply --body x 123")),
     { kind: "gog", command: "gmail reply", to: "" });
   assert.deepEqual(gogSendDetail(call("gog calendar create x")),

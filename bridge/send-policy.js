@@ -50,6 +50,9 @@ const POSITIONAL_ID = new Set([
   "gmail drafts send", "gmail drafts post", "chat messages send", "chat messages create", "chat messages post",
 ]);
 
+const VALUE_FLAGS = new Set(["--body", "--body-html", "--body-file", "--raw-file", "--subject", "--text", "--html", "--file", "--attach"]);
+const ADDRESS = /^[^\s@,'"]+@[^\s@,'"]+$/;
+
 export function gogSendDetail(toolCall) {
   const raw = toolCall?.rawInput?.command;
   const words = Array.isArray(raw) ? raw : typeof raw === "string"
@@ -62,11 +65,13 @@ export function gogSendDetail(toolCall) {
   const count = command.split(" ").length;
   const recipients = [];
   for (let i = count; i < tail.length; i++) {
+    if (VALUE_FLAGS.has(tail[i])) { i++; continue; }        // its value is message text, whatever it looks like
     const flag = /^(--to|--cc|--bcc)(?:=(.*))?$/.exec(tail[i]);
     if (!flag) continue;
-    const value = flag[2] ?? tail[++i];
-    if (!value || value.startsWith("--")) return { kind: "gog", command, to: "" };
-    recipients.push(value.replace(/^(['"])(.*)\1$/, "$2"));
+    const value = (flag[2] ?? tail[++i] ?? "").replace(/^(['"])(.*)\1$/, "$2");
+    // Only addresses are kept: anything else is ambiguous and may be text (#219 review).
+    if (!value.split(",").every((one) => ADDRESS.test(one.trim()))) return { kind: "gog", command, to: "" };
+    recipients.push(value);
   }
   const positional = tail[count]?.replace(/^(['"])(.*)\1$/, "$2") ?? "";
   const to = recipients.length ? recipients.join(", ")
