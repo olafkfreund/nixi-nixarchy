@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 211
 spec: spec/2026-11-07-211-agent-approvals.md
 coders:
@@ -20,6 +20,12 @@ reviewers:
 Everything an implementer needs is here; the spec is the record of why. Snowflake line numbers are from
 `origin/main` `3725751`; steps 3–8 start only after #208 and #219 have merged, so **re-find every region by the
 name given, never by number**.
+
+## Approval (2026-11-07)
+
+The user approved this plan at 659f5af ("approved"), with both recommendations: approved and denied show as a tick
+line with joy or sad, and the browser-fallback page may claim the click key. Step 1 runs with the user on p620. Code
+steps wait for #208 and #219 to merge.
 
 ## Approved decisions (carried over from the spec and its approval)
 
