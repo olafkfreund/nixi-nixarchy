@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 220
 intent: intent/2026-11-07-220-notification-history.md
 ---
@@ -257,6 +257,14 @@ again. Only the user does either.
    included. Upstream may want the timer and the 6-row window as settings; nixarchy keeps 904 until they decide.*
 2. **Should a stopped shell's leftover text get a cleanup at login, outside the shell?** *Recommendation: no. The
    shell's own start does the same job within seconds of login, and a second writer to these files would race it.*
+
+## Decisions at approval (2026-11-07)
+
+The user approved this spec with the recommended answers ("approve all"):
+
+1. Offer the Store.js change upstream after a week on p620, with the Node test included.
+2. No separate login cleanup for a stopped shell. The shell's own start does the job, and a second writer would
+   race it.
 
 ## Reviews (2026-11-07, read-only, advice only)
 
