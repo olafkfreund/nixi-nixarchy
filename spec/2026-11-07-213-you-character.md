@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 213
 intent: intent/2026-11-06-206-character-friends.md
 ---
