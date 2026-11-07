@@ -146,3 +146,12 @@ All pass. `test_character_fit` can be flaky under load; rerun it alone before tr
 
 Revert the two PRs and bump the inputs back. `sends.log` lines and old `always.json` entries are left as they are;
 nothing else is stored.
+
+## Deviations
+
+- **Step 1** (Codex): one fix on review. A flag straight after `reply` (`gog gmail reply --body x 123`) was taken
+  as the message id; a positional starting with `-` is now ignored, with a test.
+- **Step 3**: no separate "click to confirm sends" tick. The hint line under the composer stays visible on a
+  click-only card and says "Click yes or no: a send can't be answered by a key", so the reason is on screen
+  when `Y` is swallowed.
+- **Tests**: `node --test bridge/` doesn't take a folder on Node 24; the commands use `'bridge/*.test.js'`.
