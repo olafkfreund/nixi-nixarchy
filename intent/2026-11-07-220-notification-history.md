@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 220
 author: olafkfreund
 ---
@@ -135,6 +135,17 @@ So the files are private to the user, and history is usually short-lived. The pr
 6. **Where does the fix go?** *Recommendation: nixarchy first, as a new patch next to 903, plus the backup exclusion and
    a manual note. Offer the `Store.js` change upstream to `basecamp/omarchy` too, and drop the patch if it lands. A
    separate nixarchy issue tracks it, and this one closes when that issue does.*
+
+## Decisions at approval (2026-11-07)
+
+The user approved this intent with the recommended answers ("approve 220 with the recommendations"):
+
+1. Text kept: only the 6 newest rows (what the replay shows) keep their text. The rest keep metadata only.
+2. `execArgv` and `execActions` are kept only on the rows that keep text.
+3. `live.json` is in scope: document it, and drop old rows when it loads. It keeps its text for the cards on screen.
+4. Retention: document how it works today. Add a timer only if the spec finds one is cheap.
+5. Exclude `notifications/` from nixarchy home backup. The release note says older backups may still hold the files.
+6. The fix goes in nixarchy first, tracked in its own nixarchy issue. The `Store.js` change is offered upstream too.
 
 ## Reviews (2026-11-07, read-only, advice only)
 
