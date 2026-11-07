@@ -15,6 +15,7 @@ Item {
     sequence: "Y"
     autoRepeat: false
     enabled: conversation.permissionKeysLive && conversation.optionIdForKind("allow_once") !== ""
+      && conversation.pendingPermission.confirm !== "click"
     onActivated: conversation.answerPermission(conversation.optionIdForKind("allow_once"))
   }
   Shortcut {

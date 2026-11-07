@@ -645,6 +645,18 @@ def test_permission_keys_guard():
     print("  ok  Y and N answer a prompt, and never over typed text")
 
 
+def test_click_only_card_ignores_y():
+    """A send (confirm: "click") can't be answered with Y by either route (#219)."""
+    card = card_source()
+    handler = _block(card, card.index("Keys.onPressed", card.index("id: prompt\n")))
+    guard = handler[handler.index("pendingPermission.id"):]
+    assert guard.index('pendingPermission.confirm === "click"') < guard.index("optionIdForKind"), "the composer answers Y before checking confirm"
+    shortcuts = [s for s in re.findall(r"Shortcut\s*\{[^}]*\}", card) if re.search(r'sequence:\s*"Y"', s)]
+    assert len(shortcuts) == 1 and 'confirm !== "click"' in shortcuts[0], "the Y shortcut ignores confirm"
+    assert "a send can't be answered by a key" in card, "no click-only hint"
+    print("  ok  a click-only card ignores Y")
+
+
 def test_permission_settle_window():
     """A permission request cannot be answered before it has been on screen long
     enough to read: a held key answers once, and the next request in the queue
