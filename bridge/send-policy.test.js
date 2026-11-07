@@ -98,6 +98,8 @@ test("gog audit detail reads only fixed command and recipient places", () => {
   assert.ok(isGogSend(call('echo "${UNSET:-$(gog gmail send --to a@b --body hello)}"')));
   assert.ok(isGogSend(call('gog gmail "${UNSET:-se}nd" --to a@b --body hello')));
   assert.ok(isGogSend(call("gog gmail `echo send` --to a@b")));
+  assert.ok(isGogSend(call("g${UNSET:-o}g gmail send --to a@b --body hello")));
+  assert.equal(gogSendDetail(call("gog gmail send --to actual@example.com --body-file <(printf %s --bcc=secret@example.com)")).to, "");
   for (const command of ["gog gmail s{e..e}nd --to a@b", "gog gmail {se,x}nd --to a@b", "gog gmail s?nd --to a@b", "gog gmail s[e]nd --to a@b"])
     assert.ok(isGogSend(call(command)), command);
   assert.equal(gogSendDetail(call("gog gmail send --to actual@example.com --body=$(printf %s --bcc=secret@example.com)")).to, "");

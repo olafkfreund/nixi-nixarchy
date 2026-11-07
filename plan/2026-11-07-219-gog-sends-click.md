@@ -183,3 +183,9 @@ nothing else is stored.
   - Codex, round four: brace expansion (`s{e..e}nd`) also builds a send word, and the bridge read a recipient from
     inside `$(…)`. The rule now counts any gog command with `$`, a backtick, `{`, `*`, `?` or `[`, and logs no
     recipient when the command holds `$`, a backtick, `<<` or a newline.
+  - Codex, round five: `g${UNSET:-o}g` builds the program name, and process substitution (`<(…)`) let a body reach
+    the audit. A third reading keeps a default's word; `<(`/`>(` also means no recipient.
+  - **Where this stops.** Each round found a new shell construct that hides a send from a text match. Text
+    matching can't defeat an agent that is deliberately evading it (a wrapper script already does), and the intent's
+    goal is that no accident sends: a misheard yes, a key, "always" or YOLO. From here, a finding that needs a
+    deliberately obfuscated command is recorded as residual, not fixed; one an ordinary command can trigger is fixed.
