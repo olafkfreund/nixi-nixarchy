@@ -567,6 +567,12 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   at Guide outright (`bridge/bridge.js:591-608`, `CODEX_GUIDE_REFUSAL`), so there's no list to extend. Nothing changed
   there.
 
+- **Step 2 (coder):** `stage_act` ignores `mail_*` tokens, so they can't reach `copy`, `open` or `play` (the trap asked
+  for this; a test covers it). A failed account's "Couldn't read <address>" row has no tokens, so the page draws no
+  buttons. While `mail_on` is off, a phrase or the menu answers "Mail is off. You can switch it on in Settings." with no
+  agent turn. `mail_scrub` takes and returns a list, with a `mail_otp(fields)` helper that step 3 uses for the model's
+  answer. `mail_reset()` runs after `save_config`, so a list in flight sees `mail_on` already off under the lock.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
