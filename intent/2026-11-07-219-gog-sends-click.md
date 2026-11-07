@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 219
 author: olafkfreund
 ---
@@ -79,8 +79,7 @@ extra card.
 
 ## Open questions
 
-1. **The companion's own agent mode:** in this task, or its own issue? Recommendation:
-   in this task. The outcome is "a voice yes never sends", and that mode has the same gap.
-2. **`gog api`:** treat every call as a send (an extra card on reads too), or only
-   calls that aren't GET? Recommendation: every call. It's rare, and a false positive
-   is only a card.
+None. Decided by the user on 2026-11-07, taking both recommendations:
+
+1. The companion's own agent mode is in this task.
+2. Every `gog api` call counts as a send.
