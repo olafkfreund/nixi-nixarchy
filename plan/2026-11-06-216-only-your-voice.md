@@ -253,3 +253,22 @@ Expected: all of these pass. The full suite matches `origin/main` apart from the
 - Module: the option is off by default, so reverting changes no host.
 - The mic trial: set `mic_device` back to `alsa_input.usb-Razer_Inc_Razer_Seiren_V2_Pro_UC2152L04200038-00.mono-fallback`
   and restart Nixi.
+
+## Deviations
+
+- **Step 3** (nixoarchy-snowflake ee63a86): Codex rewrote `tests/test_follow_hold.py` to use a fake handler instead of
+  a real local server. I put the real server back, keeping only the new event fields and a `media_playing` stub.
+- **Step 4** (nixoarchy-snowflake, the commit after ee63a86):
+  - `startRec(mode, heard)` keeps `heard` on the recording itself, instead of a global `recHeard`. Clicks, keys and
+    push-to-talk call it without `heard`, so nothing has to be cleared.
+  - The settings line is tested in the new `tests/heard_fit.mjs`, not in `settings_fit.mjs`.
+  - `test_stages_fit` is added to the step's check, because `send()` and `startRec` changed.
+  - The line's counts are as follows:
+    - "by name" is wake `sent` plus `ignored`;
+    - "follow-ups" is follow `sent` plus `ignored`;
+    - "not for me" is `not_me` across all three paths;
+    - "while media played" is `not_me` with media `on`.
+
+    Barge isn't shown separately.
+  - The coder first listed `notme` in `NX_MENU`, which would have hidden it in nixi mode, the bridged build. I fixed
+    that and added a test that fails if it's listed there again.
