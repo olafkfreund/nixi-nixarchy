@@ -195,3 +195,17 @@ because no app code changes, but `test_docs_names` runs in CI with the rest.
 ## Rollback
 
 Revert the docs PRs. Nothing else depends on them.
+
+## Deviations
+
+- **Step 4** was drafted by agy. The handoff was marked failed: HEAD moved because I committed other docs into the
+  worktree during it. The draft was then lost to another session's stash, restored from that session's saved patch,
+  checked against the code and finished by the coder.
+- **Step 9 (README) and the messages sections**: the notification switches are in the companion's **Settings →
+  Look** tab (`app/static/index.html:872-889`). The Nixi card's QML has no such switches, so the docs point to Look
+  only, not to "the Nixi card's Settings → Desktop".
+- **ElevenLabs with sops-nix**: sops-nix's `/run/secrets/<name>` resolves to `/run/secrets.d/<gen>/<name>`, and
+  `app/eleven.py` refuses that path after `realpath`. The docs give the agenix example only and say sops-nix isn't
+  supported yet. The code gap goes into its own issue, not this docs-only change.
+- **CI**: nixoarchy-snowflake has no `.github/workflows/`, so "`test_docs_names` runs in CI" can't happen in this
+  change. It runs with the suite locally. Adding CI is a separate issue.
