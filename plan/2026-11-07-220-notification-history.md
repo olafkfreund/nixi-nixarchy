@@ -542,3 +542,16 @@ nixarchy commit it explains. The plan commit follows that commit directly.
   - `home-backup-restore` passes.
   - `options-files` needs a committed tree (`installer/mkFlake.nix`), and it is VM-tier, so it waits for the runner
     gate.
+- **Step 5** (`a84706d`, lead, as a fallback):
+  - The agy handoff failed to start, verbatim: `{"ok":false,"tool":"agy","reason":"tool exited 2"}`, log
+    `sandbox: not a directory: /mnt/code/Source-home/GitHub/nixarchy-220`. Following the handoff skill, the lead wrote
+    the section, and the PR says so. `coders:` is unchanged.
+  - The section's count-only `jq` example also excludes `[redacted]` bodies, so it really prints 0.
+  - `docs-lists` passes.
+- **Step 4** (`5935da3`, coder):
+  - The first-start check uses `dismissKey live-220-fresh` (`Service.qml:1546`). The seeded card's key is that
+    string, so this proves the card by identity. The plan's `dismiss <summary>` (`:1601`) would also have worked.
+  - Seeded `ts` follows `closed_ts` order. In the VM only position matters; the reversed-order case is the Node
+    check's job.
+  - The journal scan runs in Python with `re`, so a failing `journalctl` can't pass it by accident.
+  - It evaluates, and the generated test script parses. The VM run follows the runner gate.
