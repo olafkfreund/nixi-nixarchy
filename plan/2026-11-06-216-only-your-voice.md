@@ -289,3 +289,7 @@ Expected: all of these pass. The full suite matches `origin/main` apart from the
   - Left as is, for the p620 checklist: within 2 minutes of a voice ask, "not you" from the speakers also stops a
     running turn (the earlier `stop_proc()` deviation). Checked live: Nixi's WebKit `webaudio` stream is named `Nixi`,
     so `media_playing()` doesn't count Nixi's own page sounds.
+- **8b7d61e**, made by another session's #216 team and kept after my review:
+  - The mic note is reset only when the "is gone" note was the last one, so a silent mic isn't noted again by every
+    session.
+  - An `[ignore]` reply clears `HeardCounts.last`.
