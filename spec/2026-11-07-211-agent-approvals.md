@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 211
 intent: intent/2026-11-06-206-character-friends.md
 ---
@@ -289,6 +289,20 @@ the calm rules from the intent.
 4. **Is status and exit code enough for the result?** Recommended: yes, never output.
 5. **Does agy's `coder-guard` `{"decision":"allow"}` auto-approve every agy tool today?** Recommended: confirm it
    with one live check, and if it does, fix it in nixos_config, outside this slice.
+
+## Decisions at approval (2026-11-07)
+
+The user approved this spec with the recommended answers ("approve 210 and 211 with the recommendations, keep agy"):
+
+1. The card waits 60 s, then the terminal takes over. The card also has an "Answer in the terminal" button.
+2. agy gets no approve or deny until it has a hook at its own prompt. Check again at each agy update.
+3. Hooks are installed through nixos_config on the user's hosts, with Codex's in the managed requirements.toml.
+   docs/GUIDE.md covers everyone else.
+4. The result shows status and exit code only, never output.
+5. coder-guard: confirm it with one live check, then fix it in nixos_config, outside this slice.
+
+The live probes in Verification (fallback, timeout, two hooks combining) gate the plan. An agent that fails one is
+left out.
 
 ## Reviews (2026-11-07)
 
