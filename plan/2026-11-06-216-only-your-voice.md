@@ -282,3 +282,10 @@ Expected: all of these pass. The full suite matches `origin/main` apart from the
   - `media_playing()` now runs after the stop and not-me checks. Stop barges no longer carry `path` or `media`; the
     page only uses `heard` for barges that listen.
   - The English not-me phrases always count, as the stop words do. A curly apostrophe is normalised.
+- **Step 6 review fixes** (nixoarchy-snowflake 8b7d61e), from the Opus review:
+  - The mic note's memory is cleared only when the device comes back after an "is gone" note. Before this, every new
+    `Wake.session()` cleared it, so a present but silent mic repeated "sends no sound" after each reply.
+  - An `[ignore]` reply clears `HeardCounts.last`, so it can't also be marked `not_me`.
+  - Left as is, for the p620 checklist: within 2 minutes of a voice ask, "not you" from the speakers also stops a
+    running turn (the earlier `stop_proc()` deviation). Checked live: Nixi's WebKit `webaudio` stream is named `Nixi`,
+    so `media_playing()` doesn't count Nixi's own page sounds.
