@@ -12,10 +12,19 @@ The companion has grown faster than its docs. In `olafkfreund/nixoarchy-snowflak
 
 - `README.md` (109 lines) covers install, the first two minutes, what's off in nixi mode, and help. It credits piper and
   espeak-ng as the voice, and doesn't mention ElevenLabs, which is what the user runs.
-- `docs/GUIDE.md` (309 lines) has no section on the message inbox, clicking a message to open its app, the characters
-  and their reactions, the fleet board, plugins or ElevenLabs. A word search finds none of them.
+- `docs/GUIDE.md` (309 lines) has no section on the message inbox, clicking a message to open its app, choosing a
+  character and its voice, the fleet board or ElevenLabs. It covers moods ("Its face and personality"), but not the
+  characters in Settings. It says plug-ins are off in nixi mode, which is out of date: Nix-built plugins load through
+  `services.nixi.companion.plugins` (#190).
+- Both READMEs end with "everything runs on your computer". With ElevenLabs on, the text he speaks goes to ElevenLabs,
+  and the agent's provider gets what you ask.
 - Nothing walks a new person from "I have NixOS" to "he answered me" with every step checked: which flake inputs, which
-  option, the first start, mic choice, the voice, and what to do when one of those fails.
+  option, the first start, mic choice, the voice, and what to do when one of those fails. Known traps that make a
+  correct setup look broken aren't on any checklist:
+  - The module adds no login start or key binding (GUIDE, "Starting at login").
+  - A trust change in the card needs `nixi-companion restart` (#146).
+  - Notifications through him need the first two switches in Settings → Desktop, and the nixarchy shell with its
+    notification patch. Without that patch, the shell's own popups stay.
 
 The user asked for "a bulletproof onboarding" in `README.md`, plus a detailed guide that makes it easy to get started.
 
@@ -26,8 +35,12 @@ The user asked for "a bulletproof onboarding" in `README.md`, plus a detailed gu
 - **A detailed guide** covers every feature a user meets, in the order they meet it: talking, messages and notifications,
   characters and reactions, voices (local and ElevenLabs), agents and approvals, the fleet board, plugins, settings, and
   troubleshooting. Each setting it names exists in the code with that name.
-- **"Bulletproof" is tested, not claimed.** The README's steps are followed on a clean machine, a disposable nixarchy
-  VM, and each one that didn't work as written is fixed before merge.
+- **"Bulletproof" is tested, not claimed.** The steps a VM can run (install, first start, typing to him, settings,
+  plugins) are followed in a disposable nixarchy VM. Each one that didn't work as written is fixed before merge. The
+  steps it can't run (mic, hearing "hey Nixi", his voice, ElevenLabs, notifications through him) are a short checklist
+  the user ticks on p620. The PR records both, step by step, with what failed and the fix.
+- **The privacy wording is true.** It says what stays local (speech-to-text, the local voices) and what leaves the
+  machine: the text he speaks with ElevenLabs on, and whatever the agent's provider receives.
 
 ## Affected users and systems
 
@@ -59,8 +72,8 @@ The user asked for "a bulletproof onboarding" in `README.md`, plus a detailed gu
    choices explained) and `docs/GUIDE.md` kept as the reference, brought up to date. The README links both.
 3. **Who is the reader?** Recommended: someone on nixarchy first (the Nixi card comes with it, and the companion is one option away), with a short path for any NixOS
    with Home Manager. Not for non-Nix systems, though the `nix run` try-out stays.
-4. **How is "bulletproof" proven?** Recommended: follow the README in a disposable `nixarchy-desktop` microVM, step by
-   step, and record what failed and the fix in the PR. Mic and speech can't be tested in the VM, so those steps are
-   checked on p620 by the user.
+4. **How is "bulletproof" proven?** Recommended: as under Proposed outcome, with the VM for what it can run and the
+   user's p620 checklist for mic, voice and notifications. A step counts as passed only when what the README says
+   you'll see is what was seen.
 5. **Screenshots or a short recording?** Recommended: a few still images from headless Chromium, kept small, since the
    UI is still changing (#206).
