@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 217
 intent: intent/2026-11-07-217-companion-onboarding.md
 ---
