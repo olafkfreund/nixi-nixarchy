@@ -72,7 +72,8 @@ extra card.
 - Fail-safe like the herdr guard: a false positive is an extra card, never a hidden send.
   Matching command text can't see every route (a wrapper script, a shell alias); that
   residual is stated, as it is for herdr.
-- Must not change how herdr writes behave.
+- Herdr writes keep every guard they have. The only change for them is that the Nixi
+  card's `Y` no longer approves one.
 - No message body in logs, the audit file or diagnostics.
 - Comes before #210 (mail replies by voice), which depends on it.
 
