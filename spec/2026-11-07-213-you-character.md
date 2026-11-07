@@ -274,20 +274,21 @@ This needs #208's reaction player and calm gate. Slice B waits for #208 to merge
     once, not again within 5 minutes, and not under DND, fullscreen, the lock screen or reduced
     motion. A message and an email still show exactly as before.
 
+## Decided (2026-11-07, by the user)
+
+- **The published likeness:** history rewritten. The "You" art and its written description are gone from
+  `mockups/206/` and the intent on every public branch (force-pushed). The old commits stay reachable by hash
+  until GitHub support purges them; that request is the user's.
+- **Backups:** `~/.local/share` is not backed up or synced off the machine, so the folder needs no exclusion.
+
 ## Open questions
 
 1. **Where does "You" live?** Recommended: only in `~/.local/share/nixi-companion/plugins/you/`
    on p620, written there by hand. The intent's "nixos_config" isn't private: that repo is
-   public. **Also on razer?**
-2. **The likeness already published in `mockups/206/` and the intent.** Recommended: remove
-   the "me" art and the written description from `mockups/206/` and the intent in a follow-up
-   commit. Rewriting the history of the public branch is the user's call. Until then it stays
-   readable.
-3. **Backups:** is `~/.local/share` backed up or synced off the machine (restic, Syncthing)?
-   If so, do you want the folder left out?
-4. **Which services fire reactions first?** The intent names the media stack. Recommended: a
+   public. **Also on razer?** Recommended: p620 only for now; copy it by hand later if wanted.
+2. **Which services fire reactions first?** The intent names the media stack. Recommended: a
    plugin mapping your Jellyfin or *arr notifications to "video" and "news", written after #208.
-5. **Minor, out of scope:** #149 spec §1 says plugins come from `$NIXI_PLUGIN_DIRS`. The code
+3. **Minor, out of scope:** #149 spec §1 says plugins come from `$NIXI_PLUGIN_DIRS`. The code
    links them into the package instead (`plugin_dirs`, `plugins.py:55-57`, and
    `nix/hm-module.nix:29`). The #149 spec is stale there.
 
