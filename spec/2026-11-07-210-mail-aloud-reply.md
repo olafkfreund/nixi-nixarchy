@@ -25,7 +25,7 @@ so re-find them by name. The nixi bridge is in this repo, under `bridge/`. `gog`
 - **Two tokens.** `TOOL_TOKEN` goes to the commands the agent runs, and works only for `TOOL_PATHS` (`server.py:65`,
   `server.py:6117`). The window's `TOKEN` works everywhere, and sits in `runtime.json`, created with mode 0600
   (`server.py:6969`). Any program running as the user can read that file. In nixi mode the agent's Read, Grep and
-  Glob run without a card outside `SECRET_PATHS` (`bridge/trust-policy.js:149`), and `runtime.json` isn't on that
+  Glob run without a card outside `SECRET_PATHS` (`bridge/trust-policy.js:151`, `:165`), and `runtime.json` isn't on that
   list. Bash still needs a card.
 - **The agent can look at the screen without a card.** `/api/capture` is in `TOOL_PATHS` (`server.py:65`), and
   `nixi-companion see` skips the card (`server.py:785`, `server.py:6440`).
