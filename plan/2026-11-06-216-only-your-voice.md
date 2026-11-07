@@ -124,7 +124,7 @@ Traps for every step:
    - New `class HeardCounts` near `Wake`:
      - `add(path, media, outcome)` adds to today's cell;
      - `snapshot()` returns the last 7 days plus totals;
-     - `save()` writes atomically (tmp + `os.replace`, as at `:431-432`), at most once a minute from `add`, and from the
+     - `save()` creates `DATA_DIR` if needed, catches `OSError` (a failed save never breaks an ask or the shutdown), and writes atomically (tmp + `os.replace`, as at `:431-432`), at most once a minute from `add`, and from the
        existing shutdown path;
      - loading drops days older than 14 and any non-numeric value;
      - `last = (path, media, monotonic)` is the one slot.
