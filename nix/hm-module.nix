@@ -138,7 +138,7 @@ in
           };
         });
         default = [ ];
-        example = lib.literalExpression ''[ { name = "razer"; address = "100.90.72.124"; } ]'';
+        example = lib.literalExpression ''[ { name = "laptop"; address = "100.64.0.2"; } ]'';
         description = ''
           The other hosts whose status the companion shows on its fleet board.
           Normally this is derived from the NixOS fleet list, not typed by
