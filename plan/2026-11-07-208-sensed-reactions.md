@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 208
 spec: spec/2026-11-07-208-sensed-reactions.md
 coders:
