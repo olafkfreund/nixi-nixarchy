@@ -550,6 +550,17 @@ code.
 **Not verified:** `gog`'s JSON fields and delivered threading, `pointerType` in the native window, Ollama's logging on
 p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No code has been written or run.
 
+## Deviations
+
+- **Started before #208 merged (2026-11-07).** The "Rule" under "Where the work happens" says steps 2 to 5 start after
+  #208's code PR merges. The user and the #208 session agreed instead: #210's code branch
+  (`feat/210-mail-aloud-reply`, worktree `nixi-210-code`) starts from snowflake `origin/main` at `3cf27a6` (#65 merged)
+  and rebases onto #208 when it merges. The snowflake PR stays a draft until then. Expected collisions on that rebase:
+  `index.html` (#208's `REACT` object and `<defs>`, `#body` in `<g class="whole">`, the `#rxSky`/`#rxBack`/`#rxFront`
+  groups, an `rxOk` engine), `server.py` (media phrases before `recall.answer` in `/api/quick`; `reactions` in
+  `DEFAULTS` and `NOTIFY_FLAGS`), and Settings (a `reactSw` row after Proactive). #210's page edits stay out of the
+  character's SVG tree.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
