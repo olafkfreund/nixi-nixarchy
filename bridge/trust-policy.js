@@ -177,6 +177,8 @@ export const SECRET_PATHS = [
   // `**/x` is relative to the session directory; `//` is absolute (#95). Without
   // these a canary ~/foo.age was read with no card. OpenCode has its own list.
   "//**/.env", "//**/.env.*", "//**/*.age",
+  // The companion's window token (#210); `**/` covers any XDG_DATA_HOME.
+  "**/nixi-companion/runtime.json", "//**/nixi-companion/runtime.json",
 ];
 
 // Writes that will later run with nobody present (#52).
