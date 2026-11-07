@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
 
@@ -81,3 +82,56 @@ test("switching to YOLO leaves a pending herdr card unresolved (#95)", async () 
     { outcome: "selected", optionId: "reject" });
 });
 
+
+// #219: a gog send is click-only like a herdr write.
+const gog = { type: "prompt", text: "PLEASE_GOG now" };
+const gogCommand = "gog gmail send --to me@example.com --subject s --body secret-body";
+const reject = (event) => ({ type: "permission", id: event.id, optionId: "reject" });
+
+test("YOLO does not auto-approve a gog send; the card is click-only without allow_always (#219)", async () => {
+  const { events } = await runBridge({
+    env, settings: { trust: "mechanic", permissionMode: "yolo" }, messages: [gog], onPermission: reject,
+  });
+  const cards = events.filter((e) => e.type === "permission");
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].confirm, "click");
+  assert.ok(!cards[0].options.some((o) => o.kind === "allow_always"));
+});
+
+test("allow all pending leaves a gog send pending (#219)", async () => {
+  const { agent } = await runBridge({
+    env, settings: { trust: "mechanic" }, messages: [gog],
+    onPermission: (event) => [{ type: "permission_mode", mode: "yolo" }, 600, reject(event)],
+  });
+  assert.deepEqual(agent.find((e) => e.method === "permissionOutcome").outcome,
+    { outcome: "selected", optionId: "reject" });
+});
+
+test("a stored always entry does not match a gog send (#219)", async () => {
+  const cwd = tmpdir();
+  const { events } = await runBridge({
+    env: { ...env, NIXI_CWD: cwd }, settings: { trust: "mechanic" },
+    messages: [({ home }) => {
+      mkdirSync(join(home, ".local", "state", "nixi"), { recursive: true });
+      writeFileSync(join(home, ".local", "state", "nixi", "always.json"), JSON.stringify({ version: 1,
+        entries: [{ agent: "claude", cwd, command: gogCommand, added: "t", lastUsed: "t" }] }));
+    }, gog],
+    onPermission: reject,
+  });
+  assert.equal(events.filter((e) => e.type === "permission").length, 1);
+});
+
+test("Guide cancels a gog send; the audit line has no text, body or subject (#219)", async () => {
+  let lines, raw;
+  await runBridge({ env, messages: [gog, (ctx) => {
+    lines = auditLines(ctx);
+    raw = readFileSync(join(ctx.home, ".local", "share", "nixi", "sends.log"), "utf8");
+  }] });
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].decision, "cancelled");
+  assert.equal(lines[0].kind, "gog");
+  assert.equal(lines[0].command, "gmail send");
+  assert.equal(lines[0].to, "me@example.com");
+  assert.ok(!("text" in lines[0]));
+  assert.ok(!raw.includes("secret-body") && !/"s"/.test(raw));
+});

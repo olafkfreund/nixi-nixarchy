@@ -4,7 +4,7 @@
 // commands qualify: never an edit, a herdr write, a chained command or a secret path.
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { isHerdrWrite } from "./send-policy.js";
+import { isClickOnly } from "./send-policy.js";
 import { shellQuote } from "./permission-detail.js";
 import { namesSecret } from "./trust-policy.js";
 
@@ -34,7 +34,7 @@ export function rememberable(toolCall, cwd) {
   const dir = toolCall.rawInput?.cwd ?? toolCall.rawInput?.workdir;
   if (dir !== undefined && dir !== cwd) return false;
   const key = keyOf(toolCall);
-  return Boolean(key) && !isChained(toolCall) && !isHerdrWrite(toolCall)
+  return Boolean(key) && !isChained(toolCall) && !isClickOnly(toolCall)
     && !namesSecret(toolCall.rawInput.command);
 }
 

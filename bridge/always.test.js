@@ -16,6 +16,7 @@ test("only a plain, unchained, non-secret, non-herdr shell command can be rememb
     assert.ok(!rememberable(bash(command)), JSON.stringify(command));
   assert.ok(!rememberable(bash("cat ~/.ssh/id_ed25519")), "secret path");
   assert.ok(!rememberable(bash("herdr agent list")), "herdr");
+  assert.ok(!rememberable(bash("gog gmail send --to a@b")), "gog send");
   assert.ok(!rememberable(bash("uname -r", "edit")), "not execute");
   assert.ok(!rememberable(bash("   ")), "empty");
   assert.ok(isChained(bash(["bash", "-lc", "a; b"])));

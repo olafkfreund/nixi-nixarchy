@@ -84,7 +84,7 @@ command, and `<file>` didn't exist afterwards.
    `allow_always`; allow-all leaves it pending; a stored `always.json` entry for it doesn't match; Guide cancels it
    and the audit line has no `text` and doesn't contain `secret-body` or the subject; a herdr write behaves as before. In `bridge/always.test.js`: `rememberable` is
    false for a gog send.
-   → verify: `node --test bridge/`.
+   → verify: `node --test 'bridge/*.test.js'` (Node 24 won't take a folder).
    Traps: every audit path must keep writing for herdr exactly as today; `#95` tests must stay green.
 
 3. **The card's `Y`** (coder). `Conversation.qml:1546-1556`: if `root.pendingPermission.confirm === "click"` and the
@@ -136,7 +136,7 @@ command, and `<file>` didn't exist afterwards.
 ## Tests
 
 ```bash
-cd /mnt/code/Source-home/GitHub/nixi-219 && node --test bridge/ && nix flake check
+cd /mnt/code/Source-home/GitHub/nixi-219 && node --test 'bridge/*.test.js' && python3 tools/test_nixi.py && nix flake check
 cd /mnt/code/Source-home/GitHub/nixi-219-code/tests && python -m unittest discover -p 'test_*.py'
 ```
 
