@@ -155,3 +155,7 @@ nothing else is stored.
   click-only card and says "Click yes or no: a send can't be answered by a key", so the reason is on screen
   when `Y` is swallowed.
 - **Tests**: `node --test bridge/` doesn't take a folder on Node 24; the commands use `'bridge/*.test.js'`.
+- **Step 4** (coder): `tests/test_no_herdr_writes.py` fails if `server.py` holds the herdr write verbs, so the
+  companion's herdr audit regex is generic (`herdr [--session x] agent|pane <word> <pane>`) and still keeps only
+  the pane. On review its send-word match was stricter than the bridge's (`(?![\w-])` against `\b`), so
+  `send-later` and `--gmail-no-send` counted in the bridge only; it now uses `\b`, with both cases in both tests.
