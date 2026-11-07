@@ -94,7 +94,10 @@ click_only(cmd)`; add `item["click"] = co` right after `item` is built. `ask_bri
 == "click"`. `Approvals.answer(aid, ans, keyed=False)` returns False and leaves the item pending when
 `item["click"]` and either `ans == "always"`, or `ans == "yes"` and not `keyed`. So an unkeyed yes is simply not an answer: the card
 stays, the timeout and #219's `sends_log(..., "timeout")` behave as before, and `N`/no still answers. This only
-removes an approve path; every #219 guard (no always, Trust/Root ask, `sends.log`) is untouched.
+removes approve paths. Trust/Root still asks and `sends.log` is unchanged (values stay `allow`/`deny`/`timeout`).
+One #219 behaviour changes on purpose: #219 turns "always" on a click-only card into a one-time yes
+(`ans == "always" and not can_always` → `"yes"`); this plan refuses it and the card stays pending (see "Changed on
+purpose").
 
 nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/common/nixos/omarchy-nixi-companion.nix`
 (p620, razer). Pattern: `modules/programs/agent-voice.nix` (managed Claude hooks via
@@ -202,7 +205,8 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
      deadline`; it sets the end state and, for an answered item, registers its result key in the same critical
      section. It returns True to exactly one caller, which then (outside the lock) publishes `approve_done`, the
      immediate `agent_result` for a deny ("denied in Nixi"), and the `sends_log` line for a `click_only(cmd)`
-     command (`allow`/`deny`/`timeout`/`released`/`cancelled`). `answer(aid, ans, keyed)`: `ans` must be `yes`/`no`;
+     command, with #219's values only: `allow`, `deny`, or `timeout` for every no-answer end (expired, released,
+     cancelled). `answer(aid, ans, keyed)`: `ans` must be `yes`/`no`;
      `yes` needs `keyed`; `always` is refused. `release(aid)` → `released`.
    - **The wait:** the handler thread loops `ev.wait(min(0.5, remaining))` until the item is finished or the
      deadline (then `_finish(..., "expired")`). Between slices it checks the hook's socket: `select([conn], [], [conn],
@@ -229,16 +233,25 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
    a `ThreadingHTTPServer` handler thread blocks for up to 60 s (as `/api/approve` already does for 600 s), so
    never hold a lock while waiting.
 
-4. **The key on Nixi's own click-only cards** (codex). `app/server.py`: in `Approvals.ask`, `item["click"] = co`
+4. **The key on Nixi's own click-only cards** (codex). First rebase onto what actually merged for #219: its heads
+   moved in round 3 (for example `$` and backticks count as a send, and `<<` or a newline logs no recipient), so
+   re-find `Approvals.ask`, `ask_bridge`, `answer`, `click_only`, `send_detail`, `sends_log` and
+   `tests/test_approvals.py` by name at that point, and read the merged `ask` before editing it.
+   `app/server.py`: in `Approvals.ask`, `item["click"] = co`
    right after `item = {...}`; in `ask_bridge`, `item["click"] = confirm == "click"`; `Approvals.answer(self, aid,
    ans, keyed=False)`: if `it.get("click")`, refuse `always` outright (return False; the card stays) and refuse an
    unkeyed `yes`, before setting `ans`. `ask_bridge` also publishes `always=False` when `confirm == "click"`. Extend `tests/test_approvals.py`: a gog-send card and a bridge `confirm:"click"` card are not
    approved by an unkeyed yes (still pending, then `sends.log` says `timeout`), are approved by a keyed yes, are
    denied by an unkeyed no, and refuse `always` keyed or not (including a bridge card whose options contain
    `allow_always`); a plain command card still takes an unkeyed yes.
-   → verify by `python -m unittest tests.test_approvals -v` and the whole suite (below).
-   Traps: the only #219 lines touched are the one `item["click"]` line and `answer`'s signature; Trust/Root's
-   bypass and `can_always` stay as #219 wrote them.
+   **Changed on purpose, in the same step:** #219's test "an always answer counts once" becomes "always on a
+   click-only card is refused and the card stays pending" (then times out unless a keyed yes or a no comes).
+   `ask`'s own `ans == "always" and not can_always` → `"yes"` line stays for plain chained commands, which are not
+   click-only. New test: every `sends.log` line written in `test_approvals` and `test_agent_approvals` has
+   `decision` in exactly `{"allow", "deny", "timeout"}`.
+   → verify by `python -m unittest tests.test_approvals tests.test_agent_approvals -v` and the whole suite (below).
+   Traps: the only #219 lines touched are the one `item["click"]` line, `answer`'s signature and guard, and the one
+   test above; Trust/Root's bypass, `can_always` and the `sends_log` values stay as #219 wrote them.
 
 5. **The launcher** (codex). `bin/nixi-companion`, after the `attention` block, the same Python-in-shell style and
    the same `runtime.json` lookup and `target` code (factor nothing out of `attention`; copy the 10 lines):
@@ -350,16 +363,22 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
 
 (filled in during step 1)
 
-## For the user to decide before approval
+## Changed on purpose
 
-1. **The approved and denied reactions.** The spec says the reactions slice plays them, but #208's approved plan
-   puts "approved, denied, coding" out of its scope. This plan therefore shows them with what exists today: a tick
-   line, `poke('joy')` or `poke('sad')`, and a red line for "ran after you denied". Recommended: accept that, and
-   add props later in a reactions follow-up if wanted.
-2. **The browser fallback.** The page claims the key whether it runs in the window or in the browser fallback,
-   whichever loads first in a run. The spec's parenthetical said approvals never turn on in the browser fallback,
-   but with the key now required for #95/#219 cards, that would make sends unapprovable there. Recommended: let the
-   fallback page claim it.
+- **#219's always→yes downgrade on click-only cards** (step 4). #219 counts "always" on a click-only card as one
+  yes. This plan refuses it and the card stays pending, because "always" must never be an approval for a send, and
+  a refused answer is the stricter, simpler rule now that a yes needs the key. #219's test is updated in step 4.
+  Its `sends.log` values stay exactly `allow`, `deny` and `timeout`.
+- **The spec's browser-fallback parenthetical** (§3 said approvals never turn on there): see recommendation 2.
+
+## Recommendations recorded for approval
+
+1. **Approved and denied reactions.** #208's approved plan puts "approved, denied, coding" out of its scope, so
+   this plan shows them with what exists today: a tick line, `poke('joy')` or `poke('sad')`, and a red line for "ran
+   after you denied". Recommended: accept that; props can come in a later reactions follow-up.
+2. **The browser fallback claims the key.** The page claims it in the window or in the browser fallback, whichever
+   loads first in a run, because with the key required for #95/#219 cards, a fallback that can't claim it could
+   never approve a send. Recommended: let the fallback page claim it.
 
 ## Reviews (2026-11-07)
 
