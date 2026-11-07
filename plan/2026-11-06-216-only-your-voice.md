@@ -293,3 +293,7 @@ Expected: all of these pass. The full suite matches `origin/main` apart from the
   - The mic note is reset only when the "is gone" note was the last one, so a silent mic isn't noted again by every
     session.
   - An `[ignore]` reply clears `HeardCounts.last`.
+- **Codex PR review on snowflake#61**:
+  - `HeardCounts` tracks which turn `last` belongs to, so "not you" stops only that turn, never a later typed one.
+  - A count that arrives within the minute schedules one save 60 s later, instead of waiting for the next count.
+    SIGTERM still isn't handled; at most a minute of counts can be lost.
