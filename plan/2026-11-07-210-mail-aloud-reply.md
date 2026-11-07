@@ -561,6 +561,12 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   `DEFAULTS` and `NOTIFY_FLAGS`), and Settings (a `reactSw` row after Proactive). #210's page edits stay out of the
   character's SVG tree.
 
+- **Step 1 (coder):** two existing tests pin the whole derived list, so they gain the new entry: "the Mechanic shell
+  list is exactly this (#96)" (`Bash(*runtime.json*)`) and the OpenCode secret-denies test
+  (`*nixi-companion/runtime.json`). No #219 test changed. The Codex guide doesn't read `SECRET_PATHS`: it refuses Codex
+  at Guide outright (`bridge/bridge.js:591-608`, `CODEX_GUIDE_REFUSAL`), so there's no list to extend. Nothing changed
+  there.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
