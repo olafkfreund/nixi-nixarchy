@@ -170,7 +170,9 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
    installed in step 9, and `/api/agent-approve` refuses its `from`. P2 picks the wording of "Answer in the
    terminal" (the button is kept either way). P9 fixes the result key and the exit-code path for step 5. agy's
    `PreInvocation` working signal is checked in step 10. Afterwards: `rm -rf "$P"` (the `mktemp` path only).
-   → verify by: every row has a recorded outcome below, backed by its own log directory, and the user has seen them.
+   → verify by: every row has a recorded outcome below, backed by its own log directory, and the user has seen them;
+   and `sha256sum ~/.claude/settings.json ~/.codex/config.toml ~/.codex/hooks.json ~/.gemini/config/hooks.json`
+   taken before the first case and after the last are identical.
    Traps: never edit `~/.claude/settings.json`, `~/.codex/config.toml`, `~/.codex/hooks.json` or
    `~/.gemini/config/hooks.json`; never copy `auth.json`; never `pkill -f` a pattern, use the pid file; one batched
    session, one control request (memory: don't repeat live tests).
