@@ -598,6 +598,56 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   - The stage-event caption path also skips an empty `stageText`, not only `dismiss`.
   - The Mail settings block sits after "Say out loud", away from #208's Proactive row.
 
+- **Step 6.2 (review fixes, `4fb7bb8`):** Cancel now acts only on the current draft's id, or on `"pending"`, which
+  the page sends when a card closes while a Review is still on its way. A stale id does nothing, so it can't void a
+  newer Review. This replaces the step 4 rule above, where any non-empty id raised `DRAFT_GEN`.
+
+## Implementation reviews (2026-11-07)
+
+These reviewed the code diff against this plan. Their findings approve nothing. The reviewers were a fresh Opus agent
+given only this plan and the diff, Codex (`gpt-6.1-sol`, read-only through `agent-review`), and agy (model not
+reported, read-only `--mode plan`, given the plan decisions, the nixi diff and the snowflake `app/` diff).
+
+**Confirmed and fixed in `4fb7bb8`:**
+
+- A summary already queued kept playing after Mail was switched off or its board closed (Codex P1, Opus #1). The
+  check before queueing and the sid registration are now one locked step. Playback also checks `MAIL_GEN`, `mail_on`
+  and that a mail board is up.
+- Orphan drafts (Codex, Opus #7): a card closed mid-Review, or a Review answer the page ignores, left a draft that
+  blocked capture. An expired draft also blocked capture.
+- A send that ran but printed something that isn't JSON was reported as an error, inviting a second send. It now
+  answers "unknown" (Opus #3).
+- An address starting with `-` became a flag-shaped argv value after `--to` (Opus #4).
+- `mail_send` held `MAIL_LOCK` while `gog auth list` ran, for up to 20 s (Opus #5).
+- Reply-all refused a message with an empty or `undisclosed-recipients:;` To (Opus #6).
+
+**Confirmed, not fixed (accepted limits, for the user to see):**
+
+- Synthesis writes a temporary WAV for every engine (`synth`, `tempfile.mkstemp`), and espeak gets the text as an
+  argument (Codex #4). That's the shared speech path this plan chose with `local=True`, and step 3 forbids a new engine
+  path. The file is deleted afterwards. A crash mid-synthesis could leave it in `/tmp`.
+- `sends.log` records an empty `to` when the subject holds `$` or a backtick, because #219's `send_detail` blanks
+  recipients when it sees an expansion (Opus #2). It fails safe (no body or subject logged), and #219's code isn't
+  edited here.
+- A mail list started with no board up can still publish if another board opened and closed in the meantime
+  (`current() is before` sees `None` again; Codex P2 #3). It's the same pattern as `day_stage`, and only shows mail the
+  user asked for.
+- With no model, or a failed model, the row shows "I couldn't summarise that one" under the subject, which the row
+  always shows. The plan says "the subject only" (Opus).
+- The draft subject is cleaned but not scrubbed, so a code that the board hid can show on the reply card (Opus). The
+  plan says "the cleaned subject".
+- Mail is silent in a meeting only while Proactive is on, because `Ambient.meeting` is set only then (Opus). That's the
+  same as for notifications.
+- While an agent has desktop control through ai-mirror, it can see the board and click Send. That's outside this plan,
+  and #219's click-only cards have the same gap (Opus).
+
+**Refuted (agy):** it says `click_only` "verifies `e.isTrusted` and an allowed `pointerType`". It doesn't. It's #219's
+command-string guard, and the page listener checks the click. It also cites `app/stores.py`, which doesn't exist (the
+file is `app/stages.py`). agy found no defect.
+
+**Not verified:** the native window's `pointerType`, `gog`'s real send output and threading, Ollama's logging, and how
+`gog` parses a flag-shaped value.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
