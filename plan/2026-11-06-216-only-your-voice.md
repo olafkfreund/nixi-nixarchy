@@ -272,3 +272,13 @@ Expected: all of these pass. The full suite matches `origin/main` apart from the
     Barge isn't shown separately.
   - The coder first listed `notme` in `NX_MENU`, which would have hidden it in nixi mode, the bridged build. I fixed
     that and added a test that fails if it's listed there again.
+- **Review fixes** (nixoarchy-snowflake, the commit after the step 4 commit):
+  - The week's line counts `sent` only. `ignored` is a subset of `sent`.
+  - `mic_cmds(check=False)` is used for `/api/state` and `doctor`: no `pactl` call, no note. `list_mics()` has a 3 s
+    timeout.
+  - An ALSA-style name (with `:`) skips the Pulse check.
+  - "Not you" while a turn is still running calls `stop_proc()` before "Sorry.". The plan didn't cover a turn still
+    in progress.
+  - `media_playing()` now runs after the stop and not-me checks. Stop barges no longer carry `path` or `media`; the
+    page only uses `heard` for barges that listen.
+  - The English not-me phrases always count, as the stop words do. A curly apostrophe is normalised.
