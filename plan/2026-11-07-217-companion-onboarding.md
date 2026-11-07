@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 217
 spec: spec/2026-11-07-217-companion-onboarding.md
 coders:
