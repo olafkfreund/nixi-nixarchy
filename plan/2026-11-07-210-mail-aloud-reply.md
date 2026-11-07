@@ -581,6 +581,12 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   page's speech ids, so a summary never plays ahead of queued page lines. A speech error for a mail sid prints only the
   class name.
 
+- **Step 4 (Codex):** #219's `click_only(cmd)` and `send_detail(cmd)` take a shell command string, not an argv list.
+  The send calls them with `shlex.join(argv)` of the exact argv that runs, and the spy test checks that. They're still
+  called by name and not edited. Cancel increases `DRAFT_GEN` for any non-empty draft id, so a request still fetching
+  can't install a draft after Cancel. The recipient limit counts `to` plus `cc` after reply-all removes your own
+  addresses.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
