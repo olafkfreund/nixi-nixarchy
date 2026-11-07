@@ -1,0 +1,137 @@
+---
+status: draft
+issue: 219
+spec: spec/2026-11-07-219-gog-sends-click.md
+coders:
+  1: codex   # small, tricky matching logic where a miss is a hidden send
+  2: coder   # wiring the predicate into known guard points, plus tests
+  3: coder   # two small QML guards
+  4: coder   # the companion side, several pieces in one file plus a new test
+reviewers:
+  - codex    # read-only review of the whole diff, looking for a path that skips the click
+  - agy      # a second, independent read of the same diff
+---
+
+# Plan: sending with gog needs a click
+
+## Decisions carried over from the approved spec
+
+- A **click-only** command is a herdr write or a gog send. Every guard that applies to a herdr write applies to it.
+- **A gog send** is a command that mentions the word `gog` (after removing quotes, backslashes and `\`-newlines;
+  an argv is joined with spaces) and either the word `api` or a send word: `send`, `reply`, `reply-all`,
+  `replyall`, `forward`, `fwd`, `autoreply`, `post`, `create`. Exception: the phrase `drafts create|reply|forward|
+  update` doesn't count by itself; any send word elsewhere still does; `drafts send|post` always counts.
+  False positives are accepted. A wrapper script or alias without the word `gog` is a stated residual.
+- **The audit detail** `{kind: "gog", command, to}` reads only fixed places: the gog words before the first flag,
+  kept only if on the fixed list (`send`, `gmail send`, `gmail reply`, `gmail reply-all`, `gmail forward`,
+  `gmail autoreply`, `gmail drafts send`, `chat messages send`, `api`, and the aliases `mail send`, `gmail
+  replyall`, `gmail fwd`, `gmail drafts post`, `chat messages create|post`), else `"unknown"`; `to` is the values of
+  `--to`, `--cc`, `--bcc` (`--to x` and `--to=x`); without those, for reply/reply-all/forward/drafts send/chat
+  messages send, the one positional right after the command words. Ambiguous gives `""`. No other argument is ever
+  read. A gog line has no `text` field.
+- **Bridge:** no "always" offered or matched, no YOLO auto-yes, skipped by "allow all pending", the card carries
+  `confirm: "click"`, Guide cancels as today, and every decision is audited.
+- **Nixi card:** `Y` can't answer a `confirm: "click"` card, by either route. `N` still answers no.
+- **Companion:** Ask mode asks with `confirm="click"` and never uses "always" for one. Trust and Root keep
+  `bypassPermissions` and add a `Bash`-only `PreToolUse` hook to the same `approve.py`; `/api/approve` allows a
+  non-click-only command at once in those modes and asks for a click-only one. Read-only is unchanged. A body-free
+  `DATA_DIR/sends.log` line (mode `0600`) for each click-only decision: `allow`, `deny` or `timeout`.
+- Herdr writes keep every guard they have; they gain the card's `Y` fix and, in the companion, the same guard.
+
+The spec's one unverified point was checked before this plan: with `--permission-mode bypassPermissions` and a
+`PreToolUse` hook on `Bash`, Claude Code ran the hook and obeyed its deny (the command's file was never written).
+
+## Where the work happens
+
+- Steps 1-3: nixi-nixarchy, worktree `/mnt/code/Source-home/GitHub/nixi-219`, branch `feat/219-gog-sends-click`,
+  from `origin/master` `51cfd71`.
+- Step 4: nixoarchy-snowflake, a new worktree `/mnt/code/Source-home/GitHub/nixi-219-code`, branch
+  `feat/219-gog-sends-click`, from `origin/main` `3725751`.
+- Line numbers below are from those commits.
+
+## Steps
+
+1. **`bridge/send-policy.js`** (codex). `git mv bridge/herdr-policy.js bridge/send-policy.js` and
+   `git mv bridge/herdr-policy.test.js bridge/send-policy.test.js`; update the three imports
+   (`bridge/always.js:7`, `bridge/bridge.js:18`, the test's line 3) and the comment at `always.js:17`. Keep
+   `isHerdrWrite` and `herdrWriteDetail` byte-for-byte. Add `isGogSend`, `isClickOnly` and `gogSendDetail` as in the
+   decisions above, with the residual written next to the regex as the herdr one is (`herdr-policy.js:1-6`).
+   Tests in `send-policy.test.js`, one table of commands:
+   - count, as a string and as an argv: `gog send`, `gog gmail send`, `gog mail send`, `gog gmail reply`,
+     `reply-all`, `replyall`, `forward`, `fwd`, `autoreply`, `gog gmail drafts send`, `drafts post`,
+     `gog chat messages send|create|post`, `gog api …`, `g""og gmail send`, `g\og gmail send`, `gog gmail drafts
+     create x; gog gmail send y`, and a `\`-newline split;
+   - don't count: `gog gmail list`, `gog gmail search x`, `gog chat spaces list`, `gog gmail drafts create`,
+     `drafts reply`, `drafts forward`, `drafts update`, `blog send` (word boundary), `echo gogs`;
+   - `gogSendDetail` returns the recipient for `--to a@b` and `--to=a@b`, the id for `gog gmail reply 123`, and
+     `""` when unclear; for `--body`, `--body=…`, `--body-html`, `--body-file`, `--raw-file`, `--subject` and a
+     quoted body holding a send word, no field of the result contains that text;
+   - the existing herdr cases pass unchanged.
+   → verify: `node --test bridge/send-policy.test.js`.
+   Traps: a miss is a hidden send, so when in doubt it counts. Don't touch `herdrWriteDetail`.
+
+2. **Bridge guard points** (coder). In `bridge/bridge.js`, use `isClickOnly` at `461` (`offersAlways`),
+   `541` (`herdrWrite`, renamed `clickOnly`, used at `546`, `551` and `580`), `903` (allow all pending), and for the
+   audit calls at `536`, `794` and `851`. `auditSend` (`756-768`): for a gog send write `{ts, ...gogSendDetail, cwd,
+   decision, optionKind}` with no `text`; the raw-command fallback at `758-759` stays for herdr only. In
+   `bridge/always.js:37`, `rememberable` uses `isClickOnly`. Tests in `bridge/herdr-bridge.test.js`, with its
+   existing harness: a gog send in YOLO isn't auto-approved and its card has `confirm: "click"` and no
+   `allow_always`; allow-all leaves it pending; a stored `always.json` entry for it doesn't match; Guide cancels it
+   and the audit line has no `text`; a herdr write behaves as before. In `bridge/always.test.js`: `rememberable` is
+   false for a gog send.
+   → verify: `node --test bridge/`.
+   Traps: every audit path must keep writing for herdr exactly as today; `#95` tests must stay green.
+
+3. **The card's `Y`** (coder). `Conversation.qml:1546-1556`: if `root.pendingPermission.confirm === "click"` and the
+   key is `Y`, accept the event, answer nothing, and show "click to confirm sends" the way the card shows its other
+   ticks. `WindowShortcuts.qml:14-19`: add `&& conversation.pendingPermission.confirm !== "click"` to the `Y`
+   shortcut's `enabled`. `N` unchanged.
+   → verify: `nix flake check` (the QML lint runs there) and, if the repo has a QML test harness for keys, a case for
+   each route; otherwise step 6 checks it by hand.
+   Traps: `pendingPermission` may be the empty object; guard on `.confirm` only, as `Conversation.qml:968` does.
+
+4. **The companion** (coder), in `/mnt/code/Source-home/GitHub/nixi-219-code`:
+   - `app/server.py:796`: next to `CHAINED_RE`, a `click_only(cmd)` function with the same rules as step 1
+     (herdr, or gog with `api` or a send word, the drafts exception), and `send_detail(cmd)`, the Python twin of
+     `gogSendDetail` (herdr: the pane only). A comment names `bridge/send-policy.js` as the twin.
+   - `Approvals.ask` (`server.py:830-867`), for `Bash`: when `click_only(cmd)`, skip the `self.always` lookup,
+     set `can_always = False`, never add to `self.always`, and publish `approve` with `confirm="click"`. When
+     `trust()` is `trust` or `root` and the command isn't click-only, or the tool isn't `Bash`, return
+     `{"ok": True}` at once with no card.
+   - After a click-only decision, append one JSON line to `DATA_DIR / "sends.log"`, opened with mode `0o600`:
+     `ts`, `send_detail`, and `decision` (`allow`, `deny`, or `timeout` when `item["ans"]` is `None`).
+   - `server.py:4923-4926`: for `trust` and `root`, after `bypassPermissions`, add `"--settings",
+     send_hooks_file()`, a new function beside `hooks_file()` (`4892`) that writes a `PreToolUse` hook on `Bash`
+     only, running the same `approve.py`, to its own file under `DATA_DIR`.
+   - New `tests/test_approvals.py` through `tests/nixi_env.py`, run from `tests/`: the same command table as step 1
+     for `click_only`; Ask mode gives `confirm: "click"`, no always (an `always` answer counts once) and no lookup
+     in `self.always`; a plain command is unchanged; Trust and Root allow a plain command with no `approve` event
+     and ask for a gog send; `sends.log` has one line each for allow, deny and timeout, with no body or subject
+     from the test command; `send_hooks_file()` names `Bash` only. `BUS.pub` is captured, nothing real runs.
+   → verify: `cd tests && python -m unittest test_approvals` and the full suite.
+   Traps: never a real `claude`, `gog`, `pactl` or `hyprctl` in a test; import `server` only under the throwaway
+   HOME from `nixi_env` (#176); `approve.py` with no Nixi running stays out of the way, as today.
+
+5. **Review and PRs** (me). Run both suites. Reviews: a fresh Opus reviewer on the plan and the diff, then Codex
+   and agy, read-only. Two PRs, each linking the intent, spec and plan, with `@codex review`. Record which steps
+   which coder did.
+
+6. **Deploy and check** (me). Merge both PRs, bump `nixi` and `nixi-companion` in `nixos_config`, CI, merge, post
+   on the agent bus, switch p620 from the clean worktree, restart Nixi with the live Hyprland signature. With the
+   user, in Mechanic: ask the agent to send a test mail to yourself with gog; "yes" does nothing, `Y` does nothing
+   in the Nixi card, a click sends it. In YOLO the card still appears. `sends.log` has the command and recipient,
+   not the body. In the companion's Trust mode, a gog send asks and an `ls` doesn't.
+
+## Tests
+
+```bash
+cd /mnt/code/Source-home/GitHub/nixi-219 && node --test bridge/ && nix flake check
+cd /mnt/code/Source-home/GitHub/nixi-219-code/tests && python -m unittest discover -p 'test_*.py'
+```
+
+All pass. `test_character_fit` can be flaky under load; rerun it alone before treating it as a failure.
+
+## Rollback
+
+Revert the two PRs and bump the inputs back. `sends.log` lines and old `always.json` entries are left as they are;
+nothing else is stored.
