@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 216
 intent: intent/2026-11-06-216-only-your-voice.md
 ---
