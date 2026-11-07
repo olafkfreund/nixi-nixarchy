@@ -145,6 +145,9 @@ new AgentSideConnection((conn) => ({
       // PLEASE_HERDR: a Bash call that types into another session (#95).
       : text.includes("PLEASE_HERDR") ? { toolCallId: "t5", title: "Bash", kind: "execute",
         rawInput: { command: 'herdr agent prompt 1-2 "run the tests"' } }
+      // PLEASE_GOG: a Bash call that sends mail (#219).
+      : text.includes("PLEASE_GOG") ? { toolCallId: "t13", title: "Bash", kind: "execute",
+        rawInput: { command: "gog gmail send --to me@example.com --subject s --body secret-body" } }
       : null;
     if (toolCall) {
       const outcome = await conn.requestPermission({

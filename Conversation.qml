@@ -1544,6 +1544,12 @@ Item {
                 root.noteKeyboardActivity()
                 if (root.pendingPermission.id !== "") {
                   var bare = (event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier)) === Qt.NoModifier
+                  // A send is click-only (#219): Y is swallowed, N still answers.
+                  if (bare && text.length === 0 && event.key === Qt.Key_Y
+                      && root.pendingPermission.confirm === "click") {
+                    event.accepted = true
+                    return
+                  }
                   if (bare && text.length === 0
                       && (event.key === Qt.Key_Y || event.key === Qt.Key_N)) {
                     // A held key answers once: autorepeat is how the next
@@ -1986,8 +1992,10 @@ Item {
 
           Text {
             width: parent.width
-            visible: prompt.text.length > 0
-            text: "Clear the message box to answer with Y or N"
+            visible: prompt.text.length > 0 || root.pendingPermission.confirm === "click"
+            text: root.pendingPermission.confirm === "click"
+              ? "Click yes or no: a send can't be answered by a key"
+              : "Clear the message box to answer with Y or N"
             color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.5)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption * root.fontScale

@@ -4,7 +4,7 @@
 // commands qualify: never an edit, a herdr write, a chained command or a secret path.
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { isHerdrWrite } from "./herdr-policy.js";
+import { isClickOnly } from "./send-policy.js";
 import { shellQuote } from "./permission-detail.js";
 import { namesSecret } from "./trust-policy.js";
 
@@ -14,7 +14,7 @@ export const lockFs = { stat, rename };
 // whatever is chained after it. The same rule as the companion's CHAINED_RE (#94, S26).
 const CHAINED = /&&|\|\||[;|&<>`\n]|\$\(/;
 const commandText = (command) => Array.isArray(command) ? command.join(" ") : typeof command === "string" ? command : "";
-// An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as herdr-policy does.
+// An argv array (codex: ["bash", "-lc", "a; b"]) is joined first, as send-policy does.
 export const isChained = (toolCall) => CHAINED.test(commandText(toolCall?.rawInput?.command));
 
 export const storePath = (stateHome) => join(stateHome, "nixi", "always.json");
@@ -34,7 +34,7 @@ export function rememberable(toolCall, cwd) {
   const dir = toolCall.rawInput?.cwd ?? toolCall.rawInput?.workdir;
   if (dir !== undefined && dir !== cwd) return false;
   const key = keyOf(toolCall);
-  return Boolean(key) && !isChained(toolCall) && !isHerdrWrite(toolCall)
+  return Boolean(key) && !isChained(toolCall) && !isClickOnly(toolCall)
     && !namesSecret(toolCall.rawInput.command);
 }
 

@@ -15,7 +15,7 @@ import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret } from "./trust-policy.js";
-import { isHerdrWrite, herdrWriteDetail } from "./herdr-policy.js";
+import { isClickOnly, isGogSend, herdrWriteDetail, gogSendDetail } from "./send-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
@@ -458,7 +458,7 @@ function noticeMcpSource(params) {
 
 // #114/#116: offer a standing yes only where Nixi can safely keep it.
 function offersAlways(toolCall) {
-  if (isHerdrWrite(toolCall) || isChained(toolCall)) return false;
+  if (isClickOnly(toolCall) || isChained(toolCall)) return false;
   if (toolCall?.kind === "execute") return rememberable(toolCall, cwd);
   if (toolCall?.kind === "read" || toolCall?.kind === "search" || EDIT_KINDS.has(toolCall?.kind)) return false;
   return true;
@@ -533,22 +533,22 @@ const client = {
       if (policy.permission === "cancel") {
         refusedThisTurn = title;
         toolsInProgress.delete(params.toolCall?.toolCallId); // refused: it will not run
-        if (isHerdrWrite(params.toolCall)) auditSend(params.toolCall, null);
+        if (isClickOnly(params.toolCall)) auditSend(params.toolCall, null);
         emit({ type: "status", text: `Guide · not run: ${title}` });
         return { outcome: { outcome: "cancelled" } };
       }
       // A herdr write skips YOLO's auto-yes: the click is the only guard (#95).
-      const herdrWrite = isHerdrWrite(params.toolCall);
+      const clickOnly = isClickOnly(params.toolCall);
       const secret = policy.permission === "yolo" && await touchesSecret(params.toolCall, cwd);
       if (policy.permission === "yolo" && currentPolicy().permission === "cancel") {
         refusedThisTurn = title;
         toolsInProgress.delete(params.toolCall?.toolCallId);
-        if (herdrWrite) auditSend(params.toolCall, null);
+        if (clickOnly) auditSend(params.toolCall, null);
         emit({ type: "status", text: `Guide · not run: ${title}` });
         return { outcome: { outcome: "cancelled" } };
       }
       if (secret) emit({ type: "status", text: "YOLO · asks: secret path" });
-      if (policy.permission === "yolo" && currentPolicy().permission === "yolo" && !herdrWrite && !secret) {
+      if (policy.permission === "yolo" && currentPolicy().permission === "yolo" && !clickOnly && !secret) {
         const outcome = choose(options, "allow_once");
         if (outcome.outcome.outcome === "selected") emit({ type: "status", text: `YOLO · ${title}` });
         return guarded(params.toolCall, outcome, options);
@@ -577,7 +577,7 @@ const client = {
       const summary = params.toolCall?.rawInput?.description;  // plain words for the companion's question (S26)
       emit({ type: "permission", id: requestId, title, options, detail, omitted,
         ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
-        ...(herdrWrite ? { confirm: "click" } : {}),
+        ...(clickOnly ? { confirm: "click" } : {}),
         // the exact command, so a client can check it is the one it asked for (companion stages, #144)
         ...(typeof params.toolCall?.rawInput?.command === "string" ? { command: params.toolCall.rawInput.command } : {}) });
       return new Promise((resolve) => {
@@ -755,13 +755,14 @@ async function steer(text) {
 let sendsLogChecked = false;
 function auditSend(toolCall, picked) {
   const command = toolCall?.rawInput?.command;
-  const detail = herdrWriteDetail(toolCall)
-    || { pane: "", text: String(Array.isArray(command) ? command.join(" ") : (command ?? "")) };
+  const gog = isGogSend(toolCall);
+  const detail = gog ? gogSendDetail(toolCall) : (herdrWriteDetail(toolCall)
+    || { pane: "", text: String(Array.isArray(command) ? command.join(" ") : (command ?? "")) });
   try {
     const path = join(learnedDir, "sends.log");
     mkdirSync(learnedDir, { recursive: true });
     appendFileSync(path, JSON.stringify({
-      ts: new Date().toISOString(), ...detail, text: detail.text.slice(0, 500), cwd,
+      ts: new Date().toISOString(), ...detail, ...(gog ? {} : { text: detail.text.slice(0, 500) }), cwd,
       // No picked option = cancelled (Guide, shutdown, trust change, an unknown id).
       decision: !picked ? "cancelled" : String(picked.kind).startsWith("allow") ? "allow" : "deny",
       optionKind: picked?.kind || "cancelled",
@@ -791,7 +792,7 @@ function answerPermission(message) {
     pending.resolve(guarded(pending.toolCall, select(pending.options, String(message.optionId || "")), pending.options));
   }
   if (!String(picked?.kind || "").startsWith("allow")) toolsInProgress.delete(pending.toolCall?.toolCallId);
-  if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, picked);
+  if (isClickOnly(pending.toolCall)) auditSend(pending.toolCall, picked);
   emit({ type: "status", text: String(picked?.kind || "").startsWith("allow") ? "Working…" : "Tool denied" });
 }
 
@@ -848,7 +849,7 @@ function cancelAllPendingPermissions() {
   for (const [id, pending] of pendingPermissions.entries()) {
     pendingPermissions.delete(id);
     toolsInProgress.delete(pending.toolCall?.toolCallId);
-    if (isHerdrWrite(pending.toolCall)) auditSend(pending.toolCall, null);
+    if (isClickOnly(pending.toolCall)) auditSend(pending.toolCall, null);
     pending.resolve({ outcome: { outcome: "cancelled" } });
   }
 }
@@ -900,7 +901,7 @@ async function applyTrustMode(targetTrust = trust) {
 async function allowAllPendingPermissions() {
   if (effectiveTrust() !== "mechanic") return;
   for (const [id, pending] of [...pendingPermissions.entries()]) {
-    if (isHerdrWrite(pending.toolCall)) continue; // still needs its own click (#95)
+    if (isClickOnly(pending.toolCall)) continue; // still needs its own click (#95)
     if (await touchesSecret(pending.toolCall, cwd)) continue; // so does a secret (#127)
     // The check awaited: the card may have been answered, or the trust level left.
     if (!pendingPermissions.has(id) || effectiveTrust() !== "mechanic" || permissionMode !== "yolo") continue;
