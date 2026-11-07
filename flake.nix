@@ -153,6 +153,41 @@
           assert !(builtins.tryEval (builtins.deepSeq inStore.xdg.configFile."nixi-companion/peers.json".text true)).success;
           pkgs.runCommand "nixi-hm-companion-peers" { } "touch $out";
 
+        hm-companion-echo-cancel =
+          let
+            eval = extra: (nixpkgs.lib.evalModules {
+              modules = [
+                (self.homeModules.default)
+                ({ lib, ... }: {
+                  options = {
+                    assertions = lib.mkOption { type = lib.types.listOf lib.types.raw; default = [ ]; };
+                    home = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; default = { }; };
+                    programs = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    systemd = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.attrsOf lib.types.raw); default = { }; };
+                  };
+                  config._module.args.pkgs = pkgs;
+                  config.services.nixi = {
+                    enable = true;
+                    companion = {
+                      enable = true;
+                      package = pkgs.hello;
+                    } // extra;
+                  };
+                })
+              ];
+            }).config;
+            off = eval { };
+            on = eval { echoCancel.enable = true; };
+            conf = "pipewire/pipewire.conf.d/61-nixi-echo-cancel.conf";
+            text = on.xdg.configFile.${conf}.text;
+          in
+          assert !(off.xdg.configFile ? ${conf});
+          assert pkgs.lib.hasInfix "nixi-echo-cancel-source" text;
+          assert pkgs.lib.hasInfix "monitor.mode = true" text;
+          assert pkgs.lib.hasInfix "nofail" text;
+          pkgs.runCommand "nixi-hm-companion-echo-cancel" { } "touch $out";
+
       });
 
       formatter = forAllSystems (pkgs: pkgs.nixpkgs-fmt);
