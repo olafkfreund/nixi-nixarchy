@@ -90,12 +90,8 @@ Rebuild. The card and the bar button are turned on for you on the first switch
 
 ![The snowflake companion answering a question: Nixi pops up, hears "How do I install Firefox?" and answers](docs/media/companion.gif)
 
-A small snowflake that lives on your desktop, listens ("hey Nixi") and talks
-back. It is a fork of [Void](https://github.com/PLAYER99-void/void) and asks
-the agent **only through Nixi's bridge**, so it follows the card's trust level:
-Guide changes nothing, Mechanic asks first and can be undone, secrets stay
-blocked. It reads that level when it starts: after changing it in the card, run
-`nixi-companion restart` ([#146](https://github.com/olafkfreund/nixi-nixarchy/issues/146)).
+A small snowflake that lives on your desktop, listens ("hey Nixi") and talks back.
+It asks the agent only through Nixi's bridge, so it follows the card's trust level.
 
 ```nix
 {
@@ -112,69 +108,7 @@ blocked. It reads that level when it starts: after changing it in the card, run
 }
 ```
 
-Run `nixi-companion` to show or hide it, or bind it to a key, for example in
-`~/.config/hypr/bindings.lua`:
-
-```lua
-o.bind("SUPER + ALT + S", "Nixi companion: show or hide", "nixi-companion")
-o.bind("SUPER + ALT + SHIFT + S", "Nixi companion: listen", "nixi-companion listen")
-```
-
-What this build leaves out: Void's own Claude runner and trust modes, its
-self-updater, autostart, plugin toggle, conversation history, screenshots and
-live view, and its folders, projects and memory: like the card, it always works
-from Nixi's own directory, and Nixi keeps its own learned facts. Its little
-terminal shows each step's title but not its output.
-Voice models download to `~/.cache` the first time you talk to it. Its own settings live in `~/.config/nixi-companion`.
-
-**On the desktop** (Settings → Desktop; nothing happens until you turn on the first two):
-
-| Switch | What it does |
-|---|---|
-| Desktop companion | The master switch for everything below |
-| Show notifications through him | While he is visible, he shows your notifications instead of the shell's popups, each with its own little reaction, and a click opens them. While a window is fullscreen, the shell shows them. One he cannot show within a few seconds (he is busy answering you, say) pops up as usual. Hide him, turn this off, or let him crash, and the normal popups are back within seconds |
-| Show the notification text | Without it he shows only the kind and the app ("New message in Teams") |
-| Notification sounds | A short sound per kind (on by default once the takeover is on) |
-| Say out loud | Which kinds he speaks: meetings only by default |
-| Tie in meetings | He wears a tie while Meeting Mode is on, or when a calendar item is a minute away |
-| Headphones for music | He wears headphones while a player is playing |
-| Shades in fullscreen | He wears shades while a window is fullscreen |
-| Notice a busy machine | A sweat drop when the CPU works hard for a while; a word when memory runs low |
-| Remind me to move | After an hour unlocked he suggests a stretch. A lock of five minutes or more counts as a break |
-| Welcome me back | After half an hour away: how many notifications came in, and your next meeting if the calendar is on |
-| Glasses while coding | After a minute in a terminal or editor. Only the kind of window is checked, never its title |
-| Nightcap at night | Between 23:00 and 05:00 |
-| Dress for the weather | An umbrella in the rain, and he loves snow (needs the weather look) |
-| Party hat on special days | New Year, Christmas, and birthdays in your calendar (needs the calendar) |
-| Little jokes | Now and then a short line about the weather, the hour or a long session; never spoken. Edit them in the companion's `app/quips.json` |
-
-Nothing watches your keyboard: "active" means unlocked, and the idle lock
-counts as a break. Nudges wait for a pause (an unlock, a workspace switch, or
-a quiet moment), and he speaks at most one of them every ten minutes.
-
-A long command can tell you it finished, when you are looking elsewhere:
-
-```nix
-{ services.nixi.companion.commandDone.enable = true; }   # bash and/or zsh via Home Manager
-```
-
-It sends "Done in 42s" (or "Failed after 42s (exit 1)") with only the command's
-first word, as an ordinary notification, so he shows it with a proud face.
-`commandDone.seconds` sets the threshold (default 30).
-Inside herdr, tmux or zellij it cannot tell whether you are watching that
-pane, so it notifies there even when you are.
-
-Notification text stays on your machine. He never logs it, never writes it to
-disk, and never gives it to the agent. Critical alerts and anything carrying a
-code (2FA, one-time passwords) keep the shell's own popup, and he never reads a
-code aloud. Nothing he says on his own opens the microphone. In a meeting he
-says nothing unasked; he still answers when you ask him something, and
-"hey Nixi" is paused.
-The takeover needs nixarchy's notification patch (903). On a shell without it,
-the popups stay as they are. The design is in
-[intent](intent/2026-10-30-133-proactive-companion.md),
-[spec](spec/2026-10-30-133-proactive-companion.md) and
-[plan](plan/2026-10-30-133-proactive-companion.md).
+Set-up, settings and troubleshooting: [the companion's README](https://github.com/olafkfreund/nixoarchy-snowflake#readme).
 
 Claude Code is Nixi's default agent: it is used whenever Omarchy has no default
 agent and you have not picked one with SUPER+,. Its adapter, `claude-agent-acp`,
