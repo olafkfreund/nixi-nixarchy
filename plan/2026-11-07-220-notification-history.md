@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 220
 spec: spec/2026-11-07-220-notification-history.md
 coders:
@@ -17,6 +17,12 @@ reviewers:
 
 This is everything needed to implement #220 in `olafkfreund/nixarchy` without opening the intent or the spec. Nixi (this
 repo) gets no code change.
+
+## Approval (2026-11-07)
+
+The user approved this plan at 67d108a ("approved") with the recommendations: the coders as listed (steps 1, 3 and 4
+coder; step 2 codex; step 5 agy), edge dispatched with `gh workflow run omarchy-edge.yml` after a bus post, and
+razer deployed after p620.
 
 ## Decisions carried over from the approved spec
 
