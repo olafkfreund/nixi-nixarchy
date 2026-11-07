@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 216
 spec: spec/2026-11-06-216-only-your-voice.md
 coders:
