@@ -587,6 +587,17 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
   can't install a draft after Cancel. The recipient limit counts `to` plus `cc` after reply-all removes your own
   addresses.
 
+- **Step 5 (coder, not agy):** `agent-run agy` failed with `{"ok":false,"tool":"agy","reason":"tool exited 2"}`, and
+  its log said verbatim: `sandbox: not a directory: /mnt/code/Source-home/GitHub/nixi-210-code`. The step went to the
+  `coder`. In the code:
+  - The Send post uses `d.draft`, the field the server returns, not `d.id`.
+  - Send is disabled after a trusted click.
+  - Closing or replacing the board posts `/api/mail/cancel` for a live draft, so a leftover draft can't block capture
+    for 10 minutes.
+  - `/api/mail/options` is fetched only while mail is on, at most every 15 s.
+  - The stage-event caption path also skips an empty `stageText`, not only `dismiss`.
+  - The Mail settings block sits after "Say out loud", away from #208's Proactive row.
+
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
