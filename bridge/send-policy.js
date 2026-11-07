@@ -37,8 +37,9 @@ export function isGogSend(toolCall) {
   // Two readings, and either counts: quotes removed (keeps a send inside ${UNSET:-$(gog …)}), and also ${…} and
   // $ removed (g$'o'g and g${X}og are gog to the shell) (#219 reviews).
   const plain = command.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  // Any shell expansion ($…, `…`) in a gog command can assemble a send word ("${U:-se}nd"), so it counts (#219 review).
   return [plain, plain.replace(/\$\{[^}]*\}/g, "").replace(/\$/g, "")].some((words) =>
-    GOG.test(words) && (API.test(words) || SEND.test(words.replace(DRAFT_ONLY, ""))));
+    GOG.test(words) && (API.test(words) || /[$`]/.test(command) || SEND.test(words.replace(DRAFT_ONLY, ""))));
 }
 
 export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall);
@@ -76,6 +77,8 @@ export function gogSendDetail(toolCall) {
   const command = start < 0 ? "unknown" : GOG_COMMANDS.find((entry) =>
     entry.split(" ").every((word, index) => tail[index] === word)) ?? "unknown";
   if (command === "unknown") return { kind: "gog", command, to: "" };
+  // A heredoc or a second line is stdin or another command, not arguments: no recipient is read from it.
+  if (typeof raw === "string" && /<<|\n/.test(raw)) return { kind: "gog", command, to: "" };
   const count = command.split(" ").length;
   const recipients = [];
   for (let i = count; i < tail.length; i++) {

@@ -176,3 +176,7 @@ nothing else is stored.
     quote-stripped text and the `${…}`-removed text. And the audit tokenizer split one shell argument
     (`--body="a "--bcc=x`) into several, so a body part could be logged as a recipient; it now keeps whole shell
     words. The Python twin already did both (raw text, `shlex`); both tests are in both repos.
+  - Codex on the PRs, round three: a send word built by an expansion (`"${U:-se}nd"`) got past detection, and
+    heredoc lines were read as recipient flags. Rather than chase shell syntax, two blunt rules in both twins:
+    a gog command containing `$` or a backtick counts as a send, and a command with `<<` or a newline logs no
+    recipient (the command name only). False positives cost a card.
