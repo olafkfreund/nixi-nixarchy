@@ -115,7 +115,7 @@ razer deployed after p620.
 ### 0. Preflight (lead, no file edits)
 
 1. Read the agent bus (`read_new` on `#agents`) and run `ListAgents`. Post this on the bus, naming `nixarchy-24`:
-   > Starting nixarchy #<N> (Nixi #220) in a new worktree `nixarchy-220` from `origin/main`. Files:
+   > Starting nixarchy #1663 (Nixi #220) in a new worktree `nixarchy-220` from `origin/main`. Files:
    > `pkgs/omarchy/904-notification-history-text.patch` (new), `pkgs/omarchy/default.nix` (one line after 903),
    > `pkgs/omarchy/nix-bin/nixarchy-home-backup`, `tests/notification-store.nix` (new), `flake.nix` (`uniformChecks`),
    > `tests/session.nix`, `tests/options.nix`, `tests/home-backup-restore.nix`, `docs/manual/secrets.md`.
@@ -130,12 +130,12 @@ razer deployed after p620.
      > load, apply retention hourly, exclude the folder from the backup, document it.
 
      Then the decisions above, and links to Nixi #220's intent, spec and plan on `docs/220-notification-history`.
-   - comment on Nixi #220: "Implemented in olafkfreund/nixarchy#<N>; this closes when that PR merges." This is the
+   - comment on Nixi #220: "Implemented in olafkfreund/nixarchy#1663; this closes when that PR merges." This is the
      approved spec's rule.
 3. Create the worktree:
    ```sh
    git -C <nixarchy checkout> fetch -q origin
-   git -C <nixarchy checkout> worktree add ../nixarchy-220 -b fix/<N>-notification-history origin/main
+   git -C <nixarchy checkout> worktree add ../nixarchy-220 -b fix/1663-notification-history origin/main
    ```
    Check first that no `nixarchy-220` directory or branch exists.
 
@@ -270,7 +270,7 @@ razer deployed after p620.
 - **`default.nix`.** Directly after 903's `patch` line (`:2025`), add:
   ```nix
                       # Only the newest notifications keep their text in history; older rows keep who
-                      # and when, and day-old cards don't come back (Nixi #220, nixarchy #<N>). CARRIED
+                      # and when, and day-old cards don't come back (Nixi #220, nixarchy #1663). CARRIED
                       # until omacom/omarchy takes it; --fuzz=0 so a bump that rewords it fails here.
                       # Sits on 902/903: same file. checks.notification-store and checks.session prove it.
                       patch -d "$out/share/omarchy" -p1 --forward --fuzz=0 < ${./904-notification-history-text.patch}
@@ -391,12 +391,12 @@ razer deployed after p620.
 2. Get a fresh Opus review with only this plan's path and `git diff origin/main`, plus Codex and agy read-only reviews
    of the diff (`reviewers:`). Fix what is confirmed.
 3. Open a PR to nixarchy `main`:
-   - it closes `#<N>`, links Nixi #220's intent, spec and plan, says which steps `coder`, Codex and agy did, and
+   - it closes `#1663`, links Nixi #220's intent, spec and plan, says which steps `coder`, Codex and agy did, and
      carries the release note;
    - comment `@codex review`;
    - check `gh pr view --json mergeable` before calling it on its way;
    - merge when CI and the reviews are clear;
-   - the PR's `Closes #<N>` closes the nixarchy issue. Close Nixi #220 then too, with a comment linking the merge (the
+   - the PR's `Closes #1663` closes the nixarchy issue. Close Nixi #220 then too, with a comment linking the merge (the
      spec's rule). Deploy and the hand check continue under this plan.
 4. **Edge.** Wait for the 06:00 `omarchy-edge.yml` run, or `gh workflow run omarchy-edge.yml --ref main` after saying
    so on the bus. Then:
@@ -508,7 +508,7 @@ Codex judged the coder routing sensible.
   - `retain` test expectations: assertion 1 already expects text only on the newest 6.
   - The `Store` import: it's at `Service.qml:16`, `import "Store.js" as Store`.
   - The missing `mkdir -p`: step 3 already says "with `mkdir -p`".
-  - The `<N>` placeholder: step 0 fills it in.
+  - The `1663` placeholder: step 0 fills it in.
   - `running: service.historyLoaded`: that's deliberate. Before the history loads there's nothing to expire.
   - The insertion point before `# ---- power`: no tool reads `session.nix` line numbers.
   - Release-note placement: merged into Codex 6, with the Discussions post added.
