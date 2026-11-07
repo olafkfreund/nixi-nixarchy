@@ -555,3 +555,35 @@ nixarchy commit it explains. The plan commit follows that commit directly.
     check's job.
   - The journal scan runs in Python with `re`, so a failing `journalctl` can't pass it by accident.
   - It evaluates, and the generated test script parses. The VM run follows the runner gate.
+- **Step 6.1, the local checks**, at nixarchy `6bb092d`. All pass: `omarchy`, `notification-store`, `patched-files`,
+  `home-backup-restore`, `options-files` ("the allowlist names 5 paths and excludes 5"), `docs-lists` and `session`.
+  - The first `session` run failed before the VM started, on the driver's lint: F811, a second `import shlex`
+    (`session-journal.py` already imports it). Fixed in `539cd30`.
+  - The final `session` run printed all three #1663 lines, and had no `Unable to assign` line.
+- **Step 6.2, the reviews of the diff:**
+  - **Fresh Opus agent**, given the plan and the diff only. 1 finding already fixed, 4 confirmed and fixed in
+    `6bb092d`, and 1 information note. Each was checked against the code:
+    1. F811 lint: already fixed in `539cd30`.
+    2. The VM's stale-live-card check would pass without the patch. A normal card expires into history during the
+       75-second wait, so it leaves `live.json` anyway. Confirmed. The stale card is now critical, and history is
+       asserted not to hold it.
+    3. The Node check didn't show the default clock *keeps* a fresh row: a NaN cutoff would pass. Confirmed, and an
+       assertion was added.
+    4. A late card closing during the quiet-mode loop would shift the window, a flake risk. Confirmed as plausible.
+       The loop now waits for `count` to read 0 first.
+    5. The manual's `jq` checked only `body`. Confirmed. It now checks all five fields, and still skips `[redacted]`.
+    6. Information only: there were no deviation entries for steps 4-5. The agent read the plan before `7bc7ad7`
+       added them.
+  - **Codex** (`gpt-6.1-sol`, `review --base origin/main`): "No actionable regression was identified in the diff."
+  - **agy** (model not reported): 9 findings, all refuted.
+    - The `parseLive` default clock "breaking callers": the default is the production path (`Service.qml:1360`), and
+      it is tested.
+    - A redacted placeholder mismatch: `notification-store` passes with exactly that placeholder.
+    - `git init -b` on old git: the check passed with the pinned git.
+    - The check not registered: it builds as `checks.notification-store`.
+    - A leftover "three things" comment: the only remaining "three" is unrelated, at `:232`.
+    - A missing end-of-file newline: the file ends with `0a`.
+    - Temp-dir cleanup: the `runCommand` sandbox handles it.
+    - "Unused" `re` and `FIELDS`: both are used.
+  - `git diff --check` flags blank context lines in `904…patch`. Those are part of a unified diff's format, and 902
+    and 903 carry them too.
