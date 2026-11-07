@@ -135,8 +135,8 @@ on the user's machines.
   `Cache-Control: no-store`, one line covering every API answer, so the window's browser
   profile doesn't keep `state_info`, and the art in it, on disk. That covers the HTTP cache only;
   the page holds the art in memory while it runs.
-- **Not yet covered: home backups and sync** (open question 3). Until they're answered, "only
-  in that folder" means "only in that folder and wherever the home folder is copied".
+- **Home backups and sync:** the user confirmed `~/.local/share` isn't backed up or synced off the machine, so
+  "only in that folder" holds. If a backup is added later, it must leave this folder out.
 - **Fit-checking it stays local.** `node tests/character_fit.mjs <port> <url> char plug:you`
   (`tests/character_fit.mjs:1-3`) runs on the user's machine against the live folder. CI tests
   a synthetic fixture: a plain circle with two dots. No screenshot of "You" goes in
@@ -220,10 +220,10 @@ This needs #208's reaction player and calm gate. Slice B waits for #208 to merge
 - **The likeness already sits in a public repo, so the privacy rule isn't met today.** `mockups/206/claude-react.json`,
   `characters.html` and `reactions-brief.md`, pushed on `feat/206-character-friends` of the
   public nixi-nixarchy, hold the drawn "me" art and a written description. The intent's text
-  describes it too. This spec stops further publishing. Removing what's there is separate
-  (open question 2). Deleting the files leaves the history, and any copy already fetched,
-  readable.
-- **Home backups and sync** copy the folder wherever they go (open question 3).
+  describes it too. This spec stops further publishing. The user had the history rewritten (see Decided);
+  the old commits stay reachable by hash until GitHub support purges them, and any copy already fetched
+  stays readable.
+- **Home backups and sync** would copy the folder wherever they go. None today (see Decided).
 - **Face art over the eyes:** the template's face box is the Devil's, so art drawn inside it
   hides the eyes. The local `char plug:you` run checks it.
 - **#208 not specced yet:** slice B depends on #208's reaction IDs, gate, player and its
@@ -302,8 +302,8 @@ from `origin/main` 8f2275e, read-only. Their findings don't approve anything.
   ready-made derivations (`nix/plugin.nix`, `hm-module.nix:31`). §2 no longer claims it keeps
   the art out of the store.
 - The published mockups break the privacy rule today. It is now a risk, not a footnote.
-- `no-store` and backups belong in the privacy design. `no-store` moves into §2; backups stay
-  open question 3, and §2 says what they leave uncovered.
+- `no-store` and backups belong in the privacy design. `no-store` moves into §2; backups were
+  answered by the user (see Decided).
 - Sanitiser reasons can carry content (`plugins.py:446`, `:466`, `:478`). Private plugins get
   fixed error strings.
 - Reaction replay, an injected `reaction` field, and several matching plugins: now handled by
