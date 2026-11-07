@@ -513,3 +513,32 @@ Codex judged the coder routing sensible.
   - The insertion point before `# ---- power`: no tool reads `session.nix` line numbers.
   - Release-note placement: merged into Codex 6, with the Discussions post added.
   - Rollback commands: `nixos-rebuild switch --rollback` is given.
+
+## Deviations during implementation
+
+Code is in `olafkfreund/nixarchy`, and this plan is in Nixi, so the two can't share a commit. Each entry names the
+nixarchy commit it explains. The plan commit follows that commit directly.
+
+- **Dispatch.** The `team` skill would not load ("Unknown skill: team"). Steps go out by hand, following `coders:`:
+  - the `coder` subagent for steps 1, 3 and 4, kept as one agent;
+  - `agent-run codex` for step 2;
+  - `agent-run agy` for step 5.
+
+  The lead reviews every diff, runs every build and makes every commit.
+- **Step 0:** the nixarchy issue is #1663. The worktree is `nixarchy-220`, branch `fix/1663-notification-history`,
+  from `cad0d36`.
+- **Step 1** (`133c331`, coder, plus one lead edit):
+  - Assertion 2 tests the 24-hour boundary on its own three-row array. The 6-row cut is already covered by
+    assertion 1's exact per-row checks.
+  - The coder's `row()` gave `ts` the same order as `closed_ts`. The lead changed it to `ts = now - 3*H + age`, so
+    arrival runs opposite to closing as the plan requires, and gave the `parseLive` rows explicit ages.
+  - The check fails before the patch with `1: h6 loses summary`.
+- **Step 2** (`7f70732`, Codex): the patch is byte-identical to the prototype. Codex couldn't read the scratchpad
+  copies, and used a matching Nix store copy of upstream to prove 902+903+904 apply at `--fuzz=0`. The lead built
+  `omarchy`, `notification-store` (now passing) and `patched-files`.
+- **Step 3** (`80ca85b`, coder):
+  - The backup list's comment now says "five things", since four exclusions already existed before this one.
+  - The comment above the `options.nix` never-list no longer gives a number.
+  - `home-backup-restore` passes.
+  - `options-files` needs a committed tree (`installer/mkFlake.nix`), and it is VM-tier, so it waits for the runner
+    gate.
