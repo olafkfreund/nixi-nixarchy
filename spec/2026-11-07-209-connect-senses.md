@@ -61,7 +61,7 @@ Nix module in this repo (`nix/hm-module.nix`) doesn't change either.
   which wait for the next allowed moment. Other kinds keep the 10 minutes.
 - **Not a typing check.** The breakpoint is an unlock, a workspace switch, or 20 seconds without Hyprland events
   (`server.py:2102`, `Desk.on_event`, `:2540`), and nothing watches the keyboard, as the settings promise
-  (`index.html:882`). The intent's "never during typing" isn't met by this. See open question 7.
+  (`index.html:882`). The intent's "never during typing" isn't met by this. Decided: the existing breakpoint (see Decided).
 
 ### 2. Machine senses
 
@@ -226,23 +226,24 @@ Four plans and PRs under this one spec, in this order. Each needs the one before
 - On p620, by hand: toggle DND and see a pending reminder wait; stop a test user unit; play a song, a YouTube video in
   each browser and a file in mpv.
 
+## Decided (2026-11-07, by the user)
+
+- **Splitting:** four plans and PRs, in the order under Splitting.
+- **"Never during typing":** the existing breakpoint is the idle pause: an unlock, a workspace switch, or 20 seconds
+  without Hyprland events. No keyboard or compositor idle signal is added. The setting's hint is reworded only if it
+  promises more than that.
+
 ## Open questions
 
-1. **Splitting:** four plans in the order above? Recommended: yes.
-2. **Which reaction does each new sense use?** The intent's table has system error, storm and "hot and sunny", but no
+1. **Which reaction does each new sense use?** The intent's table has system error, storm and "hot and sunny", but no
    disk or offline entry. Recommended: failed unit and offline use `error`; disk uses `memory`'s overflowing box;
    storm and heat get their own. #208 draws them.
-3. **A host going down:** react too, or only to a host coming online? Recommended: only coming online, seen as down
+2. **A host going down:** react too, or only to a host coming online? Recommended: only coming online, seen as down
    then up, so hosts already up at startup aren't announced.
-4. **Is "drink water" in this slice?** The intent lists it under Breaks, but slice 8.3 names only the workout schedule
+3. **Is "drink water" in this slice?** The intent lists it under Breaks, but slice 8.3 names only the workout schedule
    and snooze. Recommended: yes, it uses the same counter.
-5. **DND and an agent's "finished":** silent, as proposed, or still spoken? Recommended: silent; the caption still shows.
-6. **Thresholds:** disk 90%, hot 28 °C, water 45, 60 or 90 minutes, news every 30 minutes. Change any?
-7. **"Never during typing":** the intent asks for it, but nothing watches the keyboard, and the settings promise
-   that. Recommended: accept the existing breakpoint (20 seconds without window events, an unlock or a workspace
-   switch) as the idle pause, and reword the setting's hint only if that's wrong. The other way is an idle signal from
-   the compositor (the `ext-idle-notify` protocol, as `hypridle` uses), which this slice would have to add. Not
-   checked: whether Hyprland gives one short enough to use.
+4. **DND and an agent's "finished":** silent, as proposed, or still spoken? Recommended: silent; the caption still shows.
+5. **Thresholds:** disk 90%, hot 28 °C, water 45, 60 or 90 minutes, news every 30 minutes. Change any?
 
 Noted, not in scope:
 
@@ -260,7 +261,7 @@ draft, the intent and code excerpts from `8f2275e`. Each finding was checked aga
 - A nudge queued on the page could slip past DND: `nudgeDrain` checks `notifyIdle()`, which checks fullscreen only
   (`index.html:2439`). The gate is now checked on the page too.
 - The breakpoint isn't a typing check: `Desk.on_event` counts Hyprland events (`server.py:2540`). Now stated, and
-  open question 7.
+  decided by the user (see Decided).
 - Snooze would hit the cooldown, which drops an early repeat (`server.py:2108`). Snooze now passes it, and acts by `id`.
 - The news run is synchronous and `step` runs before `sense` (`server.py:1741`). It's now a background thread.
 - The 10-minute expiry (`server.py:2098`) contradicted "held until clear". Reminders now carry a deadline.
