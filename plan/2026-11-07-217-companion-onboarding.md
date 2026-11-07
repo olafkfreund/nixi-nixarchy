@@ -129,7 +129,7 @@ Traps for every step:
 4. **`docs/GUIDE.md`** (agy).
    - Fix the "Nixi mode" box: plug-ins load when built by Nix (`services.nixi.companion.plugins`).
    - Add the sections: messages and notifications, with the Desktop table moved verbatim from nixi-nixarchy
-     "On the desktop" table (`README.md:124-142`) and checked; characters and their voices; ElevenLabs; the fleet board; plugins; the
+     "On the desktop" table (`README.md:130-150`) and checked; characters and their voices; ElevenLabs; the fleet board; plugins; the
      companion's Nix options (every option under `services.nixi.companion` in `hm-module.nix`, with its default); and
      `commandDone`.
    - A settings reference table, with columns key, default and what it does. Only user-facing keys from `DEFAULTS`,
