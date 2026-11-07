@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 219
 intent: intent/2026-11-07-219-gog-sends-click.md
 ---
