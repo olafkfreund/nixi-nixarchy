@@ -25,6 +25,11 @@ uninstalled Meeting AI wouldn't make him deaf. It would quietly put the speaker 
   It's also printed once to stderr.
 - When `pactl` isn't there, `list_mics()` returns `[]` and nothing can be checked, so the setting is used as today.
 - When the source comes back, the next mic open uses it again, with no message.
+- **Listed, but silent.** A source can exist and still send nothing. `Wake.session()` counts frames that are exactly zero
+  from the chosen source. After 10 s of nothing but zeros, it publishes one tick: "The mic you chose (<label>) sends no
+  sound." A quiet room isn't zero: the cleaned source reads about 0.00004 with nobody talking.
+- **No recorder works.** Today `Wake.loop()` (`server.py:3284`) only prints `open_mic()`'s error to stderr and retries,
+  so he's deaf with no sign. It also publishes that error as a tick, once per new error.
 
 ### 2. Nixi's module can provide the echo canceller
 
@@ -43,12 +48,15 @@ Today the echo-cancelled source exists because Meeting AI's configuration makes 
 ### 3. "Media is playing" means any stream on the speakers
 
 New `media_playing()` in `server.py`. It runs `pactl -f json list sink-inputs` (3 s timeout, through `Ambient.run`) and
-returns true when any stream is uncorked and its `application.name` isn't `Nixi`, his own voice's `--client-name`
-(`server.py:4069`). That covers browsers, calls, `mpv` and Spotify, with or without `playerctl`, and doesn't depend on
+returns true when any stream is uncorked, isn't muted, plays on a sink that isn't muted (`pactl -f json list sinks`),
+and its `application.name` isn't `Nixi`, his own voice's `--client-name` (`server.py:4069`). That covers browsers, calls, `mpv` and Spotify, with or without `playerctl`, and doesn't depend on
 the `look_music` look. No `pactl` means "unknown", counted on its own.
 
 It's called once per heard phrase inside `Wake.check()`, after transcription, so it costs one `pactl` call per thing
 heard and nothing while the room is quiet. `Ambient.music` is left as it is, because the looks and the beat use it.
+
+This says something is playing, not that it's loud enough to reach the mic. A stream on headphones counts too. Stream
+state can't tell headphones from speakers, and the counters only need "media was playing".
 
 ### 4. Counters, and "that wasn't me"
 
@@ -69,12 +77,19 @@ No text, no audio, no time of each event. The file is written at most once a min
   words, `server.py:3130`). While he's talking, it works like "stop". Afterwards, he only says "Sorry." and stays put.
 - A "That wasn't me" entry in his right-click menu, shown only within those 2 minutes.
 
-`[ignore]` is counted where the page already holds the reply back (`server.py:6726`).
+**How an answer keeps its path.** `Wake.check()` adds `path` (`wake`, `follow`, `barge`) and `media` to the `wake` and
+`barge` events it publishes (`server.py:3384-3400`). The page passes them back unchanged as `heard` in its `/api/ask`
+body (`index.html:2973`). Asks typed or clicked carry none, and aren't counted. The server's ask handler counts `sent`.
+It counts `ignored` where its own gate drops a `[ignore]` reply (`gate["ignored"]`, `server.py:6736`). It keeps one
+slot in memory, `(path, media, time)` of the last counted ask, for `not_me`. That slot is overwritten by the next ask,
+never written to disk, and holds no text.
 
 ### 5. Later, only if needed: his name while media plays
 
 If after a working week the counters show more than about five `follow` / media `on` answers marked `not_me`, then
-while `media_playing()` is true, the follow-up window takes nothing. Only "hey Nixi" and "stop" work. That's a
+while `media_playing()` is true, the follow-up window takes nothing. His name, as `WAKE_RE` accepts it today (bare
+"Nixie" included), and "stop" while he talks still work. A video saying his name still gets through, so this only
+helps when the counters show `follow` is the path being marked. That's a
 condition in `Wake.check()` behind a setting `follow_needs_name_during_media`, default off. It's in this spec so that a
 plan can add it later without a new spec, but it needs the user's go-ahead first.
 
@@ -122,5 +137,11 @@ that is the next thing to change, under its own plan.
     minutes they mark the last phrase; after that they do nothing.
 - `nix flake check` in this repo, with the option on and off. The option on produces the conf file with
   `nixi-echo-cancel-source`.
-- On p620, by the user: a working week with the echo-cancelled source, then the settings line and `GET /api/heard`. The
-  target is at most one `not_me` a day.
+- Unit tests: a `wake` event carries `path` and `media`; an ask with `heard` counts `sent`, and an `[ignore]` reply
+  counts `ignored`; `not_me` lands on the last ask's cell. A listed source that sends only zeros publishes the tick
+  after 10 s, once. An `open_mic()` error publishes once per new error.
+- On p620, by the user, first: "hey Nixi" and "stop" with nothing playing, over a video, over music and during a call.
+  All must still work.
+- Then a working week with the echo-cancelled source. The user marks every wrong answer they notice, and keeps a rough
+  tally of ones they missed marking. The settings line and `GET /api/heard` give the rest. Target: at most one false
+  answer a day, counting marks and the tally.
