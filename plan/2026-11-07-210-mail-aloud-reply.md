@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 210
 spec: spec/2026-11-07-210-mail-aloud-reply.md
 coders:
@@ -105,6 +105,12 @@ How this plan builds on #219 and keeps it whole:
 6. **`notify_speak_subject` can reach the cloud voice.** Out of scope, noted.
 7. **`summarize_command` loads MCP servers and hooks.** Out of scope, noted.
 8. **`runtime.json` keeps mode 0600 only when it's created.** Out of scope, noted.
+
+## Approval (2026-11-07)
+
+The user approved this plan with the recommendations ("approve 210 and 211 with the recommendations, keep agy").
+That accepts every item under "Changed on purpose" and keeps agy as a coder and a reviewer. No code step starts
+until #219 (nixi #222, snowflake #65) and #208's code have merged.
 
 ## Changed on purpose, for the user to see
 
