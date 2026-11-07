@@ -117,8 +117,22 @@ How this plan builds on #219 and keeps it whole:
   in as the spec says, but `/api/capture` is already refused in nixi mode (`server.py:6673`). So today it's a second
   guard that only matters if that changes.
 - **Sends are audited in #219's `sends.log`** (command, recipients and decision, never the subject or body). The spec
-  says only that hear writes nothing. This adds one line per send, the same as an agent send. Delete this line before
-  approving if you don't want it, and step 4 then skips `sends_log`.
+  says only that hear writes nothing. This adds one line per send, the same as an agent send. It's part of reusing
+  #219's guards (step 4), so it isn't optional.
+- **The Send route is the click, not a path around `Approvals`.** `Approvals.ask` exists so that a person can answer a
+  command the *agent* wants to run. `/api/mail/send` has no agent command to answer. It runs only the draft the server
+  built, and only when the window posts the matching draft id and body. The window posts that only from a trusted
+  pointer click on Send. So the click on the card is the approval, the same click #219 requires. Nothing else reaches
+  the route:
+  - **An agent turn can't.** The route isn't in `TOOL_PATHS`, so `TOOL_TOKEN` gets 403. The agent never gets mail
+    content or the draft id. `runtime.json` is a secret path (step 1), and any `gog` Bash call stays click-only under
+    #219.
+  - **Voice and keys can't.** No voice, `quick`, stage or key handler calls it, and Space or Enter gives no
+    `pointerType`.
+  - **"Always", YOLO, allow-all and Trust/Root can't.** Those act only on `Approvals` items and bridge permission
+    cards. A mail send never creates either, so there's nothing for them to approve.
+  - **The limit, as the spec states it:** a program running as the user that reads `runtime.json` can post with the
+    full token.
 
 ## Where the work happens
 
@@ -140,6 +154,12 @@ How this plan builds on #219 and keeps it whole:
   - `index.html`: the Settings switches (`:3527`, `:3815`), where #208 adds a switch. #208's other page edits (the
     `rx*` layer, `sitStep`, the Devil, `sendRegion`) are away from this plan's stage render, `stageText`, `dismiss`, the
     menu and the reply card.
+- **Overlap with snowflake PR #65 (#219)** in `app/server.py`, at `3725751` plus #65:
+  - `click_only`, `send_detail` and `sends_log`, added next to `CHAINED_RE` (`~796`). Step 4 calls them and never edits
+    them.
+  - `Approvals.ask` (`~830-870`). This plan doesn't touch it.
+  - `send_hooks_file` and `build_cmd`'s Trust/Root branch (`~4900-5045`). This plan doesn't touch them.
+  Branching after #65 merges removes the conflict. The rule is that no step edits these regions.
   - **Rule:** steps 2 to 5 start after #208's code PR is merged, or rebase onto it before step 2. Never in parallel on
     one file. Post on the agent bus before starting step 2.
 - Coders don't commit, deploy or restart. The session model reviews, runs the check, and commits each step.
@@ -349,10 +369,12 @@ and `Desk.locked`, `Ambient.meeting` and `Speaker.say` patched:
   1. Check `mail_on`, the account in `mail_accounts()`, the id, its age under 600 seconds, and
      `text.encode() == body.encode()`.
   2. Set `MAIL_DRAFT = None` before running anything.
-  3. Build `argv = ["gog","--json","-a",acct,"gmail","send","--to",",".join(to),*(["--cc",",".join(cc)] if cc else []),"--subject",subj,"--reply-to-message-id",mid,"--body-file","-"]`.
+  3. **The send reuses #65's own `click_only`, `send_detail` and `sends_log` from `server.py`.** They're called by
+     name. They aren't copied, wrapped or re-implemented. No other code in this plan runs `gog` without `--readonly`.
+     Build `argv = ["gog","--json","-a",acct,"gmail","send","--to",",".join(to),*(["--cc",",".join(cc)] if cc else []),"--subject",subj,"--reply-to-message-id",mid,"--body-file","-"]`.
      It starts with `"gog"`, because #219's `send_detail` looks for that word.
-  4. `sends_log(send_detail(argv), "allow")` (#219) **before** running it, so a timeout or crash still leaves the line.
-     Skip this if the user deleted that decision.
+  4. If `not click_only(argv)`, refuse with `{"error": "guard"}` and run nothing. Otherwise call
+     `sends_log(send_detail(argv), "allow")` **before** running it, so a timeout or crash still leaves the line.
   5. Outside the lock, run it with `stdin=body` and `timeout=30`.
   6. Reply `{"sent": True, "thread": …}`, or `{"sent": True, "other_thread": True}` when the thread differs. On a
      `TimeoutExpired`, reply `{"unknown": True}`. On another error, reply `{"error": type(e).__name__}`.
@@ -377,6 +399,11 @@ Tests in `tests/test_mail.py`:
 - `TOOL_TOKEN` gets 403 on draft, send, cancel, hear, open and options, through the real handler;
 - a timeout gives `unknown`, and a second send of the same draft sends nothing;
 - `sends.log` has the command and addresses, and no subject or body text;
+- **#219 guards are used, not bypassed:** with `server.click_only`, `server.send_detail` and `server.sends_log`
+  patched as spies, a send calls `click_only` and then `send_detail` with the exact argv that reaches the faked
+  `subprocess.run`. It also calls `sends_log` before that run. With `click_only` patched to return `False`, the route
+  refuses and `gog` never runs. A source check fails if `test_mail.py`'s grep finds `"send"` in a `gog` argv anywhere in
+  `server.py` outside this route, or a second definition of `click_only`, `send_detail` or `sends_log`;
 - `test_approvals` and `test_no_herdr_writes` pass unchanged.
 
 **Check:** `cd tests && python3 -B -m unittest test_mail test_approvals test_no_herdr_writes test_window_token`
@@ -520,4 +547,4 @@ p620, #208's final diff, and whether the Codex guide reads `SECRET_PATHS`. No co
 ## Rollback
 
 Revert both code PRs and bump the flake again. The three settings become unused keys. Nothing else is stored, except
-the `sends.log` lines if that decision stays. Step 1's secret path can stay: it only adds a card.
+the `sends.log` lines, which #219 keeps anyway. Step 1's secret path can stay: it only adds a card.
