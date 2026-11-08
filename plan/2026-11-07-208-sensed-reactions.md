@@ -193,6 +193,9 @@ All pass. `test_character_fit`'s idle check can be flaky under load; rerun it al
   "Opening " played `open` (now only `quick._open_app`'s `opened`); the boombox's speakers pulsed under reduced
   motion; after its own Pause, a hand-closed card left the chip up and the Pause/Play button's action could differ
   from its label; "what’s playing" with a curly apostrophe still got the memory answer.
+- **PR review (Codex, confirmed and fixed):** in the default 340x460 window the card opens inside the strip with
+  160px below it, and a long answer pushed its buttons out of the window; the answer is now clamped to three lines
+  with the full text as its title.
 - **Left open (from the art, for the user to judge on p620):** `done`'s sunglasses settle over his eyes, as the
   mockup draws them (`react_fit` measures at the animation's start); `ask`'s bounce moves the clickable mark for
   its 3 s. Pause and Play still use `playerctl` without `-a`, as before #208.
