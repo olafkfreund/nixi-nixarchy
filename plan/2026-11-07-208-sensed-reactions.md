@@ -181,10 +181,21 @@ All pass. `test_character_fit`'s idle check can be flaky under load; rerun it al
   `CHARACTERS[].fits`; `react_fit` checks every in-scope id on all four characters stays in the box and off the eyes.
   A small `RX_MOOD` table names the `poke` mood per reaction. Load and memory join the sustained set when their signal
   turns on even if the animation can't play then, so the still prop shows once the blocker clears (review fix).
-- **Step 4:** with reactions on, the headphones stay off even while the boombox is hidden (a meeting, fullscreen),
-  so music then shows neither; a meeting shows the tie anyway. The card's offsets were not in the plan: `-220px` or
+- **Step 4:** The card's offsets were not in the plan: `-220px` or
   `350px` beside the strip (top `150px`), `70px` inside it (top `300px`) when neither side has room, the side chosen
   away from a board with `stagePlace`'s room check. `MEDIA_PHRASES` is a module-level set beside `NOTIFY_FLAGS`.
+- **Review (Codex, confirmed and fixed):** `setCharacter` also filled `#rim` (a `.ball` too) and covered his face;
+  Esc on the music card also reached the main handler (dismiss, interrupt, reject an approval), so it now stops
+  there; after its own Pause the card ignored a meeting; the headphones hid whenever reactions were on, even with the
+  boombox gone (Proactive off), so they now hide only while it shows. Found while fixing: step 4's comment had
+  swallowed `sitSettled=off;`.
+- **Review (Opus, confirmed and fixed):** a finish played `done` over a pending question; any handled reply starting
+  "Opening " played `open` (now only `quick._open_app`'s `opened`); the boombox's speakers pulsed under reduced
+  motion; after its own Pause, a hand-closed card left the chip up and the Pause/Play button's action could differ
+  from its label; "what’s playing" with a curly apostrophe still got the memory answer.
+- **Left open (from the art, for the user to judge on p620):** `done`'s sunglasses settle over his eyes, as the
+  mockup draws them (`react_fit` measures at the animation's start); `ask`'s bounce moves the clickable mark for
+  its 3 s. Pause and Play still use `playerctl` without `-a`, as before #208.
 
 ## Rollback
 
