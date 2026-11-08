@@ -325,7 +325,7 @@ test("OpenCode: external reads ask, secrets denied by config, search tools ask (
     "/run/agenix/*", "/run/agenix", "/run/secrets/*", "/run/secrets",
     "/run/agenix.d/*", "/run/agenix.d", "/run/secrets.d/*", "/run/secrets.d",
     "/run/secrets-for-users/*", "/run/secrets-for-users", "/run/secrets-for-users.d/*", "/run/secrets-for-users.d",
-    "*.env", "*.env.*", "*.age"]);
+    "*.env", "*.env.*", "*.age", "*nixi-companion/runtime.json"]);
   assert.deepEqual(Object.keys(denies), opencodeSecretDenies());
 });
 
@@ -580,7 +580,7 @@ test("the Mechanic shell list is exactly this (#96)", () => {
     "Bash(*.age*)", "Bash(*.aws*)", "Bash(*.azure*)", "Bash(*.claude/.credentials.json*)",
     "Bash(*.config/gcloud*)", "Bash(*.config/gh*)", "Bash(*.config/op*)", "Bash(*.config/sops*)",
     "Bash(*.docker/config.json*)", "Bash(*.env*)", "Bash(*.gnupg*)", "Bash(*.kube*)",
-    "Bash(*.local/share/keyrings*)", "Bash(*.netrc*)", "Bash(*.ssh*)",
+    "Bash(*.local/share/keyrings*)", "Bash(*.netrc*)", "Bash(*.ssh*)", "Bash(*runtime.json*)",
     "Bash(*/run/agenix*)", "Bash(*/run/agenix.d*)", "Bash(*/run/secrets*)", "Bash(*/run/secrets.d*)",
     "Bash(*/run/secrets-for-users*)", "Bash(*/run/secrets-for-users.d*)",
   ].sort());
@@ -973,4 +973,16 @@ test("sops-nix user secrets are secret paths, for every consumer (#128)", () => 
   assert.ok(claudePermissions(false).ask.includes("Read(/run/secrets-for-users/**)"));
   assert.equal(opencodePermissions(false).permission.read["/run/secrets-for-users/*"], "deny");
   assert.equal(isSecretPath("/run/secrets-for-users.d/1/x"), true);
+});
+
+test("the companion's runtime.json is a secret path, for every consumer (#210)", () => {
+  const paths = ["**/nixi-companion/runtime.json", "//**/nixi-companion/runtime.json"];
+  const { ask } = claudePermissions(false, "mechanic");
+  for (const path of paths) {
+    assert.ok(SECRET_PATHS.includes(path), `${path} is not guarded`);
+    for (const tool of ["Read", "Grep", "Glob"]) assert.ok(ask.includes(`${tool}(${path})`), `${tool}(${path})`);
+  }
+  assert.ok(secretBashRules().includes("Bash(*runtime.json*)"));
+  assert.equal(isSecretPath("/home/u/.local/share/nixi-companion/runtime.json"), true);
+  assert.equal(isSecretPath("/custom/data/nixi-companion/runtime.json"), true);
 });
