@@ -383,6 +383,20 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
   so `/api/agent-approve` refuses every `from` until the probes fill it. Step 9's nixos_config PR stays a draft
   and must not deploy before the probes. Step 10 is not done.
 
+- **Who did each step (2026-11-08).** Codex: 3, 4, 5. coder: 6, 7, 9, and 8 because agy failed the handoff:
+  `sandbox: not a directory: /mnt/code/Source-home/GitHub/nixi-211-s8` (its guard probe passed first). Codex's first
+  step 3 attempt could not read this plan from its sandbox and was discarded; the second had the plan inline.
+- **Step 9 has no companion input bump yet.** The nixos_config PR is a draft until the snowflake release with #211 is
+  in the flake; the bump goes on that branch then. Until it does, the working hooks must not deploy: the current
+  launcher treats `approve` as show/hide and the current server reads `UserPromptSubmit`/`PreInvocation` as "done".
+- **Step 9 adds `extraHooks` to `claude-code-managed.nix`.** `settings.hooks` is freeform, so a second module defining
+  `UserPromptSubmit` (claude-swarm-reaper already does) conflicts; `extraHooks` concatenates per event.
+- **Probe-dependent constants left for step 1:** `AGENT_APPROVE_FROM` and `RESULT_BY_TOOL_USE_ID` (server.py);
+  `ALLOW_JSON`, `DENY_JSON`, `RESULT_FIELDS`, `RESULT_BY_TOOL_USE_ID`, `EXIT_PATHS` (bin/nixi-companion);
+  `approveAgents` (nixos_config); the GUIDE sentence "approvals are refused for every agent until…"; the synthetic
+  fixtures in `tests/fixtures/hooks/`. P9 should also record Codex's shell `tool_name` (detail and `sends.log` key off
+  `Bash`).
+
 ## Changed on purpose
 
 - **#219's always→yes downgrade on click-only cards** (step 4). #219 counts "always" on a click-only card as one
