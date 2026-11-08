@@ -233,6 +233,36 @@ adds a `playerctl` call (it doesn't touch media); that `wkey` handling changes (
 **Not verified:** `_ServerEnv`, `test_system_status` and the fit harnesses weren't in the reviewers' files; no code
 has been written or run.
 
+## Deviations
+
+- **Started before part 1 merged** (this plan said after). Agreed with the lead: the branch `feat/209-machine-weather`
+  is stacked on part 1's `feat/209-quiet-gate` (snowflake PR #67) and is rebased with it onto #208 before merge.
+  Every step here is server-side; step 1's one `index.html` edit is the `reactLoadSw` label and hint, which #208
+  doesn't edit. #208's settings off-list still names the old label "Notice a busy machine", so the rebase must rename
+  it there. No step is held.
+- **Step 1 (Codex), beyond the plan:** turning the gate off also drops held `error`, `disk` and `offline` nudges.
+- **Step 2 (Codex) + lead:** `host` got the three quip variants `test_quips` requires (3 to 5 lines per event), and the
+  loopback round-count test pins the quip wording, since the variants are random.
+- **Step 4 review fixes (lead):** a held nudge goes when its reason does: the route coming back drops a held
+  `offline`; the gate or peers turning off drops a held `host`; the weather gate closing drops a held `storm` or
+  `hot`; `proactive` off re-arms `storm` and `hot` (`watch` doesn't run then).
+
+## Reviews of steps 1-3 (2026-11-08)
+
+Codex reported `gpt-6.1-sol`; agy reported no model. The Opus reviewer was fresh, given only this plan and the diff.
+
+- **Codex, confirmed and fixed:** a held `host` survived turning its switches off; a held `storm`/`hot` survived the
+  weather gate closing.
+- **Opus, confirmed and fixed:** a false "No network connection." after the route came back while the line was held;
+  `proactive` off left `storm`/`hot` armed. Also confirmed `host` (as Codex).
+  Noted, not fixed: `test_situation` turns `react_load` on without mocking `os.statvfs`, so it reads the real disks
+  (it asserts nothing on them); with a gauges board on screen, the 5-minute round also triggers the board's follow-up
+  round (2 rounds per 5 minutes, as the integration test expects).
+- **agy, refuted:** "a failed read (`None`) should reset the failed set" (the plan says it keeps the last set, so a
+  recovery is never a new failure; resetting would make the next read only record); "the callback can start a second
+  round" (`peer_edges` uses `current()`, and `snapshot()` starts none while one runs, `peers.py:177`). Its other
+  points are notes (lock order, quip fallback duplication), not defects.
+
 ## Rollback
 
 Revert the PR and bump back. `storm` and `hot` in `situation` are ignored by older pages; no setting is added; the
