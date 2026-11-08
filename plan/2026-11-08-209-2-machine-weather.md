@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 issue: 209
 spec: spec/2026-11-07-209-connect-senses.md
 part: 2 of 4 (machine, heat and storm; spec sections 2 and 3)
@@ -17,6 +17,16 @@ reviewers:
 
 The second of the four plans under the approved #209 spec. It adds senses only: each is an edge that offers a nudge
 through `Nudge.offer`, never a stream. No art; until #208 draws them, a new kind shows only its caption, visual only.
+
+
+## Decisions at approval (2026-11-08)
+
+The user approved this plan on 2026-11-08 ("approve 209 plans with the recommendations"). That accepts the recommendation on every open question:
+
+1. Storm and hot-and-sunny follow the weather gate only; they don't also need `react_quips`.
+2. A host reacts only when it comes back up (down → up), not on each check.
+3. Thresholds as written: disk 90% on, 85% off, on `/` and `/nix/store`; no route for 30 s; storm on codes 95/96/99; hot at 28 °C on, 26 °C off.
+4. Which art each kind uses belongs to #208 (spec Q1).
 
 ## Builds on part 1
 
