@@ -369,6 +369,20 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
 
 (filled in during step 1)
 
+## Deviations
+
+- **Step 2's gate relaxed (2026-11-08).** On the user's "keep going, close as many as we can", with the #208
+  session's agreement, as #210 did: #219 is merged (snowflake #65, nixi #222) but #208 is not. The branch
+  `feat/211-agent-approvals` is cut from snowflake `origin/main` `3cf27a6` now, and the snowflake PR stays a
+  **draft** until it is rebased onto #208. #211's edits stay away from the character SVG tree; expected #208
+  collisions (index.html `REACT`, `#body` in `<g class="whole">`, `#rx*`, the `reactSw` row; server.py
+  `reactions` in `DEFAULTS`/`NOTIFY_FLAGS`, `/api/quick`, attention reads) are resolved at that rebase.
+- **Step 1 not run yet; code steps go first (2026-11-08).** The lead runs the probes with the user later. Steps
+  3, 4, 6, 7 and 9 are done now. Step 5 and step 8 are written with every probe-dependent value as one named
+  constant marked `# set from probe P6/P9 (#211 step 1)`, at its safest default: `AGENT_APPROVE_FROM` is empty,
+  so `/api/agent-approve` refuses every `from` until the probes fill it. Step 9's nixos_config PR stays a draft
+  and must not deploy before the probes. Step 10 is not done.
+
 ## Changed on purpose
 
 - **#219's always→yes downgrade on click-only cards** (step 4). #219 counts "always" on a click-only card as one
