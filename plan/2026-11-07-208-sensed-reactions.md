@@ -181,6 +181,10 @@ All pass. `test_character_fit`'s idle check can be flaky under load; rerun it al
   `CHARACTERS[].fits`; `react_fit` checks every in-scope id on all four characters stays in the box and off the eyes.
   A small `RX_MOOD` table names the `poke` mood per reaction. Load and memory join the sustained set when their signal
   turns on even if the animation can't play then, so the still prop shows once the blocker clears (review fix).
+- **Step 4:** with reactions on, the headphones stay off even while the boombox is hidden (a meeting, fullscreen),
+  so music then shows neither; a meeting shows the tie anyway. The card's offsets were not in the plan: `-220px` or
+  `350px` beside the strip (top `150px`), `70px` inside it (top `300px`) when neither side has room, the side chosen
+  away from a board with `stagePlace`'s room check. `MEDIA_PHRASES` is a module-level set beside `NOTIFY_FLAGS`.
 
 ## Rollback
 
