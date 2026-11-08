@@ -173,6 +173,15 @@ cd /mnt/code/Source-home/GitHub/nixi-208-code/tests && python -m unittest discov
 
 All pass. `test_character_fit`'s idle check can be flaky under load; rerun it alone before treating it as a failure.
 
+## Deviations
+
+- **Step 1:** the settings checks went into `tests/settings_fit.mjs` (run by `test_settings_fit.py`), where the other
+  Settings switch checks live, not a new Python case.
+- **Step 3:** the art in `claude-react.json` carries no per-prop fit data, so nothing is filtered by
+  `CHARACTERS[].fits`; `react_fit` checks every in-scope id on all four characters stays in the box and off the eyes.
+  A small `RX_MOOD` table names the `poke` mood per reaction. Load and memory join the sustained set when their signal
+  turns on even if the animation can't play then, so the still prop shows once the blocker clears (review fix).
+
 ## Rollback
 
 Revert the PR and bump back. `reactions` and `track` are ignored by older code; the setting stays in `config.json`
