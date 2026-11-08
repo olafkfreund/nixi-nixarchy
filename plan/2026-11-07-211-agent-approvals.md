@@ -396,6 +396,10 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
   `approveAgents` (nixos_config); the GUIDE sentence "approvals are refused for every agent until…"; the synthetic
   fixtures in `tests/fixtures/hooks/`. P9 should also record Codex's shell `tool_name` (detail and `sends.log` key off
   `Bash`).
+- **#211 merged before #208 (2026-11-08).** User: close the issues; the #208 session agreed to the flip for #210/#214.
+  Snowflake #68 merged main (#66, #69) cleanly and merged as `0fa35d4`; #208 rebases onto it. Inert until probes:
+  `AGENT_APPROVE_FROM` is empty. Codex review round 1 (two P2s) was fixed in `be31d54`: an agent's card survives Nixi's
+  turn cleanup, and `.bar[hidden]` hides the terminal row on Nixi's cards. Round 2 was clean. nixos_config #2794 stays a draft.
 
 ## Changed on purpose
 
