@@ -399,6 +399,19 @@ Run 2026-11-09 on p620 by the lead, in a private tmux server, Claude Code v2.1.3
 
 ## Deviations
 
+- **Step 10 live check (2026-11-09, p620 at nixos_config 043195f/405f5d8, Codex v0.167.0, the user clicking).**
+  1. a write (`touch`, since Codex's `on-request` mode runs read-only commands like `uname -r` without asking): the
+     card showed it, a click on yes ran it, "Codex ran it ✓" — pass;
+  2. a fake `gog` (by full path: Codex's shell resets `PATH`): three click-yes runs ran it (three lines in `called`),
+     a click on no denied it ("Nixi rejected the request because you declined approval", `called` unchanged);
+     `sends.log` has every decision with no body — pass. Not shown: that Y and the voice do nothing (the card says
+     "click yes or no — voice can't confirm sends"; the unit tests cover it);
+  3. Claude Code: out of scope (left out after P7);
+  4. a card left alone went after Nixi's 60 s and Codex showed its own prompt at 63 s; nothing ran — pass;
+  5. "Answer in the terminal": Codex's own prompt at once — pass;
+  6. the decorative terminal: seen for Claude and Codex (the user's screenshots, then #79 sized it at 70% and made it
+     follow him); agy not seen;
+  7. herdr write card from Nixi's own turn: not run in this session.
 - **Step 1 run (2026-11-09): Claude left out, the result key digests the command only.** Per the plan's rule, Claude's P7 fail leaves it out. P9 also showed Codex's `PermissionRequest` `tool_input` carries a `description` that its `PostToolUse` lacks, so a digest of the whole `tool_input` never matched: `result_key` (server.py) and the hook's key (bin/nixi-companion) now digest `{"command": …}` when there is a string command. Codex also fires `PostToolUse` for its sandboxed try before it asks; a result with no matching approval is ignored. Codex's `-a untrusted` no longer exists; the probes ran with `-a on-request -s read-only`. The values were filled by Codex (handoff), reviewed and committed by the lead: snowflake #78; nixos_config sets `approveAgents = [ "codex" ]`.
 - **Step 2's gate relaxed (2026-11-08).** On the user's "keep going, close as many as we can", with the #208
   session's agreement, as #210 did: #219 is merged (snowflake #65, nixi #222) but #208 is not. The branch
