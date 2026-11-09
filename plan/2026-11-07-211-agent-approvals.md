@@ -367,10 +367,39 @@ nixos_config: new `modules/programs/nixi-agent-hooks.nix`, imported from `hosts/
 
 ## Probe results
 
-(filled in during step 1)
+Run 2026-11-09 on p620 by the lead, in a private tmux server, Claude Code v2.1.319 and Codex v0.167.0, with the user's go-ahead ("continue and finish"). The four settings files hashed identically before the first case and after the last; `$P` was removed. The hook read the case id from `$P/case` instead of `$CASE`, so one session could run many cases; Codex cases are named `cP<n>`.
+
+| # | Agent | Outcome | Verdict |
+|---|---|---|---|
+| P1 | claude | silent/silent: own prompt shown; ran-P1 only after Yes; payload PermissionRequest, tool_use_id null | PASS |
+| P4 | claude | garbage: own prompt shown, not run | PASS |
+| P5 | claude | crash1 and crash2: own prompt shown, not run (crash2 did not deny) | PASS |
+| P6 | claude | allow: ran with no prompt (positive control); deny: not run, agent reported "probe deny" | PASS |
+| P7 | claude | hooks run in parallel and the FIRST to finish wins: allow/deny ran (P7b), deny/allow and a repeat where deny finished first were blocked (P7a/P7c/P7d). An allow can win | **FAIL** (left out) |
+| P2 | claude | sleep30: own prompt shows at once while the hook sleeps; answering Yes runs it; the hook is NOT killed (still running after) | recorded |
+| P2k | claude | sleep30 killed -9 at 5 s: own prompt stays, not run | PASS |
+| P3 | claude | sleep90 with timeout 20: own prompt at once; hook killed at 20 s; not run | PASS |
+| P10 | claude | tmux-ccm's managed PermissionRequest hook was loaded in every case; P6 allow/deny outcomes held with it, so it gives no decision | PASS |
+| P8 | claude | permissions.ask Bash(*gog *) beats allow Bash(echo:*): PermissionRequest payload for "echo gog send probe" | PASS |
+| P9 | claude | PermissionRequest: no tool_use_id (null); keys session_id, prompt_id, tool_input. PostToolUse: tool_use_id set, tool_response {stdout,stderr,interrupted}, no exit code. PostToolUseFailure: tool_use_id set, error = "Exit code N\n…" | recorded |
+| setup | codex | v0.167.0; `-a untrusted` is gone, ran with `-a on-request -s read-only`. /hooks: PermissionRequest 2 + PostToolUse 1 (probe, trusted once); managed PreToolUse 1, UserPromptSubmit 1, SubagentStart 1, SubagentStop 1, Stop 1 | — |
+| P1 | codex | silent/silent: tries in the read-only sandbox first (fails), then PermissionRequest; own prompt shown; ran only after y | PASS |
+| P4 | codex | garbage: own prompt shown, not run | PASS |
+| P5 | codex | crash1: own prompt, not run; crash2 (exit 2 + stderr): denied with "probe deny" | PASS |
+| P6 | codex | allow: ran with no prompt (positive control); deny: not run, reported "probe deny" | PASS |
+| P7 | codex | deny/allow and allow/deny: both slots ran; in allow/deny the allow finished first (…124 vs …126) and the command was still not run: any deny wins | PASS |
+| P2 | codex | sleep30: NO prompt while the hook runs ("Running hook"); the prompt shows only after the hook returns (30 s); never killed. Note: PostToolUse of the sandboxed try also runs first | recorded |
+| P2k | codex | PermissionRequest hook killed -9 at 5 s: Codex waits until the orphaned sleep closes the pipe (~30 s), then shows its own prompt; not run | PASS |
+| P3 | codex | sleep90 with timeout 20: own prompt after ~20 s; not run (timing shows no TERM: the hook is left, not signalled) | PASS |
+| P9 | codex | PermissionRequest: tool_use_id null, has turn_id. PostToolUse fires for the sandboxed try AND the approved run, same turn_id, tool_use_id "exec-…" differs per run; tool_response is the output text; no exit code anywhere, no PostToolUseFailure. Result key = turn_id + command | recorded |
+| P8, P10 | codex | Claude-only cases | n/a |
+| P11 | agy | plain agy, AGY_CODER unset: asks "Run this command?" before touch; coder-guard does not auto-approve; no nixos_config issue needed | recorded |
+
+**Result:** Codex passes P1-P7 and is the only agent approved from Nixi. Claude fails P7 and is left out: its approve and result hooks are not installed, and `/api/agent-approve` refuses `claude`.
 
 ## Deviations
 
+- **Step 1 run (2026-11-09): Claude left out, the result key digests the command only.** Per the plan's rule, Claude's P7 fail leaves it out. P9 also showed Codex's `PermissionRequest` `tool_input` carries a `description` that its `PostToolUse` lacks, so a digest of the whole `tool_input` never matched: `result_key` (server.py) and the hook's key (bin/nixi-companion) now digest `{"command": …}` when there is a string command. Codex also fires `PostToolUse` for its sandboxed try before it asks; a result with no matching approval is ignored. Codex's `-a untrusted` no longer exists; the probes ran with `-a on-request -s read-only`. The values were filled by Codex (handoff), reviewed and committed by the lead: snowflake #78; nixos_config sets `approveAgents = [ "codex" ]`.
 - **Step 2's gate relaxed (2026-11-08).** On the user's "keep going, close as many as we can", with the #208
   session's agreement, as #210 did: #219 is merged (snowflake #65, nixi #222) but #208 is not. The branch
   `feat/211-agent-approvals` is cut from snowflake `origin/main` `3cf27a6` now, and the snowflake PR stays a
