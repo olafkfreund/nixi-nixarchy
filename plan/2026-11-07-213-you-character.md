@@ -229,3 +229,10 @@ Revert the slice's PR and bump back. The private folder is removed by hand (`rm 
   - saving voices keeps a switched-off plugin's `plug:` entry;
   - a duplicate id says "duplicate id" for every plugin (it names nothing), instead of the private art error;
   - `docs/GUIDE.md` says the art's `viewBox` is fitted to the body box `-96 -120 192 220`.
+
+## Deviations (slice B, while implementing)
+
+- **Step 8:** only the first matching plugin counts; if it is inside its 5-minute window the row gets no reaction
+  (no fall-through to a second plugin). Under reduced motion a plugin reaction shows its still prop with no
+  animation, as #208's reactions do, rather than nothing. The coder's first meeting and lock cases passed without
+  reaching the gate; Claude fixed them and added a control row that must play.
