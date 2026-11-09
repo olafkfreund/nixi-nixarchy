@@ -214,3 +214,18 @@ Revert the slice's PR and bump back. The private folder is removed by hand (`rm 
 ## Decided by the user (2026-11-07)
 
 - Slice B starts with `notice` and `music`; `video` and `news` are added when #209 provides them (the recommendation). This changes the spec's first list, as the plan states.
+
+## Deviations (slice A, while implementing)
+
+- **Step 3** was done by Claude, not the coder: the coder made no edits. The page test sets
+  `info.plugin_characters=[]` in the page to model a reload without the plugin (the server path is covered by
+  `test_look_character`). `character_fit`'s Look-row check now counts every entry in `CHARACTERS`, not a fixed 4, and
+  the `.accent` check skips `plug:` entries (plugin art cannot carry `class`).
+- **Review fixes** (Codex gpt-6-sol, a fresh Opus reviewer; agy found nothing above low):
+  - the nested svg sets `overflow:hidden` inline: `.skins button svg{overflow:visible}` had un-clipped plugin art in
+    the Look grid (plugin props in the Skin grid are clipped too now);
+  - in random-colour mode a changed plugin character is redrawn;
+  - a private plugin's prop error is `PRIVATE_ART_ERROR`;
+  - saving voices keeps a switched-off plugin's `plug:` entry;
+  - a duplicate id says "duplicate id" for every plugin (it names nothing), instead of the private art error;
+  - `docs/GUIDE.md` says the art's `viewBox` is fitted to the body box `-96 -120 192 220`.
