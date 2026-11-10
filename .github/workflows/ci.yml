@@ -95,8 +95,16 @@ jobs:
                     })
                     else prev.opencode;
                 };
+                # shortcut: nixos-unstable's codex no longer comes from the binary cache (#229:
+                # cargoSetupHook forces system libs and aws-lc-sys wants a system AWS-LC), and
+                # building it here gets the runner killed. This job checks the module's wiring, not
+                # codex, so a stand-in codex-acp keeps the adapter-pinning check below honest.
+                # Remove it once codex builds on Hydra again.
+                codexStub = final: prev: {
+                  codex-acp = prev.writeShellScriptBin "codex-acp" "exit 0";
+                };
                 mk = unfree: settings: home-manager.lib.homeManagerConfiguration {
-                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; overlays = [ opencodeFix ]; };
+                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; overlays = [ opencodeFix codexStub ]; };
                   modules = [
                     nixi.homeModules.default
                     {
