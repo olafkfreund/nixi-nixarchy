@@ -95,8 +95,14 @@ jobs:
                     })
                     else prev.opencode;
                 };
+                # shortcut: nixos-unstable's cargoSetupHook forces system C libraries (nixpkgs
+                # 44cddf92c4) and codex's aws-lc-sys then wants a system AWS-LC (#229); this is the
+                # hook's own opt-out. Remove it once the nixpkgs fix reaches the channel.
+                codexFix = final: prev: {
+                  codex = prev.codex.overrideAttrs { dontCargoUseSystemLibs = true; };
+                };
                 mk = unfree: settings: home-manager.lib.homeManagerConfiguration {
-                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; overlays = [ opencodeFix ]; };
+                  pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = unfree; overlays = [ opencodeFix codexFix ]; };
                   modules = [
                     nixi.homeModules.default
                     {
