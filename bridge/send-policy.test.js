@@ -77,6 +77,15 @@ test("gog sends need a click, as strings and argv", () => {
   assert.ok(!isClickOnly(undefined));
 });
 
+test("Flux commands need a click", () => {
+  for (const command of [
+    "flux-cli send f", "flux-cli clip", "flux-cli url https://x", "flux sms send 1 hi", "flux ring",
+    "echo x | nc -U /run/user/1000/flux/fluxd.sock", '"flux-cli" status', "${X:-flux-cli} send f",
+    'fl""ux-cli status', "fl${X:-ux-cli} send f",
+  ]) assert.ok(isClickOnly(call(command)), command);
+  assert.ok(!isClickOnly(call("fluxcd get all")));
+});
+
 test("gog audit detail reads only fixed command and recipient places", () => {
   assert.deepEqual(gogSendDetail(call("gog gmail send --to a@b")),
     { kind: "gog", command: "gmail send", to: "a@b" });
