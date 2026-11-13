@@ -52,7 +52,7 @@ function isFlux(toolCall) {
   if (typeof command !== "string") return false;
   const clean = command.replace(/\\\n/g, "").replace(/\$\{[^}]*\}/g, "").replace(/['"\\$]/g, "");
   const defaults = command.replace(/\$\{[^}:]*:?[-=+?]([^}]*)\}/g, "$1").replace(/['"\\]/g, "");
-  return [command, clean, defaults].some((text) => FLUX.test(text) || (/\bflux(?:-cli|d)?\b/i.test(text) && /[$\{\}*?[]/.test(text)));
+  return [command, clean, defaults].some((text) => FLUX.test(text) || (/\bflux(?:-cli|d)?\b/i.test(text) && /[$`\{\}*?[]/.test(text)));
 }
 
 export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall) || isFlux(toolCall);
