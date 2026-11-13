@@ -26,7 +26,7 @@ export function herdrWriteDetail(toolCall) {
 
 // A wrapper or alias without the word gog remains a residual hidden send.
 const GOG = /\bgog\b/i;
-const FLUX = /\bflux-cli\b|\bflux\s+(?:send|clip|url|sms|ring|ping|notify|share)\b|fluxd\.sock/i;
+const FLUX = /\bflux-cli\b|\bflux(?:\s+--[\w-]+(?:=\S+)?)*\s+(?:send|clip|url|sms|ring|ping|notify|share|dnd)\b|fluxd\.sock/i;
 const API = /\bapi\b/i;
 const SEND = /\b(?:send|reply-all|replyall|reply|forward|fwd|autoreply|post|create|respond|rsvp)\b/i;
 const DRAFT_ONLY = /\bdrafts\s+(?:create|reply|forward|update)\b/gi;
@@ -52,7 +52,7 @@ function isFlux(toolCall) {
   if (typeof command !== "string") return false;
   const clean = command.replace(/\\\n/g, "").replace(/\$\{[^}]*\}/g, "").replace(/['"\\$]/g, "");
   const defaults = command.replace(/\$\{[^}:]*:?[-=+?]([^}]*)\}/g, "$1").replace(/['"\\]/g, "");
-  return [command, clean, defaults].some((text) => FLUX.test(text));
+  return [command, clean, defaults].some((text) => FLUX.test(text) || (/\bflux(?:-cli|d)?\b/i.test(text) && /[$\{\}*?[]/.test(text)));
 }
 
 export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall) || isFlux(toolCall);
