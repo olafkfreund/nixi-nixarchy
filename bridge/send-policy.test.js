@@ -79,7 +79,7 @@ test("gog sends need a click, as strings and argv", () => {
 
 test("Flux commands need a click", () => {
   for (const command of [
-    "flux-cli send f", "flux `printf sms` send 1 hi", "flux-cli clip", "flux-cli url https://x", "flux sms send 1 hi", "flux ring",
+    "flux-cli send f", "flux `printf sms` send 1 hi", "unset X; VERB=ring; fl${X}ux $VERB", "flux-cli clip", "flux-cli url https://x", "flux sms send 1 hi", "flux ring",
     "echo x | nc -U /run/user/1000/flux/fluxd.sock", '"flux-cli" status', "${X:-flux-cli} send f",
     'fl""ux-cli status', "fl${X:-ux-cli} send f", "flux --json sms send 1 hi", "flux dnd on",
     "flux/*.sock", "fluxd.so?k", "/bin/flux-c[l]i status", "flux $VERB", "flux {sms,dnd}", "flux ?ms",
