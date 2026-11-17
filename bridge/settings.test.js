@@ -51,3 +51,15 @@ test("a trust switch leaves an unparsable nixi.json alone and says so (#103)", a
   const ack = run.events.find((e) => e.type === "ack" && e.of === "trust");
   assert.equal(ack.ok, false);
 });
+
+test("shared settings apply at startup and local values win", async () => {
+  const shared = { ".config/omarchy/nixi-shared.json": JSON.stringify({ trust: "mechanic", permissionMode: "yolo" }) };
+  const inherited = await runBridge({ files: shared });
+  assert.equal(inherited.events.find((e) => e.type === "ready").trust, "mechanic");
+  assert.equal(inherited.events.find((e) => e.type === "ready").permissionMode, "yolo");
+  const local = await runBridge({ files: shared, settings: { trust: "guide", permissionMode: "permission" } });
+  assert.equal(local.events.find((e) => e.type === "ready").trust, "guide");
+  assert.equal(local.events.find((e) => e.type === "ready").permissionMode, "permission");
+  const broken = await runBridge({ files: { ".config/omarchy/nixi-shared.json": "{bad" } });
+  assert.equal(broken.events.find((e) => e.type === "ready").trust, "guide");
+});

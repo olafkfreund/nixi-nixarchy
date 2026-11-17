@@ -2,11 +2,12 @@
 // another (the companion) without a restart. The file is written mid-run, as another client would.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
 
 const file = (home) => join(home, ".config", "omarchy", "nixi.json");
+const sharedFile = (home) => join(home, ".config", "omarchy", "nixi-shared.json");
 const put = (settings) => async ({ home }) => {
   mkdirSync(join(home, ".config", "omarchy"), { recursive: true });
   writeFileSync(file(home), typeof settings === "string" ? settings : JSON.stringify(settings));
@@ -123,4 +124,50 @@ test("a file change during a stdin switch is read after the switch, and cannot l
       await new Promise((r) => setTimeout(r, 800));
     }, write], onPermission: reject });
   assert.deepEqual(outcomes(run), [{ outcome: "cancelled" }]);
+});
+
+test("shared symlink swap follows a missing target and local precedence", async () => {
+  const run = await runBridge({ settings: { permissionMode: "permission" }, messages: [async (ctx) => {
+    const first = join(ctx.home, "shared-1.json");
+    const second = join(ctx.home, "shared-2.json");
+    writeFileSync(first, JSON.stringify({ trust: "mechanic", permissionMode: "yolo" }));
+    symlinkSync(first, sharedFile(ctx.home));
+    await ctx.until((e) => e.type === "settings" && e.trust === "mechanic", "shared mechanic");
+    assert.equal(settingsEvents({ events: ctx.events }).at(-1).permissionMode, "permission");
+    rmSync(sharedFile(ctx.home));
+    symlinkSync(second, sharedFile(ctx.home)); // Home Manager link exists before its target.
+    await ctx.until((e) => e.type === "settings" && e.trust === "guide", "missing target guide");
+    writeFileSync(second, JSON.stringify({ trust: "mechanic" }));
+    // Target is outside the watched directory, so the link replacement wakes the watcher.
+    rmSync(sharedFile(ctx.home));
+    symlinkSync(second, sharedFile(ctx.home));
+    await ctx.until((e) => e.type === "settings" && e.trust === "mechanic" && e.permissionMode === "permission" && e !== settingsEvents({ events: ctx.events })[0], "new target mechanic");
+  }] });
+  assert.equal(settingsEvents(run).at(-1).trust, "mechanic");
+});
+
+test("a broken shared file is ignored while following", async () => {
+  const run = await runBridge({ settings: { permissionMode: "permission" }, messages: [async (ctx) => {
+    writeFileSync(sharedFile(ctx.home), JSON.stringify({ trust: "mechanic" }));
+    await ctx.until((e) => e.type === "settings" && e.trust === "mechanic", "shared mechanic");
+    writeFileSync(sharedFile(ctx.home), "{bad");
+    await ctx.until((e) => e.type === "settings" && e.trust === "guide", "broken shared guide");
+  }] });
+  assert.equal(settingsEvents(run).at(-1).trust, "guide");
+});
+
+test("a shared symlink swap during a trust change cannot restore stale Mechanic", async () => {
+  const run = await runBridge({ settings: {}, env: { FAKE_AGENT_SLOW_MODE: "1200" }, messages: [async (ctx) => {
+    const first = join(ctx.home, "shared-mechanic.json");
+    const second = join(ctx.home, "shared-guide.json");
+    writeFileSync(first, JSON.stringify({ trust: "mechanic", permissionMode: "yolo" }));
+    writeFileSync(second, JSON.stringify({ trust: "guide" }));
+    symlinkSync(first, sharedFile(ctx.home));
+    await new Promise((r) => setTimeout(r, 400));
+    rmSync(sharedFile(ctx.home));
+    symlinkSync(second, sharedFile(ctx.home));
+    await new Promise((r) => setTimeout(r, 2600));
+  }, write], onPermission: reject });
+  assert.deepEqual(outcomes(run), [{ outcome: "cancelled" }]);
+  assert.ok(!settingsEvents(run).some((e) => e.trust === "mechanic"));
 });
