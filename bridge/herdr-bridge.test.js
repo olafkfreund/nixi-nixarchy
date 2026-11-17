@@ -26,6 +26,16 @@ test("Mechanic: a herdr write gets a click-only card without allow_always (#95)"
   assert.equal(card.command, 'herdr agent prompt 1-2 "run the tests"');  // the exact bytes, for the companion's check (#144)
 });
 
+test("the card and the finished tool carry the same toolCallId (#96)", async () => {
+  const { events } = await runBridge({
+    env, settings: { trust: "mechanic" }, messages: [send],
+    onPermission: (event) => ({ type: "permission", id: event.id, optionId: "allow" }),
+  });
+  const card = events.find((e) => e.type === "permission");
+  assert.equal(card.toolCallId, "t5");
+  assert.ok(events.some((e) => e.type === "tool" && e.toolCallId === "t5" && e.status === "completed"));
+});
+
 test("YOLO still shows the card (#95)", async () => {
   const { events } = await runBridge({
     env, settings: { trust: "mechanic", permissionMode: "yolo" }, messages: [send],

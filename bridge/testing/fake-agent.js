@@ -158,6 +158,9 @@ new AgentSideConnection((conn) => ({
       log({ method: "permissionOutcome", outcome: outcome.outcome });
       // THEN_CANCEL: end the turn with no text, as opencode does on a refusal (#102).
       // WITH_TEXT: some words first. WAIT_STOP: end only once the user's stop arrives.
+      // PLEASE_HERDR + an allow: the send ran, so the agent reports its tool call finished (#96).
+      if (text.includes("PLEASE_HERDR") && outcome.outcome?.optionId?.startsWith("allow"))
+        await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call_update", toolCallId: toolCall.toolCallId, status: "completed" } });
       if (text.includes("WITH_TEXT")) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Denied, trying the shell" } } });
       if (text.includes("WAIT_STOP")) await new Promise((resolve) => { stopTurn = resolve; });
       if (text.includes("THEN_CANCEL")) return { stopReason: "cancelled" };
