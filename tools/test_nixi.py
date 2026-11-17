@@ -626,6 +626,8 @@ def test_settings_keep_bridge_keys():
             f"{key} has no shared default with a local override"
     assert "if (nextAgent !== root.selectedAgent) root.changedSettings.agent = true" in ask and "changedSettings.fontScale = true" in ask, \
         "card edits do not mark their keys as changed"
+    assert "sharedSettingsFile.reload()" in _block(ask, ask.index("function open(")), \
+        "the card misses a deployed shared file (symlink swap) until the shell restarts"
     print("  ok  a UI settings write keeps the bridge's own keys")
 
 

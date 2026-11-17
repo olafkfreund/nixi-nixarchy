@@ -502,6 +502,8 @@ Item {
       } catch (error) {}
       return
     }
+    // A deploy swaps the shared file's symlink, which a FileView watch misses: re-read it on each open.
+    sharedSettingsFile.reload()
     createConversation(payloadJson)
   }
 
