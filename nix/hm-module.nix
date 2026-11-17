@@ -115,6 +115,25 @@ in
       '';
     };
 
+    settings = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          trust = lib.mkOption { type = lib.types.nullOr (lib.types.enum [ "guide" "mechanic" ]); default = null; };
+          permissionMode = lib.mkOption { type = lib.types.nullOr (lib.types.enum [ "permission" "yolo" ]); default = null; };
+          agent = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
+          model = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
+          reasoningEffort = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; };
+        };
+      };
+      default = { };
+      description = ''
+        Nixi's shared settings, written to `~/.config/omarchy/nixi-shared.json`
+        (only the fields you set). The Nix store is world-readable: put no
+        secrets, private plugins or personal text here. A change made on the
+        machine wins until it is reset.
+      '';
+    };
+
     companion = {
       enable = lib.mkEnableOption
         "the snowflake desktop companion (a Void fork), driven through Nixi's bridge";
@@ -157,6 +176,17 @@ in
           path is written to `peers.json`; the companion reads the file at
           runtime. Pass a runtime path (e.g. an agenix secret), never a store
           path: the token would become world-readable.
+        '';
+      };
+
+      settings = lib.mkOption {
+        type = (pkgs.formats.json { }).type;
+        default = { };
+        description = ''
+          Companion settings shared across machines, written to
+          `~/.config/nixi-companion/shared.json` when not empty. The Nix store
+          is world-readable: put no secrets, private plugins or personal text
+          here. A change made on the machine wins until it is reset.
         '';
       };
 
@@ -371,6 +401,10 @@ in
         });
     })
 
+    (let set = lib.filterAttrs (_: v: v != null) cfg.settings; in {
+      xdg.configFile."omarchy/nixi-shared.json" = lib.mkIf (set != { }) { text = builtins.toJSON set; };
+    })
+
     (lib.mkIf cfg.companion.enable {
       assertions = [{
         assertion = cfg.companion.package != null;
@@ -384,6 +418,9 @@ in
           peers = map (p: { inherit (p) name address port; }) cfg.companion.peers;
           token_file = toString cfg.companion.peerTokenFile;
         };
+      };
+      xdg.configFile."nixi-companion/shared.json" = lib.mkIf (cfg.companion.settings != { }) {
+        text = builtins.toJSON cfg.companion.settings;
       };
       xdg.configFile."pipewire/pipewire.conf.d/61-nixi-echo-cancel.conf" = lib.mkIf cfg.companion.echoCancel.enable {
         text = ''
