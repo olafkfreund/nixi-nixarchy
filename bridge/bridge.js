@@ -487,6 +487,7 @@ const client = {
           type: "tool",
           title: update.title || update.name || "Using a tool",
           status: update.status || "in_progress",
+          toolCallId: update.toolCallId,  // opaque; lets a client tie this to its permission card (#96). Never logged.
         });
         break;
       case "agent_thought_chunk":
@@ -579,7 +580,8 @@ const client = {
         ...(typeof summary === "string" && summary.trim() ? { summary: summary.trim() } : {}),
         ...(clickOnly ? { confirm: "click" } : {}),
         // the exact command, so a client can check it is the one it asked for (companion stages, #144)
-        ...(typeof params.toolCall?.rawInput?.command === "string" ? { command: params.toolCall.rawInput.command } : {}) });
+        ...(typeof params.toolCall?.rawInput?.command === "string" ? { command: params.toolCall.rawInput.command } : {}),
+        ...(typeof params.toolCall?.toolCallId === "string" && params.toolCall.toolCallId ? { toolCallId: params.toolCall.toolCallId } : {}) });
       return new Promise((resolve) => {
         pendingPermissions.set(requestId, { resolve, options, toolCall: params.toolCall });
         armStall();
