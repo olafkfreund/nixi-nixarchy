@@ -626,8 +626,14 @@ def test_settings_keep_bridge_keys():
             f"{key} has no shared default with a local override"
     assert "if (nextAgent !== root.selectedAgent) root.changedSettings.agent = true" in ask and "changedSettings.fontScale = true" in ask, \
         "card edits do not mark their keys as changed"
-    assert "sharedSettingsFile.reload()" in _block(ask, ask.index("function open(")), \
-        "the card misses a deployed shared file (symlink swap) until the shell restarts"
+    for fn in ("function open(", "function toggle("):
+        assert "refreshSharedSettings()" in _block(ask, ask.index(fn)), \
+            f"{fn[9:-1]} misses a deployed shared file (symlink swap) until the shell restarts"
+        blk = _block(ask, ask.index(fn))
+        assert blk.index("refreshSharedSettings()") < blk.index("createConversation("), \
+            f"{fn[9:-1]} creates the conversation before the shared settings are re-read"
+    shared_view = ask[ask.index("id: sharedSettingsFile"):ask.index("onLoaded", ask.index("id: sharedSettingsFile"))]
+    assert "blockAllReads: true" in shared_view, "the refresh reads the shared file before it has loaded"
     print("  ok  a UI settings write keeps the bridge's own keys")
 
 

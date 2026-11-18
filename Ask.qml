@@ -238,9 +238,20 @@ Item {
     changedSettings = ({})
   }
 
+  // A deploy swaps the shared file's symlink, which the FileView watch misses: both open paths re-read it,
+  // blocking, so the conversation they create already has the deployed agent, model and effort.
+  function refreshSharedSettings() {
+    sharedSettingsFile.reload()
+    var data = {}
+    try { data = JSON.parse(sharedSettingsFile.text() || "{}") } catch (error) { data = {} }
+    sharedSettings = data && typeof data === "object" && !Array.isArray(data) ? data : {}
+    if (settingsLoaded && !flushPending && !settingsSaveTimer.running) loadSettings(settingsFile.text())
+  }
+
   FileView {
     id: sharedSettingsFile
     path: root.sharedSettingsPath
+    blockAllReads: true
     watchChanges: true
     printErrors: false
     onLoaded: {
@@ -502,8 +513,7 @@ Item {
       } catch (error) {}
       return
     }
-    // A deploy swaps the shared file's symlink, which a FileView watch misses: re-read it on each open.
-    sharedSettingsFile.reload()
+    refreshSharedSettings()
     createConversation(payloadJson)
   }
 
@@ -528,7 +538,9 @@ Item {
   function toggle(payloadJson) {
     if (opened)
       activeOverlay.close()
-    else
+    else {
+      refreshSharedSettings()
       createConversation(payloadJson)
+    }
   }
 }
