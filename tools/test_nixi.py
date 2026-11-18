@@ -606,7 +606,8 @@ def test_settings_keep_bridge_keys():
     assert "settingsFile.reload()" in flush and "setText" not in flush, \
         "flushSettings writes the stale copy instead of re-reading first (#103)"
     write = _block(ask, ask.index("function writeSettings"))
-    assert "Object.assign({}, data, cardOwnedSettings())" in write, "the write is not fresh disk + card keys"
+    assert "for (var key in changedSettings) data[key] = owned[key]" in write, \
+        "the write persists keys the user did not change"
     assert "loadSettings" not in write, "the flush re-read applies disk values to the card (#103)"
     owned = _block(ask, ask.index("function cardOwnedSettings"))
     assert "permissionMode" not in owned and "trust" not in owned, "the card writes a bridge-owned key (#103)"
@@ -616,6 +617,23 @@ def test_settings_keep_bridge_keys():
     assert 'error === FileViewError.FileNotFound) root.writeSettings("{}")' in ask, "first run no longer writes"
     assert "try { data = JSON.parse(raw) } catch (error) { return }" in write, \
         "an unparsable or empty nixi.json is overwritten without the bridge's keys"
+    shared = ask[ask.index("id: sharedSettingsFile"):ask.index("onFileChanged: reload()", ask.index("id: sharedSettingsFile"))]
+    assert "nixi-shared.json" in ask and "watchChanges: true" in shared, \
+        "the card does not follow the shared settings file"
+    load = _block(ask, ask.index("function loadSettings"))
+    for key in ("agent", "model", "reasoningEffort"):
+        assert f"data.{key} !== undefined ? data.{key} : sharedSettings.{key}" in load, \
+            f"{key} has no shared default with a local override"
+    assert "if (nextAgent !== root.selectedAgent) root.changedSettings.agent = true" in ask and "changedSettings.fontScale = true" in ask, \
+        "card edits do not mark their keys as changed"
+    for fn in ("function open(", "function toggle("):
+        assert "refreshSharedSettings()" in _block(ask, ask.index(fn)), \
+            f"{fn[9:-1]} misses a deployed shared file (symlink swap) until the shell restarts"
+        blk = _block(ask, ask.index(fn))
+        assert blk.index("refreshSharedSettings()") < blk.index("createConversation("), \
+            f"{fn[9:-1]} creates the conversation before the shared settings are re-read"
+    shared_view = ask[ask.index("id: sharedSettingsFile"):ask.index("onLoaded", ask.index("id: sharedSettingsFile"))]
+    assert "blockAllReads: true" in shared_view, "the refresh reads the shared file before it has loaded"
     print("  ok  a UI settings write keeps the bridge's own keys")
 
 

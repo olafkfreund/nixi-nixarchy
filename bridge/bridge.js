@@ -77,6 +77,15 @@ function noticeUnaccountedEnvironment() {
 
 const settingsDir = join(process.env.HOME || process.cwd(), ".config", "omarchy");
 const settingsPath = join(settingsDir, "nixi.json");
+const sharedPath = join(settingsDir, "nixi-shared.json");
+
+async function sharedSettings() {
+  try {
+    const data = JSON.parse(await readFile(sharedPath, "utf8"));
+    return data && typeof data === "object" && !Array.isArray(data)
+      ? { trust: data.trust, permissionMode: data.permissionMode } : {};
+  } catch { return {}; }
+}
 
 // "Ask for everything" (#27). Read once, synchronously: the agent's permission
 // rules are fixed when it is spawned (OpenCode) or its session starts (Claude),
@@ -96,11 +105,14 @@ let leavingMechanic = 0;
 const effectiveTrust = () => (leavingMechanic > 0 ? "guide" : trust);
 
 async function loadSettings() {
+  const shared = await sharedSettings();
+  let local = {};
   try {
-    const settings = JSON.parse(await readFile(settingsPath, "utf8"));
-    permissionMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
-    trust = resolveTrust(settings.trust);
+    local = JSON.parse(await readFile(settingsPath, "utf8"));
   } catch {}
+  const settings = { ...shared, ...local };
+  permissionMode = settings.permissionMode === "yolo" ? "yolo" : "permission";
+  trust = resolveTrust(settings.trust);
 }
 
 // #146: another client (the card, the companion, an editor) may change nixi.json while this
@@ -117,7 +129,7 @@ function watchSettings() {
     mkdirSync(settingsDir, { recursive: true });
     // The folder, not the file: saves rename a new file over the old one (#103), which ends a file watch.
     const watcher = watch(settingsDir, (_event, name) => {
-      if (name && name !== "nixi.json") return;
+      if (name && name !== "nixi.json" && name !== "nixi-shared.json") return;
       followGen++;
       clearTimeout(followTimer);
       followTimer = setTimeout(() => { followSettings().catch(() => {}); }, 150);
@@ -145,6 +157,8 @@ async function followOnce() {
   // After any await, a newer file event or stdin switch makes this reading stale: stop, read again.
   const stale = () => { if (gen !== followGen || stdinSwitching > 0) { followPending = true; return true; } return false; };
   let settings;
+  const shared = await sharedSettings();
+  if (stale()) return;
   try {
     settings = JSON.parse(await readFile(settingsPath, "utf8"));
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("not a JSON object");
@@ -156,6 +170,7 @@ async function followOnce() {
       return;
     }
   }
+  settings = { ...shared, ...settings };
   followBroken = false;
   if (stale()) return;
   const nextTrust = resolveTrust(settings.trust);

@@ -153,6 +153,42 @@
           assert !(builtins.tryEval (builtins.deepSeq inStore.xdg.configFile."nixi-companion/peers.json".text true)).success;
           pkgs.runCommand "nixi-hm-companion-peers" { } "touch $out";
 
+        # Shared settings (#99): both files, from the options only.
+        hm-companion-shared =
+          let
+            eval = extra: (nixpkgs.lib.evalModules {
+              modules = [
+                (self.homeModules.default)
+                ({ lib, ... }: {
+                  options = {
+                    assertions = lib.mkOption { type = lib.types.listOf lib.types.raw; default = [ ]; };
+                    home = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; default = { }; };
+                    programs = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    systemd = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.attrsOf lib.types.raw); default = { }; };
+                  };
+                  config._module.args.pkgs = pkgs;
+                  config.services.nixi = {
+                    enable = true;
+                    companion = { enable = true; package = pkgs.hello; } // (extra.companion or { });
+                  } // (builtins.removeAttrs extra [ "companion" ]);
+                })
+              ];
+            }).config;
+            ok = eval {
+              settings = { trust = "mechanic"; model = "opus"; };
+              companion.settings = { voice.speed = 1.2; };
+            };
+            empty = eval { };
+            bad = eval { settings.trust = "root"; };
+          in
+          assert builtins.fromJSON ok.xdg.configFile."omarchy/nixi-shared.json".text == { trust = "mechanic"; model = "opus"; };
+          assert builtins.fromJSON ok.xdg.configFile."nixi-companion/shared.json".text == { voice.speed = 1.2; };
+          assert !(empty.xdg.configFile ? "omarchy/nixi-shared.json");
+          assert !(empty.xdg.configFile ? "nixi-companion/shared.json");
+          assert !(builtins.tryEval (builtins.deepSeq bad.xdg.configFile."omarchy/nixi-shared.json".text true)).success;
+          pkgs.runCommand "nixi-hm-companion-shared" { } "touch $out";
+
         hm-companion-echo-cancel =
           let
             eval = extra: (nixpkgs.lib.evalModules {

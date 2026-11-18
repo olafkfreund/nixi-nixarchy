@@ -47,6 +47,9 @@ Item {
     return Math.max(1, Math.min(maxFontScale, Math.round((tallest / 1080) * 100) / 100))
   }
   readonly property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/nixi.json"
+  readonly property string sharedSettingsPath: Quickshell.env("HOME") + "/.config/omarchy/nixi-shared.json"
+  property var sharedSettings: ({})
+  property var changedSettings: ({})
   property real fontScale: 1
   // How long typing has to pause before the menu search recomputes. Matching
   // is cheap; the resize it triggers is not, so this is really a tolerance
@@ -144,7 +147,10 @@ Item {
     var next = Math.max(minFontScale, Math.min(maxFontScale, Math.round(value * 100) / 100))
     if (next === fontScale) return
     fontScale = next
-    if (settingsLoaded) settingsSaveTimer.restart()
+    if (settingsLoaded) {
+      changedSettings.fontScale = true
+      settingsSaveTimer.restart()
+    }
   }
 
   function adjustFontScale(step) { setFontScale(fontScale + step) }
@@ -179,9 +185,9 @@ Item {
     repoSearchDepth = isFinite(repoDepth)
       ? (repoDepth <= 0 ? 0 : Math.max(1, Math.min(128, Math.round(repoDepth))))
       : 6
-    selectedAgent = String(data.agent || "")
-    selectedModel = selectedAgent ? String(data.model || "") : ""
-    selectedReasoningEffort = selectedAgent ? String(data.reasoningEffort || "") : ""
+    selectedAgent = String((data.agent !== undefined ? data.agent : sharedSettings.agent) || "")
+    selectedModel = selectedAgent ? String((data.model !== undefined ? data.model : sharedSettings.model) || "") : ""
+    selectedReasoningEffort = selectedAgent ? String((data.reasoningEffort !== undefined ? data.reasoningEffort : sharedSettings.reasoningEffort) || "") : ""
     settingsLoaded = true
   }
 
@@ -226,7 +232,36 @@ Item {
     // A half-done hand edit (or a truncated file): writing would drop the bridge's keys, so leave it alone.
     try { data = JSON.parse(raw) } catch (error) { return }
     if (!data || typeof data !== "object" || Array.isArray(data)) return
-    settingsFile.setText(JSON.stringify(Object.assign({}, data, cardOwnedSettings()), null, 2) + "\n")
+    var owned = cardOwnedSettings()
+    for (var key in changedSettings) data[key] = owned[key]
+    settingsFile.setText(JSON.stringify(data, null, 2) + "\n")
+    changedSettings = ({})
+  }
+
+  // A deploy swaps the shared file's symlink, which the FileView watch misses: both open paths re-read it,
+  // blocking, so the conversation they create already has the deployed agent, model and effort.
+  function refreshSharedSettings() {
+    sharedSettingsFile.reload()
+    var data = {}
+    try { data = JSON.parse(sharedSettingsFile.text() || "{}") } catch (error) { data = {} }
+    sharedSettings = data && typeof data === "object" && !Array.isArray(data) ? data : {}
+    if (settingsLoaded && !flushPending && !settingsSaveTimer.running) loadSettings(settingsFile.text())
+  }
+
+  FileView {
+    id: sharedSettingsFile
+    path: root.sharedSettingsPath
+    blockAllReads: true
+    watchChanges: true
+    printErrors: false
+    onLoaded: {
+      var data = {}
+      try { data = JSON.parse(text()) } catch (error) { data = {} }
+      root.sharedSettings = data && typeof data === "object" && !Array.isArray(data) ? data : {}
+      settingsFile.reload()
+    }
+    onLoadFailed: { root.sharedSettings = ({}); settingsFile.reload() }
+    onFileChanged: reload()
   }
 
   FileView {
@@ -242,9 +277,8 @@ Item {
       if (root.flushPending) root.writeSettings(text())
       else if (!settingsSaveTimer.running) root.loadSettings(text())
     }
-    // First run: the file does not exist yet. Without this the scale would
-    // never be marked loaded and would never be written.
-    // Only a missing file is written from scratch; any other failure keeps the file.
+    // First run: load defaults even though the local file does not exist yet.
+    // Only a missing file can be written from scratch; any other failure keeps the file.
     onLoadFailed: (error) => {
       if (!root.flushPending) root.loadSettings("")
       else if (error === FileViewError.FileNotFound) root.writeSettings("{}")
@@ -268,10 +302,13 @@ Item {
   Connections {
     target: harnessSelectorLoader.item
     function onApplied(nextAgent, nextModel, nextReasoningEffort) {
+      if (nextAgent !== root.selectedAgent) root.changedSettings.agent = true
+      if (nextModel !== root.selectedModel) root.changedSettings.model = true
+      if (nextReasoningEffort !== root.selectedReasoningEffort) root.changedSettings.reasoningEffort = true
       root.selectedAgent = nextAgent
       root.selectedModel = nextModel
       root.selectedReasoningEffort = nextReasoningEffort
-      settingsSaveTimer.restart()
+      if (Object.keys(root.changedSettings).length) settingsSaveTimer.restart()
     }
   }
 
@@ -476,6 +513,7 @@ Item {
       } catch (error) {}
       return
     }
+    refreshSharedSettings()
     createConversation(payloadJson)
   }
 
@@ -500,7 +538,9 @@ Item {
   function toggle(payloadJson) {
     if (opened)
       activeOverlay.close()
-    else
+    else {
+      refreshSharedSettings()
       createConversation(payloadJson)
+    }
   }
 }
