@@ -15,7 +15,7 @@ import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
 import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret, isWhatsappRead } from "./trust-policy.js";
-import { isClickOnly, isGogSend, herdrWriteDetail, gogSendDetail } from "./send-policy.js";
+import { isClickOnly, isGogSend, isWhatsapp, herdrWriteDetail, gogSendDetail } from "./send-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
 import { createChanges } from "./changes.js";
@@ -776,15 +776,16 @@ async function steer(text) {
 // command only: never terminal output.
 let sendsLogChecked = false;
 function auditSend(toolCall, picked) {
+  const whatsapp = isWhatsapp(toolCall);
   const command = toolCall?.rawInput?.command;
   const gog = isGogSend(toolCall);
-  const detail = gog ? gogSendDetail(toolCall) : (herdrWriteDetail(toolCall)
+  const detail = whatsapp ? { kind: "whatsapp" } : gog ? gogSendDetail(toolCall) : (herdrWriteDetail(toolCall)
     || { pane: "", text: String(Array.isArray(command) ? command.join(" ") : (command ?? "")) });
   try {
     const path = join(learnedDir, "sends.log");
     mkdirSync(learnedDir, { recursive: true });
     appendFileSync(path, JSON.stringify({
-      ts: new Date().toISOString(), ...detail, ...(gog ? {} : { text: detail.text.slice(0, 500) }), cwd,
+      ts: new Date().toISOString(), ...detail, ...(gog || whatsapp ? {} : { text: detail.text.slice(0, 500) }), cwd,
       // No picked option = cancelled (Guide, shutdown, trust change, an unknown id).
       decision: !picked ? "cancelled" : String(picked.kind).startsWith("allow") ? "allow" : "deny",
       optionKind: picked?.kind || "cancelled",

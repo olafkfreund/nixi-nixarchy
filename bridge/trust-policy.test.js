@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath, touchesSecret } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, OPENCODE_PERMISSIONS, SECRET_PATHS, EXEC_WRITE_PATHS, claudePermissions, opencodePermissions, opencodePathDenies, opencodeSecretDenies, secretBashRules, isSecretPath, touchesSecret, isWhatsappRead } from "./trust-policy.js";
+
+test("WhatsApp reads include ACP locations, filePath and broad search roots", async () => {
+  const home = process.env.HOME;
+  const path = `${home}/Downloads/WhatsApp/photo.png`;
+  for (const call of [
+    { title: path, kind: "read", locations: [{ path }] },
+    { name: "read", rawInput: { filePath: path } },
+    { name: "GREP", rawInput: { path: `${home}/Downloads`, pattern: "photo" } },
+    { name: "glob", rawInput: { cwd: home, pattern: "**/*.png" } },
+    { name: "Glob", rawInput: { path: "~", pattern: "**/*.png" } },
+  ]) assert.equal(await isWhatsappRead(call, home), true);
+  assert.equal(await isWhatsappRead({ name: "Read", rawInput: { filePath: `${home}/plain.txt` } }, home), false);
+});
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -89,7 +89,7 @@ test("Flux commands need a click", () => {
 
 test("WhatsApp mentions need a click across shell spellings", () => {
   for (const command of ["whatsapp status", "cat messages.db", 'env WHATSAPP_HOME=/x true',
-    'wha""tsapp status', "wha${X}tsapp status", "wha${X:-ts}app status",
+    'wha""tsapp status', "wha${X}tsapp status", "wha${X:-ts}app status", "cat runtime.json", "ls nixi-w*", "cat ~/.local/state/nixi/x", "cat $XDG_RUNTIME_DIR/*",
     "echo '${X:-messages.db}'", ["env", "whatsapp", "status"]]) {
     assert.ok(isWhatsapp(call(command)), JSON.stringify(command));
     assert.ok(isClickOnly(call(command)), JSON.stringify(command));

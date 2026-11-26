@@ -107,6 +107,17 @@ test("WhatsApp Bash still reaches a click card with a standing Bash(env:*) allow
   assert.ok(!card.options.some((option) => option.kind === "allow_always"));
 });
 
+test("WhatsApp Bash audit stores only its kind", async () => {
+  let entry;
+  await runBridge({ env, settings: { trust: "mechanic" },
+    messages: [{ type: "prompt", text: "PLEASE_WHATSAPP" }, ({ home }) => {
+      entry = JSON.parse(readFileSync(join(home, ".local", "share", "nixi", "sends.log"), "utf8").trim());
+    }], onPermission: reject });
+  assert.equal(entry.kind, "whatsapp");
+  assert.equal(entry.text, undefined);
+  assert.equal(entry.command, undefined);
+});
+
 test("YOLO does not auto-approve a gog send; the card is click-only without allow_always (#219)", async () => {
   const { events } = await runBridge({
     env, settings: { trust: "mechanic", permissionMode: "yolo" }, messages: [gog], onPermission: reject,

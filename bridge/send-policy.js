@@ -57,7 +57,9 @@ function isFlux(toolCall) {
 }
 
 // Twin of app/server.py _WA_RE in nixoarchy-snowflake.
-const WHATSAPP = /whatsapp|messages\.db/i;
+const WHATSAPP = /whatsapp|messages\.db|runtime\.json|nixi-w|\.local\/state\/nixi|downloads\/whatsapp/i;
+const WA_EXPAND = /[$`*?\[]/;
+const WA_HINT = /nixi|messages\.d|\/run\/user|xdg_runtime_dir|\.local\/state|downloads/i;
 export function isWhatsapp(toolCall) {
   let command = toolCall?.rawInput?.command;
   if (Array.isArray(command)) command = command.join(" ");
@@ -65,7 +67,7 @@ export function isWhatsapp(toolCall) {
   const plain = command.replace(/\\\n/g, "").replace(/['"\\]/g, "");
   const defaults = plain.replace(/\$\{[^}:]*:?[-=+?]([^}]*)\}/g, "$1");
   return [command, defaults, plain.replace(/\$\{[^}]*\}/g, "").replace(/\$/g, "")]
-    .some((text) => WHATSAPP.test(text));
+    .some((text) => WHATSAPP.test(text) || (WA_EXPAND.test(command) && WA_HINT.test(text)));
 }
 
 export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall) || isFlux(toolCall) || isWhatsapp(toolCall);

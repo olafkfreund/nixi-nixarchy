@@ -249,20 +249,27 @@ const WHATSAPP_DENIES = [
 ];
 
 export async function isWhatsappRead(toolCall, cwd) {
-  const tool = toolCall?.name ?? toolCall?.title?.split(" ")[0];
-  if (!READ_TOOLS.includes(tool)) return false;
+  const tool = String(toolCall?.name ?? toolCall?.title?.split(" ")[0] ?? "").toLowerCase();
+  if (toolCall?.kind !== "read" && !["read", "grep", "glob"].includes(tool)) return false;
   const input = toolCall.rawInput ?? {};
-  const paths = [input.file_path, input.path, tool === "Glob" ? input.pattern : undefined];
+  const paths = [...(Array.isArray(toolCall.locations) ? toolCall.locations.map((location) => location?.path) : []),
+    input.file_path, input.filePath, input.path, tool === "glob" ? input.pattern : undefined];
   const home = process.env.HOME || "/";
   const dirs = [resolve(home, ".local/state/nixi-whatsapp"), resolve(home, "Downloads/WhatsApp"),
     resolve(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`, "nixi-whatsapp")];
   const runtime = resolve(home, ".local/share/nixi-companion/runtime.json");
   for (const path of paths) {
     if (typeof path !== "string") continue;
-    const absolute = path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(cwd, path);
+    const absolute = path === "~" ? home : path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(cwd, path);
     for (const candidate of [absolute, await realpathOfExisting(absolute)]) {
       if (candidate === runtime || dirs.some((dir) => candidate === dir || candidate.startsWith(`${dir}/`))) return true;
     }
+  }
+  if (["grep", "glob"].includes(tool)) {
+    const root = input.path || input.cwd || cwd;
+    const absolute = root === "~" ? home : typeof root === "string" && root.startsWith("~/") ? resolve(home, root.slice(2)) : resolve(cwd, root);
+    if ([home, resolve(home, "Downloads"), resolve(home, ".local"), resolve(home, ".local/state"),
+      resolve(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`)].includes(absolute)) return true;
   }
   return false;
 }
@@ -301,9 +308,9 @@ export function claudePermissions(askBeforeReading, trust = "guide") {
     // would otherwise let Claude run a herdr write without ever asking the bridge, so
     // the bridge's click-only card (#95) could not be skipped by a standing allow.
     // The same for a gog send (#219): `env gog gmail send …` matches Bash(env:*).
-    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)", "Bash(*gog *)", "Bash(*gog)",
-      "Bash(*whatsapp*)", "Bash(*WhatsApp*)", "Bash(*messages.db*)",
-      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
+    ask: [...new Set([...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)", "Bash(*gog *)", "Bash(*gog)",
+      "Bash(*whatsapp*)", "Bash(*WhatsApp*)", "Bash(*messages.db*)", "Bash(*nixi-w*)", "Bash(*runtime.json*)", "Bash(*.local/state*)",
+      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())])],
     deny: [...EXEC_WRITES, ...WHATSAPP_DENIES],
   };
 }
