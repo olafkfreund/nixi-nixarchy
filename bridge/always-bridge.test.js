@@ -2,12 +2,13 @@
 // bridge, and never at Guide, in YOLO, for another agent or folder, or for a chained command.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
 
-const cwd = tmpdir();
+// its own folder, not tmpdir() itself: the fake HOME lives under tmpdir(), and a search rooted at an ancestor of HOME can reach the WhatsApp folders (#126)
+const cwd = mkdtempSync(join(tmpdir(), "nixi-always-cwd-"));
 const store = (home) => join(home, ".local", "state", "nixi", "always.json");
 const plain = { type: "prompt", text: "PLEASE_PLAIN it" };
 const chained = { type: "prompt", text: "PLEASE_RUN it" };

@@ -255,21 +255,27 @@ export async function isWhatsappRead(toolCall, cwd) {
   const paths = [...(Array.isArray(toolCall.locations) ? toolCall.locations.map((location) => location?.path) : []),
     input.file_path, input.filePath, input.path, tool === "glob" ? input.pattern : undefined];
   const home = process.env.HOME || "/";
-  const dirs = [resolve(home, ".local/state/nixi-whatsapp"), resolve(home, "Downloads/WhatsApp"),
+  const plain = [resolve(home, ".local/state/nixi-whatsapp"), resolve(home, "Downloads/WhatsApp"),
     resolve(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`, "nixi-whatsapp")];
+  // compare against both spellings: a symlinked ~/.local/state must not hide the real folder
+  const dirs = [...new Set([...plain, ...(await Promise.all(plain.map((dir) => realpathOfExisting(dir))))])];
   const runtime = resolve(home, ".local/share/nixi-companion/runtime.json");
+  const runtimes = new Set([runtime, await realpathOfExisting(runtime)]);
   for (const path of paths) {
     if (typeof path !== "string") continue;
     const absolute = path === "~" ? home : path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(cwd, path);
     for (const candidate of [absolute, await realpathOfExisting(absolute)]) {
-      if (candidate === runtime || dirs.some((dir) => candidate === dir || candidate.startsWith(`${dir}/`))) return true;
+      if (runtimes.has(candidate) || dirs.some((dir) => candidate === dir || candidate.startsWith(`${dir}/`))) return true;
     }
   }
   if (["grep", "glob"].includes(tool)) {
     const root = input.path || input.cwd || cwd;
     const absolute = root === "~" ? home : typeof root === "string" && root.startsWith("~/") ? resolve(home, root.slice(2)) : resolve(cwd, root);
-    if ([home, resolve(home, "Downloads"), resolve(home, ".local"), resolve(home, ".local/state"),
-      resolve(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`)].includes(absolute)) return true;
+    // any ancestor of a protected folder (/, /home, ~, ~/Downloads ...) can search into it
+    for (const root of [absolute, await realpathOfExisting(absolute)]) {
+      const prefix = root.endsWith("/") ? root : `${root}/`;
+      if ([...dirs, ...runtimes].some((dir) => dir === root || dir.startsWith(prefix))) return true;
+    }
   }
   return false;
 }

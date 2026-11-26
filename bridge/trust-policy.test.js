@@ -13,10 +13,13 @@ test("WhatsApp reads include ACP locations, filePath and broad search roots", as
     { name: "Glob", rawInput: { path: "~", pattern: "**/*.png" } },
   ]) assert.equal(await isWhatsappRead(call, home), true);
   assert.equal(await isWhatsappRead({ name: "Read", rawInput: { filePath: `${home}/plain.txt` } }, home), false);
+  // an ancestor of HOME searches into the WhatsApp folders too; an unrelated project root does not
+  assert.equal(await isWhatsappRead({ name: "Grep", rawInput: { path: dirname(home), pattern: "x" } }, "/tmp"), true);
+  assert.equal(await isWhatsappRead({ name: "Grep", rawInput: { path: "/nix/store", pattern: "x" } }, "/tmp"), false);
 });
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runBridge } from "./testing/run-bridge.js";
 
 test("every row of the trust table", () => {
@@ -1034,3 +1037,20 @@ for (const trust of ["guide", "mechanic"]) {
     assert.ok(!run.events.some((event) => event.type === "permission"));
   });
 }
+
+test("a symlinked ~/.local/state does not hide the real WhatsApp folder", async () => {
+  const saved = process.env.HOME;
+  const root = mkdtempSync(join(tmpdir(), "wa-link-"));
+  try {
+    const real = join(root, "storage");
+    mkdirSync(join(real, "nixi-whatsapp"), { recursive: true });
+    writeFileSync(join(real, "nixi-whatsapp", "messages.db"), "");
+    mkdirSync(join(root, "home", ".local"), { recursive: true });
+    symlinkSync(real, join(root, "home", ".local", "state"));
+    process.env.HOME = join(root, "home");
+    assert.equal(await isWhatsappRead({ name: "Read", rawInput: { file_path: join(real, "nixi-whatsapp", "messages.db") } }, root), true);
+  } finally {
+    process.env.HOME = saved;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
