@@ -98,6 +98,15 @@ const gog = { type: "prompt", text: "PLEASE_GOG now" };
 const gogCommand = "gog gmail send --to me@example.com --subject s --body secret-body";
 const reject = (event) => ({ type: "permission", id: event.id, optionId: "reject" });
 
+test("WhatsApp Bash still reaches a click card with a standing Bash(env:*) allow", async () => {
+  const { events } = await runBridge({ env, settings: { trust: "mechanic" },
+    messages: [{ type: "prompt", text: "PLEASE_WHATSAPP" }], onPermission: reject });
+  const card = events.find((event) => event.type === "permission");
+  assert.equal(card.confirm, "click");
+  assert.equal(card.command, "env whatsapp status");
+  assert.ok(!card.options.some((option) => option.kind === "allow_always"));
+});
+
 test("YOLO does not auto-approve a gog send; the card is click-only without allow_always (#219)", async () => {
   const { events } = await runBridge({
     env, settings: { trust: "mechanic", permissionMode: "yolo" }, messages: [gog], onPermission: reject,

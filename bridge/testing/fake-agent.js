@@ -148,6 +148,13 @@ new AgentSideConnection((conn) => ({
       // PLEASE_GOG: a Bash call that sends mail (#219).
       : text.includes("PLEASE_GOG") ? { toolCallId: "t13", title: "Bash", kind: "execute",
         rawInput: { command: "gog gmail send --to me@example.com --subject s --body secret-body" } }
+      : text.includes("PLEASE_WHATSAPP") ? { toolCallId: "t14", title: "Bash", kind: "execute",
+        rawInput: { command: "env whatsapp status" } }
+      : text.startsWith("PLEASE_WA_") ? (() => {
+        const [, tool, path] = /^PLEASE_WA_(Read|Grep|Glob) (.*)$/.exec(text) ?? [];
+        return { toolCallId: "t15", name: tool, title: `${tool} ${path}`, kind: tool === "Read" ? "read" : "search",
+          rawInput: tool === "Read" ? { file_path: path } : tool === "Grep" ? { path, pattern: "x" } : { pattern: path } };
+      })()
       : null;
     if (toolCall) {
       const outcome = await conn.requestPermission({

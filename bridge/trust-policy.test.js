@@ -744,7 +744,8 @@ test("every unattended-write path is denied for every write tool (#52)", () => {
   // The #41 property, on the write side: the list is GENERATED over the tool
   // names, so a path added later covers every tool automatically. A hand-written
   // Write(...) list would leave Edit free to reach the same paths.
-  assert.equal(deny.length, WRITE_TOOLS.length * EXEC_WRITE_PATHS.length,
+  assert.equal(deny.filter((rule) => EXEC_WRITE_PATHS.some((path) => rule.endsWith(`(${path})`))).length,
+    WRITE_TOOLS.length * EXEC_WRITE_PATHS.length,
     "deny is not the full cross product -- it was hand-listed, or a tool was dropped");
 });
 
@@ -986,3 +987,37 @@ test("the companion's runtime.json is a secret path, for every consumer (#210)",
   assert.equal(isSecretPath("/home/u/.local/share/nixi-companion/runtime.json"), true);
   assert.equal(isSecretPath("/custom/data/nixi-companion/runtime.json"), true);
 });
+
+test("Claude denies WhatsApp files and asks before WhatsApp Bash even with a standing env allow", () => {
+  const { ask, deny } = claudePermissions(false, "mechanic");
+  for (const rule of ["Bash(*whatsapp*)", "Bash(*WhatsApp*)", "Bash(*messages.db*)"])
+    assert.ok(ask.includes(rule), rule);
+  const runtime = `//${(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`).replace(/^\/+/, "")}/nixi-whatsapp/**`;
+  for (const path of ["~/.local/state/nixi-whatsapp/**", "~/Downloads/WhatsApp/**", runtime])
+    for (const tool of ["Read", "Grep", "Glob", "Edit", "MultiEdit", "Write", "NotebookEdit"])
+      assert.ok(deny.includes(`${tool}(${path})`), `${tool}(${path})`);
+  for (const tool of ["Read", "Grep", "Glob"])
+    assert.ok(deny.includes(`${tool}(~/.local/share/nixi-companion/runtime.json)`));
+});
+
+for (const trust of ["guide", "mechanic"]) {
+  test(`${trust}: bridge rejects Read, Grep and Glob under WhatsApp paths without a card`, async () => {
+    const runtimeDir = `/run/user/${process.getuid()}`;
+    const run = await runBridge({ env: { XDG_RUNTIME_DIR: runtimeDir }, settings: { trust },
+      messages: [async ({ home, events, send, until }) => {
+        const paths = [join(home, ".local/state/nixi-whatsapp/messages.db"),
+          join(home, "Downloads/WhatsApp/chat.txt"), `${runtimeDir}/nixi-whatsapp/token`,
+          join(home, ".local/share/nixi-companion/runtime.json")];
+        for (const path of paths) for (const tool of ["Read", "Grep", "Glob"]) {
+          const count = events.filter((event) => event.type === "done").length;
+          send({ type: "prompt", text: `PLEASE_WA_${tool} ${path}` });
+          await until(() => events.filter((event) => event.type === "done").length > count, `${tool} ${path}`);
+        }
+      }],
+    });
+    const outcomes = run.agent.filter((event) => event.method === "permissionOutcome");
+    assert.equal(outcomes.length, 12);
+    assert.ok(outcomes.every((event) => event.outcome.optionId === "reject"));
+    assert.ok(!run.events.some((event) => event.type === "permission"));
+  });
+}

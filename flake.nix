@@ -153,6 +153,43 @@
           assert !(builtins.tryEval (builtins.deepSeq inStore.xdg.configFile."nixi-companion/peers.json".text true)).success;
           pkgs.runCommand "nixi-hm-companion-peers" { } "touch $out";
 
+        hm-companion-whatsapp =
+          let
+            eval = package: (nixpkgs.lib.evalModules {
+              modules = [
+                self.homeModules.default
+                ({ lib, ... }: {
+                  options = {
+                    assertions = lib.mkOption { type = lib.types.listOf lib.types.raw; default = [ ]; };
+                    home = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; default = { }; };
+                    programs = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw); default = { }; };
+                    systemd = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.lazyAttrsOf (lib.types.lazyAttrsOf lib.types.raw)); default = { }; };
+                    xdg = lib.mkOption { type = lib.types.lazyAttrsOf (lib.types.attrsOf lib.types.raw); default = { }; };
+                  };
+                  config._module.args.pkgs = pkgs;
+                  config.services.nixi.enable = true;
+                  config.services.nixi.companion.whatsapp = { enable = true; inherit package; };
+                })
+              ];
+            }).config;
+            ok = eval pkgs.hello;
+            bad = eval null;
+            unit = ok.systemd.user.services.nixi-whatsapp;
+          in
+          assert builtins.all (a: a.assertion) ok.assertions;
+          assert builtins.any (a: !a.assertion && pkgs.lib.hasInfix "whatsapp.package" a.message) bad.assertions;
+          assert unit.Unit.Description == "Nixi WhatsApp bridge";
+          assert unit.Service.ExecStart == "${pkgs.hello}/bin/nixi-whatsapp-bridge --state %S/nixi-whatsapp --run %t/nixi-whatsapp";
+          assert unit.Service.StateDirectory == "nixi-whatsapp" && unit.Service.StateDirectoryMode == "0700";
+          assert unit.Service.RuntimeDirectory == "nixi-whatsapp" && unit.Service.RuntimeDirectoryMode == "0700";
+          assert unit.Service.UMask == "0077" && unit.Service.Restart == "on-failure" && unit.Service.NoNewPrivileges;
+          assert !(unit ? Install);
+          assert builtins.fromJSON ok.xdg.configFile."nixi-companion/whatsapp.json".text == {
+            bridge = true;
+            unit = "nixi-whatsapp.service";
+          };
+          pkgs.runCommand "nixi-hm-companion-whatsapp" { } "touch $out";
+
         # Shared settings (#99): both files, from the options only.
         hm-companion-shared =
           let

@@ -14,7 +14,7 @@ import { groundPrompt } from "./grounding.js";
 import { createLearnedFilter, appendLearned } from "./learned.js";
 import { blockMarkdown, prepareMediaDir } from "./media.js";
 import { createChartFilter } from "./chart.js";
-import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret } from "./trust-policy.js";
+import { resolveTrust, trustPolicy, claudePermissions, opencodePermissions, isSecretPath, touchesSecret, isWhatsappRead } from "./trust-policy.js";
 import { isClickOnly, isGogSend, herdrWriteDetail, gogSendDetail } from "./send-policy.js";
 import { createAlways, isChained, keyOf, rememberable, storePath } from "./always.js";
 import { permissionDetail } from "./permission-detail.js";
@@ -525,6 +525,11 @@ const client = {
     })).filter((option) => option.kind !== "allow_always" || offersAlways(params.toolCall));
     noticeMcpSource(params);
     return (async () => {
+      if (await isWhatsappRead(params.toolCall, cwd)) {
+        toolsInProgress.delete(params.toolCall?.toolCallId);
+        emit({ type: "status", text: "Read refused: WhatsApp data" });
+        return guarded(params.toolCall, choose(options, "reject_once"), options);
+      }
       if (agentName === "opencode" && params.toolCall?.kind === "read") {
         try {
           const path = resolve(cwd, params.toolCall.locations?.[0]?.path ?? params.toolCall.rawInput?.path);
