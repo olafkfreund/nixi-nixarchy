@@ -237,6 +237,48 @@ const SECRET_READS = READ_TOOLS.flatMap((tool) => SECRET_PATHS.map((path) => `${
 // tool that does not exist costs nothing, and omitting one that does is the bug.
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 const EXEC_WRITES = WRITE_TOOLS.flatMap((tool) => EXEC_WRITE_PATHS.map((path) => `${tool}(${path})`));
+const WHATSAPP_DIRS = [
+  "~/.local/state/nixi-whatsapp/**",
+  "~/Downloads/WhatsApp/**",
+  `//${(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`).replace(/^\/+/, "")}/nixi-whatsapp/**`,
+];
+const WHATSAPP_READS = ["~/.local/share/nixi-companion/runtime.json"];
+const WHATSAPP_DENIES = [
+  ...[...READ_TOOLS, ...WRITE_TOOLS].flatMap((tool) => WHATSAPP_DIRS.map((path) => `${tool}(${path})`)),
+  ...READ_TOOLS.flatMap((tool) => WHATSAPP_READS.map((path) => `${tool}(${path})`)),
+];
+
+export async function isWhatsappRead(toolCall, cwd) {
+  const tool = String(toolCall?.name ?? toolCall?.title?.split(" ")[0] ?? "").toLowerCase();
+  if (toolCall?.kind !== "read" && !["read", "grep", "glob"].includes(tool)) return false;
+  const input = toolCall.rawInput ?? {};
+  const paths = [...(Array.isArray(toolCall.locations) ? toolCall.locations.map((location) => location?.path) : []),
+    input.file_path, input.filePath, input.path, tool === "glob" ? input.pattern : undefined];
+  const home = process.env.HOME || "/";
+  const plain = [resolve(home, ".local/state/nixi-whatsapp"), resolve(home, "Downloads/WhatsApp"),
+    resolve(process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`, "nixi-whatsapp")];
+  // compare against both spellings: a symlinked ~/.local/state must not hide the real folder
+  const dirs = [...new Set([...plain, ...(await Promise.all(plain.map((dir) => realpathOfExisting(dir))))])];
+  const runtime = resolve(home, ".local/share/nixi-companion/runtime.json");
+  const runtimes = new Set([runtime, await realpathOfExisting(runtime)]);
+  for (const path of paths) {
+    if (typeof path !== "string") continue;
+    const absolute = path === "~" ? home : path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(cwd, path);
+    for (const candidate of [absolute, await realpathOfExisting(absolute)]) {
+      if (runtimes.has(candidate) || dirs.some((dir) => candidate === dir || candidate.startsWith(`${dir}/`))) return true;
+    }
+  }
+  if (["grep", "glob"].includes(tool)) {
+    const root = input.path || input.cwd || cwd;
+    const absolute = root === "~" ? home : typeof root === "string" && root.startsWith("~/") ? resolve(home, root.slice(2)) : resolve(cwd, root);
+    // any ancestor of a protected folder (/, /home, ~, ~/Downloads ...) can search into it
+    for (const root of [absolute, await realpathOfExisting(absolute)]) {
+      const prefix = root.endsWith("/") ? root : `${root}/`;
+      if ([...dirs, ...runtimes].some((dir) => dir === root || dir.startsWith(prefix))) return true;
+    }
+  }
+  return false;
+}
 
 // Bash patterns from SECRET_PATHS, for sessions that start at Mechanic (#96).
 // Mechanic (Claude's default mode) already asks for shell commands; these matter
@@ -272,9 +314,10 @@ export function claudePermissions(askBeforeReading, trust = "guide") {
     // would otherwise let Claude run a herdr write without ever asking the bridge, so
     // the bridge's click-only card (#95) could not be skipped by a standing allow.
     // The same for a gog send (#219): `env gog gmail send …` matches Bash(env:*).
-    ask: [...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)", "Bash(*gog *)", "Bash(*gog)",
-      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())],
-    deny: EXEC_WRITES,
+    ask: [...new Set([...SECRET_READS, "Bash(*herdr*)", "Bash(*HERDR_SOCKET*)", "Bash(*gog *)", "Bash(*gog)",
+      "Bash(*whatsapp*)", "Bash(*WhatsApp*)", "Bash(*messages.db*)", "Bash(*nixi-w*)", "Bash(*runtime.json*)", "Bash(*.local/state*)",
+      ...(resolveTrust(trust) === "guide" ? ["Bash"] : secretBashRules())])],
+    deny: [...EXEC_WRITES, ...WHATSAPP_DENIES],
   };
 }
 

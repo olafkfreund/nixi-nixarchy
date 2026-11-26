@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isHerdrWrite, herdrWriteDetail, isGogSend, isClickOnly, gogSendDetail } from "./send-policy.js";
+import { isHerdrWrite, herdrWriteDetail, isGogSend, isClickOnly, gogSendDetail, isWhatsapp } from "./send-policy.js";
 
 const call = (command) => ({ rawInput: { command } });
 
@@ -85,6 +85,17 @@ test("Flux commands need a click", () => {
     "flux/*.sock", "fluxd.so?k", "/bin/flux-c[l]i status", "flux $VERB", "flux {sms,dnd}", "flux ?ms",
   ]) assert.ok(isClickOnly(call(command)), command);
   assert.ok(!isClickOnly(call("fluxcd get all")));
+});
+
+test("WhatsApp mentions need a click across shell spellings", () => {
+  for (const command of ["whatsapp status", "cat messages.db", 'env WHATSAPP_HOME=/x true',
+    'wha""tsapp status', "wha${X}tsapp status", "wha${X:-ts}app status", "cat runtime.json", "ls nixi-w*", "cat ~/.local/state/nixi/x", "cat $XDG_RUNTIME_DIR/*",
+    "echo '${X:-messages.db}'", ["env", "whatsapp", "status"]]) {
+    assert.ok(isWhatsapp(call(command)), JSON.stringify(command));
+    assert.ok(isClickOnly(call(command)), JSON.stringify(command));
+  }
+  for (const command of ["echo hello", "cat messages.sqlite"])
+    assert.ok(!isWhatsapp(call(command)), command);
 });
 
 test("gog audit detail reads only fixed command and recipient places", () => {

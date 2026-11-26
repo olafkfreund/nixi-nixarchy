@@ -138,6 +138,16 @@ in
       enable = lib.mkEnableOption
         "the snowflake desktop companion (a Void fork), driven through Nixi's bridge";
 
+      whatsapp = {
+        enable = lib.mkEnableOption "the Nixi WhatsApp bridge";
+        package = lib.mkOption {
+          type = lib.types.nullOr lib.types.package;
+          default = null;
+          example = lib.literalExpression "inputs.nixi-companion.packages.\${pkgs.system}.nixi-whatsapp-bridge";
+          description = "The WhatsApp bridge package from the nixi-companion flake.";
+        };
+      };
+
       peers = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
           options = {
@@ -471,6 +481,30 @@ in
               ${companionPkg}/bin/nixi-companion restart || true
           fi
         '');
+    })
+
+    (lib.mkIf cfg.companion.whatsapp.enable {
+      assertions = [{
+        assertion = cfg.companion.whatsapp.package != null;
+        message = "services.nixi.companion.whatsapp.package must be set when WhatsApp is enabled.";
+      }];
+      systemd.user.services.nixi-whatsapp = {
+        Unit.Description = "Nixi WhatsApp bridge";
+        Service = {
+          ExecStart = "${cfg.companion.whatsapp.package}/bin/nixi-whatsapp-bridge --state %S/nixi-whatsapp --run %t/nixi-whatsapp";
+          StateDirectory = "nixi-whatsapp";
+          StateDirectoryMode = "0700";
+          RuntimeDirectory = "nixi-whatsapp";
+          RuntimeDirectoryMode = "0700";
+          UMask = "0077";
+          Restart = "on-failure";
+          NoNewPrivileges = true;
+        };
+      };
+      xdg.configFile."nixi-companion/whatsapp.json".text = builtins.toJSON {
+        bridge = true;
+        unit = "nixi-whatsapp.service";
+      };
     })
 
     # Hooks every interactive bash and zsh (HM appends these only when the shell program is enabled).

@@ -56,7 +56,21 @@ function isFlux(toolCall) {
   return [command, clean, defaults].some((text) => FLUX.test(text) || (/\bflux(?:-cli|d)?\b/i.test(text) && expands));
 }
 
-export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall) || isFlux(toolCall);
+// Twin of app/server.py _WA_RE in nixoarchy-snowflake.
+const WHATSAPP = /whatsapp|messages\.db|runtime\.json|nixi-w|\.local\/state\/nixi|downloads\/whatsapp/i;
+const WA_EXPAND = /[$`*?\[]/;
+const WA_HINT = /nixi|messages\.d|\/run\/user|xdg_runtime_dir|\.local\/state|downloads/i;
+export function isWhatsapp(toolCall) {
+  let command = toolCall?.rawInput?.command;
+  if (Array.isArray(command)) command = command.join(" ");
+  if (typeof command !== "string") return false;
+  const plain = command.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  const defaults = plain.replace(/\$\{[^}:]*:?[-=+?]([^}]*)\}/g, "$1");
+  return [command, defaults, plain.replace(/\$\{[^}]*\}/g, "").replace(/\$/g, "")]
+    .some((text) => WHATSAPP.test(text) || (WA_EXPAND.test(command) && WA_HINT.test(text)));
+}
+
+export const isClickOnly = (toolCall) => isHerdrWrite(toolCall) || isGogSend(toolCall) || isFlux(toolCall) || isWhatsapp(toolCall);
 
 const GOG_COMMANDS = [
   "chat messages create", "chat messages post", "chat messages send", "gmail drafts post",
